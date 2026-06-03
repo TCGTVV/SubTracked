@@ -1,0 +1,44 @@
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
+import { startOfDay, subDays, isBefore, format } from "date-fns";
+import { nextDueDate } from "./recurrence";
+import { listSubscriptions, insertReminderIfNew } from "./db";
+
+/**
+ * Prüft alle aktiven Abos und sendet native Benachrichtigungen für Fälligkeiten,
+ * die im Vorlauf-Fenster liegen (heute >= Fälligkeit - leadDays).
+ * Pro Fälligkeit nur einmal (Idempotenz über die reminders-Tabelle).
+ *
+ * Beim App-Start und danach in Intervallen aufrufen (siehe App-Komponente).
+ */
+export async function runReminderCheck(): Promise<number> {
+  let granted = await isPermissionGranted();
+  if (!granted) granted = (await requestPermission()) === "granted";
+
+  const today = startOfDay(new Date());
+  const subs = await listSubscriptions(true);
+  let sent = 0;
+
+  for (const sub of subs) {
+    const due = nextDueDate(new Date(sub.anchorDate), sub.interval, today);
+    const remindFrom = subDays(due, sub.leadDays);
+    if (isBefore(today, remindFrom)) continue; // noch nicht im Fenster
+
+    const dueStr = format(due, "yyyy-MM-dd");
+    const isNew = await insertReminderIfNew(sub.id, dueStr);
+    if (!isNew) continue; // bereits benachrichtigt
+
+    if (granted) {
+      const amount = (sub.amountCents / 100).toFixed(2);
+      sendNotification({
+        title: `${sub.name} fällig`,
+        body: `${format(due, "dd.MM.yyyy")}: ${amount} ${sub.currency}. Konto rechtzeitig decken.`,
+      });
+    }
+    sent += 1;
+  }
+  return sent;
+}
