@@ -53,6 +53,20 @@ export async function addAccount(name: string, note?: string): Promise<number> {
   return res.lastInsertId ?? 0;
 }
 
+export async function deleteAccount(id: number): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM accounts WHERE id = $1", [id]);
+}
+
+export async function countSubsForAccount(accountId: number): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) AS n FROM subscriptions WHERE account_id = $1",
+    [accountId],
+  );
+  return rows[0]?.n ?? 0;
+}
+
 // --- Subscriptions ---------------------------------------------------------
 
 export async function listSubscriptions(onlyActive = true): Promise<Subscription[]> {

@@ -1,7 +1,7 @@
 import { useId, useState, type FormEvent, type Ref } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
 import { todayISO } from "../lib/format";
-import type { Interval, Subscription } from "../types";
+import type { Account, Interval, Subscription } from "../types";
 import { DateField } from "./DateField";
 
 const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
@@ -15,6 +15,7 @@ const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF"] as const;
 interface Props {
   ref: Ref<HTMLDialogElement>;
   subscription: Subscription | null;
+  accounts: Account[];
   onSaved: () => void;
 }
 
@@ -22,12 +23,13 @@ function centsToInput(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-export function SubscriptionDialog({ ref, subscription, onSaved }: Props) {
+export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Props) {
   const isEdit = subscription !== null;
 
   const nameId = useId();
   const amountId = useId();
   const currencyId = useId();
+  const accountIdId = useId();
   const intervalId = useId();
   const anchorId = useId();
   const leadId = useId();
@@ -37,6 +39,7 @@ export function SubscriptionDialog({ ref, subscription, onSaved }: Props) {
     subscription ? centsToInput(subscription.amountCents) : "",
   );
   const [currency, setCurrency] = useState<string>(subscription?.currency ?? "EUR");
+  const [accountId, setAccountId] = useState<number | null>(subscription?.accountId ?? null);
   const [interval, setInterval] = useState<Interval>(subscription?.interval ?? "monthly");
   const [anchorDate, setAnchorDate] = useState(subscription?.anchorDate ?? todayISO());
   const [leadDays, setLeadDays] = useState(subscription?.leadDays ?? 60);
@@ -58,6 +61,7 @@ export function SubscriptionDialog({ ref, subscription, onSaved }: Props) {
         name: trimmedName,
         amountCents: Math.round(amountNumber * 100),
         currency,
+        accountId,
         interval,
         anchorDate,
         leadDays,
@@ -66,11 +70,10 @@ export function SubscriptionDialog({ ref, subscription, onSaved }: Props) {
         await updateSubscription({
           ...payload,
           id: subscription.id,
-          accountId: subscription.accountId,
           active: subscription.active,
         });
       } else {
-        await addSubscription({ ...payload, accountId: null });
+        await addSubscription(payload);
       }
       onSaved();
     } catch (err) {
@@ -122,6 +125,22 @@ export function SubscriptionDialog({ ref, subscription, onSaved }: Props) {
               ))}
             </select>
           </div>
+        </div>
+
+        <div className="field">
+          <label htmlFor={accountIdId}>Konto</label>
+          <select
+            id={accountIdId}
+            value={accountId === null ? "" : String(accountId)}
+            onChange={(e) =>
+              setAccountId(e.target.value === "" ? null : Number(e.target.value))
+            }
+          >
+            <option value="">(kein Konto)</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
         </div>
 
         <div className="field">

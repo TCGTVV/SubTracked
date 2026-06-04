@@ -1,22 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Subscription } from "./types";
-import { deleteSubscription, listSubscriptions } from "./lib/db";
+import type { Account, Subscription } from "./types";
+import {
+  deleteSubscription,
+  listAccounts,
+  listSubscriptions,
+} from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
+import { AccountsDialog } from "./components/AccountsDialog";
 import "./App.css";
 
 function App() {
   const [subs, setSubs] = useState<Subscription[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
-  const [openSeq, setOpenSeq] = useState(0);
-  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [subOpenSeq, setSubOpenSeq] = useState(0);
+  const subDialogRef = useRef<HTMLDialogElement>(null);
+  const accountsDialogRef = useRef<HTMLDialogElement>(null);
 
-  const reload = useCallback(async () => {
+  const reloadAll = useCallback(async () => {
     try {
-      const rows = await listSubscriptions();
-      setSubs(rows);
+      const [subRows, accountRows] = await Promise.all([
+        listSubscriptions(),
+        listAccounts(),
+      ]);
+      setSubs(subRows);
+      setAccounts(accountRows);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -25,46 +36,66 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const reloadAccounts = useCallback(async () => {
+    try {
+      setAccounts(await listAccounts());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
 
   useEffect(() => {
-    if (openSeq > 0) dialogRef.current?.showModal();
-  }, [openSeq]);
+    void reloadAll();
+  }, [reloadAll]);
+
+  useEffect(() => {
+    if (subOpenSeq > 0) subDialogRef.current?.showModal();
+  }, [subOpenSeq]);
 
   function startNew() {
     setEditingSub(null);
-    setOpenSeq((s) => s + 1);
+    setSubOpenSeq((s) => s + 1);
   }
 
   function startEdit(sub: Subscription) {
     setEditingSub(sub);
-    setOpenSeq((s) => s + 1);
+    setSubOpenSeq((s) => s + 1);
   }
 
-  function handleSaved() {
-    dialogRef.current?.close();
-    void reload();
+  function openAccounts() {
+    accountsDialogRef.current?.showModal();
+  }
+
+  function handleSubSaved() {
+    subDialogRef.current?.close();
+    void reloadAll();
   }
 
   async function handleDelete(sub: Subscription) {
     if (!window.confirm(`„${sub.name}“ wirklich löschen?`)) return;
     try {
       await deleteSubscription(sub.id);
-      await reload();
+      await reloadAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }
 
+  const accountName = (id: number | null): string | null =>
+    id === null ? null : accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)";
+
   return (
     <main className="container">
       <header className="header">
         <h1>SubTracked</h1>
-        <button type="button" onClick={startNew}>
-          Neues Abo
-        </button>
+        <div className="header-actions">
+          <button type="button" onClick={openAccounts}>
+            Konten
+          </button>
+          <button type="button" onClick={startNew}>
+            Neues Abo
+          </button>
+        </div>
       </header>
 
       {loading && <p>Lade …</p>}
@@ -74,45 +105,55 @@ function App() {
       )}
       {subs.length > 0 && (
         <ul className="sub-list">
-          {subs.map((sub) => (
-            <li key={sub.id} className="sub-item">
-              <div className="sub-info">
-                <span className="sub-name">{sub.name}</span>
-                <span className="sub-next">
-                  nächste Fälligkeit: {formatNextDue(sub)}
-                </span>
-              </div>
-              <div className="sub-meta">
-                <span className="sub-amount">
-                  {formatAmount(sub.amountCents, sub.currency)}
-                </span>
-                <button
-                  type="button"
-                  className="sub-edit"
-                  onClick={() => startEdit(sub)}
-                  aria-label={`${sub.name} bearbeiten`}
-                >
-                  Bearbeiten
-                </button>
-                <button
-                  type="button"
-                  className="sub-delete"
-                  onClick={() => void handleDelete(sub)}
-                  aria-label={`${sub.name} löschen`}
-                >
-                  Löschen
-                </button>
-              </div>
-            </li>
-          ))}
+          {subs.map((sub) => {
+            const account = accountName(sub.accountId);
+            return (
+              <li key={sub.id} className="sub-item">
+                <div className="sub-info">
+                  <span className="sub-name">{sub.name}</span>
+                  <span className="sub-next">
+                    nächste Fälligkeit: {formatNextDue(sub)}
+                    {account && <> · {account}</>}
+                  </span>
+                </div>
+                <div className="sub-meta">
+                  <span className="sub-amount">
+                    {formatAmount(sub.amountCents, sub.currency)}
+                  </span>
+                  <button
+                    type="button"
+                    className="sub-edit"
+                    onClick={() => startEdit(sub)}
+                    aria-label={`${sub.name} bearbeiten`}
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="sub-delete"
+                    onClick={() => void handleDelete(sub)}
+                    aria-label={`${sub.name} löschen`}
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       <SubscriptionDialog
-        key={`${editingSub?.id ?? "new"}-${openSeq}`}
-        ref={dialogRef}
+        key={`${editingSub?.id ?? "new"}-${subOpenSeq}`}
+        ref={subDialogRef}
         subscription={editingSub}
-        onSaved={handleSaved}
+        accounts={accounts}
+        onSaved={handleSubSaved}
+      />
+      <AccountsDialog
+        ref={accountsDialogRef}
+        accounts={accounts}
+        onChanged={reloadAccounts}
       />
     </main>
   );
