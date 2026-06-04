@@ -17,6 +17,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [ ] **Abo anlegen / bearbeiten / löschen** (Formular) — `db.addSubscription()`, `db.deleteSubscription()`
 - [ ] **Konten** anlegen/auswählen — `db.listAccounts()`, `db.addAccount()`
 - [ ] **Kontodeckungs-Ansicht** (anstehende Abflüsse je Konto, N Monate) — `coverage.computeCoverage()`
+- [ ] **Monatliche Fixkosten-Übersicht** ("Baseline") — Summe aller aktiven Abos auf monatliche Basis normiert (`monthly` = Betrag, `quarterly` = Betrag/3, `yearly` = Betrag/12), pro Konto aufgeschlüsselt. Anzeige: "Monatlich gebunden: 324 € (Hauptkonto)". Hilft, das Konto-Polster zu kalibrieren — quasi Nulllinie der Abo-Fixkosten
 - [ ] **Erinnerungs-Check verdrahten:** `runReminderCheck()` beim App-Start + stündliches Intervall in `App.tsx`
 - [ ] Standard-Template-Reste (`greet`-Demo) durch echte UI ersetzen
 
@@ -26,6 +27,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [ ] **Autostart beim Login** über Einstellungen aktivierbar (`@tauri-apps/plugin-autostart` `enable()`)
 - [ ] Notification-Berechtigung sauber abfragen und Status anzeigen
 - [ ] Vorlaufzeit (`lead_days`) pro Abo in der UI editierbar
+- [ ] **Notifications pro Abo stummschaltbar** — bei bekannten regelmäßigen Abos (z.B. Netflix monatlich) will man keinen Spam. Neue Spalte `notify INTEGER DEFAULT 1` via Migration, UI-Toggle pro Abo, `runReminderCheck` überspringt stumme Abos. Sie bleiben aber sichtbar in Liste/Fixkosten-Übersicht
 
 ## 🌱 Später
 
