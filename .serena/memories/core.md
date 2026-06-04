@@ -28,3 +28,4 @@ Diese im Repo gepflegten Dateien sind verbindlich und sollten zuerst gelesen wer
 - Befehle für Dev/Build inkl. Wayland-Renderfix: `mem:suggested_commands`.
 - Code-Konventionen, die über AGENTS.md hinaus für Agents relevant sind: `mem:conventions`.
 - Was vor "fertig" laufen muss: `mem:task_completion`.
+- UI-Designziel für späteres Overhaul (arsnova.eu / Material 3): `mem:ui_vision`.

@@ -31,6 +31,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## 🌱 Später
 
+- [ ] **UI-Redesign Richtung arsnova.eu** (Angular Material 3 / Material You als Vorlage) — Teal-Akzentpalette, Card-Layout, Material Icons, vollständige Dark-Mode-Parität, App-Feel statt Web-Formular. Vor Umsetzung Lib-Auswahl (MUI v6 / Material Web / shadcn+Tokens / Tailwind+M3). Designziel und nicht-zu-übernehmende Teile siehe Serena-Memory `mem:ui_vision`
 - [ ] **GitHub-Actions-Matrix-Build** (`tauri-action`) für Win/Linux/macOS-Installer bei jedem Release-Tag
 - [ ] App-Icon / Branding
 - [ ] Import/Export (CSV) der Abos
