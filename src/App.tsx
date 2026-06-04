@@ -1,33 +1,51 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Subscription } from "./types";
 import { listSubscriptions } from "./lib/db";
+import { formatAmount, formatNextDue } from "./lib/format";
+import { NewSubscriptionDialog } from "./components/NewSubscriptionDialog";
 import "./App.css";
-
-function formatAmount(cents: number, currency: string): string {
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
-}
 
 function App() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const rows = await listSubscriptions();
+      setSubs(rows);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    listSubscriptions()
-      .then(setSubs)
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, []);
+    void reload();
+  }, [reload]);
+
+  function handleAdded() {
+    dialogRef.current?.close();
+    void reload();
+  }
 
   return (
     <main className="container">
-      <h1>SubTracked</h1>
+      <header className="header">
+        <h1>SubTracked</h1>
+        <button
+          type="button"
+          onClick={() => dialogRef.current?.showModal()}
+        >
+          Neues Abo
+        </button>
+      </header>
 
       {loading && <p>Lade …</p>}
-      {error && <p className="error">Fehler: {error}</p>}
+      {error && <p className="error" role="alert">Fehler: {error}</p>}
       {!loading && !error && subs.length === 0 && (
         <p className="empty">Noch keine Abos angelegt.</p>
       )}
@@ -35,7 +53,12 @@ function App() {
         <ul className="sub-list">
           {subs.map((sub) => (
             <li key={sub.id} className="sub-item">
-              <span className="sub-name">{sub.name}</span>
+              <div className="sub-info">
+                <span className="sub-name">{sub.name}</span>
+                <span className="sub-next">
+                  nächste Fälligkeit: {formatNextDue(sub)}
+                </span>
+              </div>
               <span className="sub-amount">
                 {formatAmount(sub.amountCents, sub.currency)}
               </span>
@@ -43,6 +66,8 @@ function App() {
           ))}
         </ul>
       )}
+
+      <NewSubscriptionDialog ref={dialogRef} onAdded={handleAdded} />
     </main>
   );
 }
