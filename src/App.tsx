@@ -8,6 +8,7 @@ import {
 import { formatAmount, formatNextDue } from "./lib/format";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { AccountsDialog } from "./components/AccountsDialog";
+import { OverviewSection } from "./components/OverviewSection";
 import "./App.css";
 
 function App() {
@@ -142,6 +143,8 @@ function App() {
           })}
         </ul>
       )}
+
+      <OverviewSection subscriptions={subs} accounts={accounts} />
 
       <SubscriptionDialog
         key={`${editingSub?.id ?? "new"}-${subOpenSeq}`}

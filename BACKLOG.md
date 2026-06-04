@@ -16,8 +16,8 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [x] **Abo-Liste** anzeigen (Name, Betrag, nächste Fälligkeit, Konto) — nutzt `db.listSubscriptions()` + `recurrence.nextDueDate()`
 - [x] **Abo anlegen / bearbeiten / löschen** (Formular) — `db.addSubscription()`, `db.updateSubscription()`, `db.deleteSubscription()`
 - [x] **Konten** anlegen/auswählen — `db.listAccounts()`, `db.addAccount()`, `db.deleteAccount()` mit Soft-Check (`countSubsForAccount()`)
-- [ ] **Kontodeckungs-Ansicht** (anstehende Abflüsse je Konto, N Monate) — `coverage.computeCoverage()`
-- [ ] **Monatliche Fixkosten-Übersicht** ("Baseline") — Summe aller aktiven Abos auf monatliche Basis normiert (`monthly` = Betrag, `quarterly` = Betrag/3, `yearly` = Betrag/12), pro Konto aufgeschlüsselt. Anzeige: "Monatlich gebunden: 324 € (Hauptkonto)". Hilft, das Konto-Polster zu kalibrieren — quasi Nulllinie der Abo-Fixkosten
+- [x] **Kontodeckungs-Ansicht** (anstehende Abflüsse je Konto, N Monate) — `coverage.computeCoverage()`, collapsible pro Konto
+- [x] **Monatliche Fixkosten-Übersicht** ("Baseline") — `coverage.computeMonthlyBaseline()`, pro Konto + Gesamt-Summe
 - [ ] **Erinnerungs-Check verdrahten:** `runReminderCheck()` beim App-Start + stündliches Intervall in `App.tsx`
 - [x] Standard-Template-Reste (`greet`-Demo) durch echte UI ersetzen
 

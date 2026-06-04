@@ -2,7 +2,7 @@ import { addMonths, isBefore, startOfDay } from "date-fns";
 
 export type Interval = "monthly" | "quarterly" | "yearly";
 
-const monthsPer: Record<Interval, number> = {
+export const monthsPer: Record<Interval, number> = {
   monthly: 1,
   quarterly: 3,
   yearly: 12,

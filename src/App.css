@@ -238,6 +238,134 @@ select:focus-visible {
   border-top: 1px solid rgba(127, 127, 127, 0.2);
 }
 
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 2.5rem;
+}
+
+.overview-section h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.overview-hint {
+  color: #888;
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+
+.baseline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.baseline-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 6px;
+}
+
+.baseline-total {
+  font-weight: 600;
+  background-color: rgba(127, 127, 127, 0.08);
+}
+
+.baseline-account {
+  font-weight: 500;
+}
+
+.baseline-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage-account {
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+
+.coverage-account summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.coverage-account summary::-webkit-details-marker {
+  display: none;
+}
+
+.coverage-account summary::before {
+  content: "▸";
+  margin-right: 0.25rem;
+  display: inline-block;
+  transition: transform 0.15s;
+  color: #888;
+}
+
+.coverage-account[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.coverage-name {
+  flex: 1;
+  font-weight: 500;
+}
+
+.coverage-total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.coverage-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid rgba(127, 127, 127, 0.2);
+  background-color: rgba(127, 127, 127, 0.04);
+}
+
+.coverage-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.4rem 1rem;
+  font-size: 0.9rem;
+}
+
+.coverage-row:not(:last-child) {
+  border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+}
+
+.coverage-row-name {
+  font-weight: 500;
+}
+
+.coverage-row-date {
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+.coverage-row-amount {
+  font-variant-numeric: tabular-nums;
+}
+
 .field {
   display: flex;
   flex-direction: column;
