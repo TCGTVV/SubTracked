@@ -36,6 +36,9 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [ ] Tests für `recurrence.ts` und `coverage.ts` ins Repo aufnehmen
 - [ ] Optionale weitere Kanäle (z.B. Telegram) als Alternative zu nativen Notifications
 - [ ] Auf Windows und macOS testen
+- [ ] Migration: `ON DELETE CASCADE` für `reminders.subscription_id`, damit beim Löschen eines Abos keine Waisen-Reminder zurückbleiben
+- [ ] `SubRow.interval`: aus SQLite kommt ein roher `string` — sauberer Cast in `mapSub` statt implizit auf `Interval` zu vertrauen (DB-`CHECK` greift, aber Typ ist optimistisch)
+- [ ] `tauri-plugin-opener` entfernen, falls nicht für externe Links genutzt (aktuell ungenutzt)
 
 ## Hinweise
 
