@@ -35,8 +35,8 @@ src-tauri/                Rust
 
 ```bash
 pnpm install
-# Linux-Dev (Wayland-Renderfix nötig):
-WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm tauri dev
+# Dev: Wayland-Renderfix ist im pnpm-`tauri`-Script gesetzt
+pnpm tauri dev
 # Build (erzeugt Installer fürs aktuelle OS):
 pnpm tauri build
 ```

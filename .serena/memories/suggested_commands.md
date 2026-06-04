@@ -7,12 +7,13 @@ Alles aus dem Projektroot. Paketmanager ist `pnpm`.
 pnpm install
 ```
 
-## Dev-Run (Linux/Wayland)
+## Dev-Run
 
-Wayland-WebKit braucht den DMABUF-Renderer-Workaround, sonst schwarzes Fenster:
 ```
-WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm tauri dev
+pnpm tauri dev
 ```
+
+Auf Linux/Wayland wäre WebKit ohne `WEBKIT_DISABLE_DMABUF_RENDERER=1` direkt mit `Gdk Error 71 (Protokollfehler)` abgestürzt — die Env-Var ist im pnpm-`tauri`-Script bereits gesetzt (siehe `package.json`), daher reicht der einfache Aufruf. Auf macOS/Windows bleibt die Var wirkungslos.
 
 Ohne Wayland-Problem (X11, macOS, Windows):
 ```
