@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent, type Ref } from "react";
 import { addSubscription } from "../lib/db";
 import { todayISO } from "../lib/format";
 import type { Interval } from "../types";
+import { DateField } from "./DateField";
 
 const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
   { value: "monthly", label: "Monatlich" },
@@ -132,11 +133,10 @@ export function NewSubscriptionDialog({ ref, onAdded }: Props) {
         <div className="field-row">
           <div className="field">
             <label htmlFor={anchorId}>Erste Fälligkeit</label>
-            <input
+            <DateField
               id={anchorId}
-              type="date"
               value={anchorDate}
-              onChange={(e) => setAnchorDate(e.target.value)}
+              onChange={setAnchorDate}
               required
             />
           </div>
