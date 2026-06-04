@@ -96,12 +96,18 @@ h2 {
   gap: 0.75rem;
 }
 
+.sub-edit,
 .sub-delete {
   font-size: 0.85rem;
   padding: 0.3em 0.7em;
   background-color: transparent;
   border-color: rgba(127, 127, 127, 0.3);
   color: #888;
+}
+
+.sub-edit:hover {
+  border-color: #396cd8;
+  color: #396cd8;
 }
 
 .sub-delete:hover {

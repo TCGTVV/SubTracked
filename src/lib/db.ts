@@ -86,6 +86,27 @@ export async function addSubscription(
   return res.lastInsertId ?? 0;
 }
 
+export async function updateSubscription(s: Subscription): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    `UPDATE subscriptions
+       SET name = $1, amount_cents = $2, currency = $3, account_id = $4,
+           interval = $5, anchor_date = $6, lead_days = $7, active = $8
+     WHERE id = $9`,
+    [
+      s.name,
+      s.amountCents,
+      s.currency,
+      s.accountId,
+      s.interval,
+      s.anchorDate,
+      s.leadDays,
+      s.active ? 1 : 0,
+      s.id,
+    ],
+  );
+}
+
 export async function deleteSubscription(id: number): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM subscriptions WHERE id = $1", [id]);

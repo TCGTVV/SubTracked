@@ -2,13 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Subscription } from "./types";
 import { deleteSubscription, listSubscriptions } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
-import { NewSubscriptionDialog } from "./components/NewSubscriptionDialog";
+import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import "./App.css";
 
 function App() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+  const [openSeq, setOpenSeq] = useState(0);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   const reload = useCallback(async () => {
@@ -27,7 +29,21 @@ function App() {
     void reload();
   }, [reload]);
 
-  function handleAdded() {
+  useEffect(() => {
+    if (openSeq > 0) dialogRef.current?.showModal();
+  }, [openSeq]);
+
+  function startNew() {
+    setEditingSub(null);
+    setOpenSeq((s) => s + 1);
+  }
+
+  function startEdit(sub: Subscription) {
+    setEditingSub(sub);
+    setOpenSeq((s) => s + 1);
+  }
+
+  function handleSaved() {
     dialogRef.current?.close();
     void reload();
   }
@@ -46,10 +62,7 @@ function App() {
     <main className="container">
       <header className="header">
         <h1>SubTracked</h1>
-        <button
-          type="button"
-          onClick={() => dialogRef.current?.showModal()}
-        >
+        <button type="button" onClick={startNew}>
           Neues Abo
         </button>
       </header>
@@ -75,6 +88,14 @@ function App() {
                 </span>
                 <button
                   type="button"
+                  className="sub-edit"
+                  onClick={() => startEdit(sub)}
+                  aria-label={`${sub.name} bearbeiten`}
+                >
+                  Bearbeiten
+                </button>
+                <button
+                  type="button"
                   className="sub-delete"
                   onClick={() => void handleDelete(sub)}
                   aria-label={`${sub.name} löschen`}
@@ -87,7 +108,12 @@ function App() {
         </ul>
       )}
 
-      <NewSubscriptionDialog ref={dialogRef} onAdded={handleAdded} />
+      <SubscriptionDialog
+        key={`${editingSub?.id ?? "new"}-${openSeq}`}
+        ref={dialogRef}
+        subscription={editingSub}
+        onSaved={handleSaved}
+      />
     </main>
   );
 }
