@@ -2,6 +2,12 @@
 
 Anweisungen für KI-Agents, die an diesem Projekt arbeiten. Kurz halten, Konventionen einhalten, offene Aufgaben siehe [BACKLOG.md](./BACKLOG.md).
 
+## 🛎️ Schichtübergabe — IMMER ZUERST LESEN
+
+**Vor jeder Arbeit:** zuerst [HANDOVER.md](./HANDOVER.md) — den **obersten Eintrag** — vollständig lesen. Dort steht der letzte Sitzungs-Stand, der nächste geplante Schritt, getroffene Entscheidungen mit Begründung und Stolperfallen.
+
+**Am Sitzungsende:** in HANDOVER.md **oben** einen neuen Eintrag anfügen. Schablone steht unten in der Datei.
+
 ## Projekt
 
 **SubTracked** — plattformübergreifender Desktop-Tracker für wiederkehrende Zahlungen/Abos. Erinnert den Nutzer rechtzeitig (Vorlaufzeit pro Abo), damit das jeweilige Konto vor der Abbuchung gedeckt ist.
