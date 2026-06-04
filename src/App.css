@@ -27,6 +27,39 @@ h1 {
   text-align: center;
 }
 
+.empty {
+  color: #888;
+  font-style: italic;
+}
+
+.error {
+  color: #c00;
+}
+
+.sub-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5em auto;
+  max-width: 480px;
+  text-align: left;
+}
+
+.sub-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.6em 1em;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.25);
+}
+
+.sub-name {
+  font-weight: 500;
+}
+
+.sub-amount {
+  font-variant-numeric: tabular-nums;
+}
+
 input,
 button {
   border-radius: 8px;
