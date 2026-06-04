@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Subscription } from "./types";
-import { listSubscriptions } from "./lib/db";
+import { deleteSubscription, listSubscriptions } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
 import { NewSubscriptionDialog } from "./components/NewSubscriptionDialog";
 import "./App.css";
@@ -32,6 +32,16 @@ function App() {
     void reload();
   }
 
+  async function handleDelete(sub: Subscription) {
+    if (!window.confirm(`„${sub.name}“ wirklich löschen?`)) return;
+    try {
+      await deleteSubscription(sub.id);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <main className="container">
       <header className="header">
@@ -59,9 +69,19 @@ function App() {
                   nächste Fälligkeit: {formatNextDue(sub)}
                 </span>
               </div>
-              <span className="sub-amount">
-                {formatAmount(sub.amountCents, sub.currency)}
-              </span>
+              <div className="sub-meta">
+                <span className="sub-amount">
+                  {formatAmount(sub.amountCents, sub.currency)}
+                </span>
+                <button
+                  type="button"
+                  className="sub-delete"
+                  onClick={() => void handleDelete(sub)}
+                  aria-label={`${sub.name} löschen`}
+                >
+                  Löschen
+                </button>
+              </div>
             </li>
           ))}
         </ul>

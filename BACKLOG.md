@@ -14,7 +14,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 ## 🔨 Jetzt (Oberfläche)
 
 - [ ] **Abo-Liste** anzeigen (Name, Betrag, nächste Fälligkeit, Konto) — nutzt `db.listSubscriptions()` + `recurrence.nextDueDate()`
-- [ ] **Abo anlegen / bearbeiten / löschen** (Formular) — `db.addSubscription()`, `db.deleteSubscription()`
+- [ ] **Abo anlegen / bearbeiten / löschen** (Formular) — `db.addSubscription()`, `db.deleteSubscription()`, **`db.updateSubscription()` fehlt noch** (bestehende Verträge nachträglich editierbar, alle Felder)
 - [ ] **Konten** anlegen/auswählen — `db.listAccounts()`, `db.addAccount()`
 - [ ] **Kontodeckungs-Ansicht** (anstehende Abflüsse je Konto, N Monate) — `coverage.computeCoverage()`
 - [ ] **Monatliche Fixkosten-Übersicht** ("Baseline") — Summe aller aktiven Abos auf monatliche Basis normiert (`monthly` = Betrag, `quarterly` = Betrag/3, `yearly` = Betrag/12), pro Konto aufgeschlüsselt. Anzeige: "Monatlich gebunden: 324 € (Hauptkonto)". Hilft, das Konto-Polster zu kalibrieren — quasi Nulllinie der Abo-Fixkosten
