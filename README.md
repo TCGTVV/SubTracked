@@ -31,7 +31,7 @@ Funktional komplett für den Eigenbedarf (Stand 2026-06-05). Entwickelt und genu
 
 Voraussetzungen:
 
-- Node ≥ 20 und [pnpm](https://pnpm.io/)
+- Node ≥ 22.13 und [pnpm](https://pnpm.io/)
 - Rust (stable)
 - [Tauri-Build-Deps](https://tauri.app/start/prerequisites/) für dein OS (auf Linux z.B. `webkit2gtk`, `libayatana-appindicator`, …)
 
