@@ -61,7 +61,7 @@ Strategie am 2026-06-05 mit dem User diskutiert und festgelegt. Stack-Entscheidu
 
 - [x] **Schritt 1: Biome eingerichtet** (2026-06-05) — `biome.json` mit Spaces 2 / lineWidth 100, `pnpm lint` und `pnpm lint:fix` als Scripts, initialer Format-Pass über die ganze Codebase.
 - [x] **Schritt 2: Rust-Strenge** (2026-06-05) — `cargo clippy --all-targets -- -D warnings` clean ohne Eingriffe; `cargo fmt --check` hatte zwei triviale Abweichungen in `lib.rs` (eine künstlich umgebrochene Zeile + fehlende Final-Newline), per `cargo fmt` korrigiert.
-- [ ] **Schritt 3: vitest** für Pure-Logic-Tests — installieren, konfigurieren, dann Tests für `recurrence.ts` (anker-additive Logik, das ist die kritischste), `coverage.ts` (Geld-Summen), `format.ts`. `reminders.ts` evtl. mit DB-Mock.
+- [x] **Schritt 3: vitest** (2026-06-05) — `vitest@4.1.8` als devDependency, separate `vitest.config.ts` (env `node`, entkoppelt von der Tauri-`vite.config.ts`), Scripts `pnpm test` / `pnpm test:run`. 26 Tests in `src/lib/{recurrence,coverage,format}.test.ts`: zentrale Drift-Tests für die anker-additive Logik (`nextDueDate`/`dueDatesWithin` mit Anker 31.01.), Bucket-/Sortierungs-/Math.round-Verhalten in `coverage`, Locale-tolerante Regex-Matcher für `formatAmount`. `reminders.ts` (mit DB-Mock) auf später vertagt.
 - [ ] **Schritt 4: Lefthook** als Pre-Commit-Hook — eine Binary, kein Node-Hook-Dance. Hooks: `cargo fmt --check`, `cargo clippy`, `pnpm lint`, `pnpm vitest run` (nur die schnellen Unit-Tests).
 - [ ] **Schritt 5: GitHub Actions CI** — gleiche Checks wie lokal, triggert auf Push zu `main`. **Nicht** der große Matrix-Build (der bleibt im "Später"-Punkt für Release-Tags).
 

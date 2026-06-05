@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "tauri": "WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri",
     "lint": "biome check",
-    "lint:fix": "biome check --write"
+    "lint:fix": "biome check --write",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.8"
   }
 }
