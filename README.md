@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="SubTracked-Logo" width="480">
+</p>
+
 # SubTracked
 
 Persönlicher Abo-Tracker, der im System-Tray lebt. Verwaltet wiederkehrende Zahlungen, zeigt anstehende Fälligkeiten als native System-Notifications und gibt eine 6-Monats-Kontodeckungs-Übersicht.
