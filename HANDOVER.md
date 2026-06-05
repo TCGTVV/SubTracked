@@ -28,11 +28,11 @@
 
 | Bereich | Stand |
 |---|---|
-| Branch | `main`, **noch nicht gepusht** (Code-Commit + dieser HANDOVER-Commit lokal voraus) |
-| HEAD | nach HANDOVER-Commit; Code-Commit davor: `b911081` |
-| Working tree | clean nach beiden Commits |
+| Branch | `main`, **synchron mit `origin/main`** (gepusht) |
+| HEAD | `77c43d9` (HANDOVER-Commit), Code-Commit davor: `b911081` |
+| Working tree | clean |
 | Build | grün (`pnpm build` → 288,96 KB JS / 14,06 KB CSS, gzipped 89,91 KB / 3,16 KB) |
-| App | startbar (`pnpm tauri dev`); **Banner visuell vom User noch nicht abgenommen** |
+| App | startbar (`pnpm tauri dev`); **Banner-Optik vom User abgenommen** |
 
 ### Nächster Schritt
 
@@ -64,7 +64,6 @@ Backlog "Als Nächstes (Hintergrund-Betrieb)" — sinnvolle Reihenfolge:
 
 ### Offen / nicht geklärt
 
-- Banner-Optik vom User visuell abnehmen lassen.
 - Edge-Case "Reminders schon ohne Permission archiviert, danach aktiviert" — siehe Gotchas, erst bei echter Nutzung relevant.
 - Backlog-Reihenfolge "Als Nächstes" bleibt unverändert.
 
