@@ -13,6 +13,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## 🐛 Bugs
 
+- [ ] **Dropdown-Lesbarkeit im Dark-Mode** — Native `<select>`-Elemente (Intervall + Konto im `SubscriptionDialog`) bleiben mit hellem Hintergrund, während die App-Schrift im Dark-Mode weiß ist. Ergebnis: weiß auf weiß, unlesbar. WebKitGTK rendert native Form-Controls in OS-Defaults, das CSS-Variablen-System der App greift dort nicht automatisch durch. Quick-Fix via expliziter Dark-Mode-Regel für `select`/`option` (background + color setzen). **Hinweis**: Das geplante UI-Redesign Richtung Material 3 (Backlog "🌱 Später") würde das eh komplett ersetzen — aber bis dahin ist die Bedienung blockiert, also Quick-Fix lohnt.
 - [ ] **Datenpersistenz nach Reboot — Beobachtung beobachten.** User hatte am 2026-06-05 berichtet, nach einem System-Neustart seien angelegte Abos weg. Untersuchung am selben Tag (siehe HANDOVER 2026-06-05 — Persistenz-Diagnose): DB unter `~/.config/com.tcgtvv.subtracked/subtracker.db` enthält die Daten, WAL aktiv, Identifier nie geändert, Code-Pfad clean (`getDb` cached, `listSubscriptions` plain SELECT, Errors werden im UI als Banner sichtbar). Aktuell **nicht reproduzierbar** — Persistenz scheint gesund.
 
   Falls das Phänomen wieder auftritt, in dieser Reihenfolge:

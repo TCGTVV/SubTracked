@@ -9,6 +9,79 @@
 
 ---
 
+## 2026-06-05 — Marathon-Session-Abschluss
+
+Sessions-Wrap-Up. Tagesabschluss nach einem langen Tag mit vielen Strängen — Tests-/Qualitäts-Strategie komplett (5/5), Mikro-Cleanups, Architektur-Diskussion + Hands-on auf ➊ durchgezogen. Detail-Einträge stehen unten — dies ist die Übersicht plus der konkrete Stand zur nächsten Session.
+
+### Heute insgesamt erledigt (chronologisch)
+
+| Thema | Commits | HANDOVER-Eintrag |
+|---|---|---|
+| Logo `assets/logo.png` + im README eingebunden | `5268a2e`, `d3d7e30`, `5c130cf` | "Logo ins Repo" |
+| 📐 Tests-Strategie Schritt 2 (Rust-Strenge) | `1fb3b57` | "Schritte 2+3" |
+| 📐 Tests-Strategie Schritt 3 (vitest, 26 Tests) | `64ee85e` | "Schritte 2+3" |
+| 📐 Tests-Strategie Schritt 4 (Lefthook) | `059507f`, `b80747a` | "Schritt 4" |
+| 📐 Tests-Strategie Schritt 5 (GitHub Actions CI) | `74b2131`, `275ed0c`, `0dc5b9b` | "Schritt 5" |
+| Mikro-Cleanups: README Node, SubRow-Cast, Opener entfernen | `827eaf6`, `4a83712`, `ddc4e4c`, `a316042` | "Mikro-Cleanups" |
+| 🏛️ Architektur-Diskussion + Plan-Festlegung | `3b61620`, `0905be2` | "Architektur-Diskussion" |
+| 🏛️ Architektur ➊ (Custom Hooks) | `1e936ba`, `8d2fd19` | "Architektur ➊" |
+| Dropdown-Bug + dieser Session-Abschluss | (folgt) | hier |
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal eins vor `origin/main` (Push folgt mit diesem Commit) |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓, `pnpm build` ✓, `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| **GitHub Actions** | grün auf `main` (zuletzt erfolgreich gefahren mit `0dc5b9b`) |
+| Hooks | aktiv (Lefthook, 4 parallele Jobs) |
+
+### Nächster Schritt — wichtig für die nächste Session
+
+**Die ursprüngliche Architektur-Reihenfolge ➊→➋→➌ kollidiert mit der technischen Abhängigkeitskette.** ➊ (Custom Hooks) ist durch, aber:
+
+- **➋ "Reminder-Loop ins Rust-Backend"** braucht DB-Zugriff aus Rust.
+- **Aktuell** lebt die DB-Schicht komplett im Frontend via `tauri-plugin-sql`. Rust-Seite (`src-tauri/src/lib.rs`) hat keinen eigenen DB-Zugriff.
+- **Zwei Wege**:
+  - **A)** Eigener Rust-DB-Pool via `sqlx`/`rusqlite` neben `tauri-plugin-sql`. Schneller, aber zwei Connection-Pools auf einer Datei — WAL hilft, aber Concurrency-Risiko.
+  - **B)** Erst ➌ (Tauri-Commands, also DB-Logik nach Rust verlagern), dann ➋ einfach drauf. Sauber, aber Reihenfolge tauscht zu **➊→➌→➋**.
+- **Empfehlung an die nächste Session**: Mit dem User die Reihenfolge-Frage klären, bevor Hands-on. Option B (Reihenfolge tauschen) ist die saubere Variante, aber ➌ ist deutlich größer und braucht vermutlich zwei Sessions.
+
+**Plan B-Plan**: Falls keine Lust auf großen Block, sind Quick-Win-Items naheliegend:
+- 🐛 **Dropdown-Lesbarkeit im Dark-Mode** (neu im Backlog) — CSS-Override für `<select>`/`<option>` im Dark-Theme. 5–10 Min Quick-Fix, bis das UI-Redesign kommt.
+- 🚀 **Lokaler Installer-Build** (`pnpm tauri build` → `.deb`/`.AppImage` → installieren → Tray/Autostart real testen). Bonus: klärt den Persistenz-Bug-Verdacht.
+
+### Wichtige Entscheidungen + Begründung (Tages-Summe)
+
+- **Tests-Strategie komplett ausgerollt**: Biome → cargo clippy/fmt → vitest → Lefthook → GitHub Actions. Jede Stufe einzeln dokumentiert. Hot-Path: jeder Commit wird lokal vorab geprüft, Push wird in der Cloud nochmal validiert.
+- **Architektur-Diskussion explizit geführt** statt "machen wir mal" — User wollte Zweitmeinung zu Codex' "alles perfekt", acht Themen mit File-Belegen identifiziert, Reihenfolge gemeinsam beschlossen.
+- **`replace_content` + Serena-symbolische Tools etabliert** in der Session-Mitte (User-Hinweis "ich sehe keine Serena-Usage"). Feedback-Memory `feedback-serena` angelegt — bei nächstem Session-Start zuerst `initial_instructions` aufrufen.
+
+### Gotchas / Stolperfallen (aus Tagessumme)
+
+- **pnpm v11 zwingt zu Node ≥ 22.13** (CI-Erkenntnis). README + tech_stack-Memory angepasst.
+- **Lefthook 2.x skippt Jobs mit `root:`** bei ungeladenen staged files — sinnvolle Heuristik, aber im Trockenlauf nutze `--force`.
+- **Bash-Tail kann Hook-Errors verschlucken**: lieber `git log` checken statt dem Output trauen, wenn kein Commit-Hash erscheint.
+- **Biome formatiert JSON-Arrays kontext-abhängig**: 5 Einträge → Multi-Line, 4 → One-Line. Diff-Rauschen bei Permission-Sets.
+- **Timezone-Trap in Vitest-Date-Tests**: `new Date("YYYY-MM-DD")` ist UTC-Mitternacht, `startOfDay()` arbeitet lokal — Helper `d(y, m, d)` in jeder Test-Datei einbauen.
+- **Architektur ➋ + ➌ technisch verkoppelt** (siehe "Nächster Schritt"). Klären bevor Hands-on.
+
+### Geänderte/neue Memories
+
+- **Auto-Memory** `feedback-serena.md` neu: bei Session-Start zuerst Serena MCP aktivieren. Begründung: heutige Korrektur durch User.
+- **Serena** `tech_stack` und `suggested_commands` komplett aktualisiert (Biome, vitest, Lefthook, CI, neue Befehle).
+
+### Offen / nicht geklärt
+
+- Architektur-Reihenfolge ➋ vs. ➌ (siehe oben — User-Diskussion vor Hands-on).
+- 🐛 Dropdown-Bug (Quick-Fix).
+- 🚀 Installer-Build steht weiter offen.
+- 🎨 Logo-Re-Export wartet auf User mit Quelltool.
+- Architektur-Punkte ➍ bis ➑ als Diskussions-Material im Backlog.
+
+---
+
 ## 2026-06-05 — Architektur ➊ erledigt (Custom Hooks)
 
 Punkt ➊ aus der Architektur-Sektion durchgezogen. Erste Hands-on-Architektur-Verbesserung der heutigen Marathon.
