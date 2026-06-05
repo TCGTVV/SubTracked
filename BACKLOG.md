@@ -13,16 +13,15 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## 🐛 Bugs
 
-- [ ] **Datenpersistenz nach Reboot prüfen.** Beobachtet vom User (2026-06-05): nach einem System-Neustart waren bereits angelegte Abos weg. Potenziell kritisch (Daten-Verlust). Verdachts-Punkte:
-  - DB-Pfad-Drift zwischen Dev-Lauf und einem späteren Installer-Build (`tauri::app_data_dir()` hängt am Bundle-Identifier `com.tcgtvv.subtracked` — sollte gleich sein, aber explizit prüfen).
-  - SQLite-WAL/Journal nicht gecheckpointet, bevor App beendet wird (Connection-Lifecycle in `tauri-plugin-sql` auditieren).
-  - Beim Beenden über Tray → `app.exit(0)` läuft kein expliziter SQLite-Shutdown.
+- [ ] **Datenpersistenz nach Reboot — Beobachtung beobachten.** User hatte am 2026-06-05 berichtet, nach einem System-Neustart seien angelegte Abos weg. Untersuchung am selben Tag (siehe HANDOVER 2026-06-05 — Persistenz-Diagnose): DB unter `~/.config/com.tcgtvv.subtracked/subtracker.db` enthält die Daten, WAL aktiv, Identifier nie geändert, Code-Pfad clean (`getDb` cached, `listSubscriptions` plain SELECT, Errors werden im UI als Banner sichtbar). Aktuell **nicht reproduzierbar** — Persistenz scheint gesund.
 
-  Reproduktions-Schritte für die nächste Session:
-  1. `~/.local/share/com.tcgtvv.subtracked/` (oder OS-Äquivalent) auflisten — DB-Datei + WAL/SHM da?
-  2. Abo anlegen, App via Tray-"Beenden" schließen, Datei-Zeitstempel der DB prüfen.
-  3. App neu starten — Abo da?
-  4. Falls 3 negativ: PRAGMA `journal_mode`, `synchronous` prüfen; SQLx-Pool-Lifecycle in lib.rs.
+  Falls das Phänomen wieder auftritt, in dieser Reihenfolge:
+  1. `ls -la ~/.config/com.tcgtvv.subtracked/` — DB + WAL + SHM da, Zeitstempel sinnvoll?
+  2. `sqlite3 ~/.config/com.tcgtvv.subtracked/subtracker.db "SELECT * FROM subscriptions;"` — Einträge in der DB?
+  3. Wenn DB voll, UI leer → Frontend-Bug. Devtools-Console im `pnpm tauri dev` prüfen (silent rejection in `listSubscriptions`?).
+  4. Wenn DB leer → Connection-Lifecycle in `tauri-plugin-sql` auditieren; PRAGMA `journal_mode`/`synchronous`; prüfen ob das Verzeichnis von außen geleert wird.
+
+  **DB-Pfad-Sonderheit**: `tauri-plugin-sql` nutzt `app_config_dir()`, nicht `app_data_dir()` — die Datei landet daher im Config-Dir (`~/.config/...` auf Linux), obwohl es Nutzdaten sind. Footgun für Suchen am falschen Ort.
 
 ## 🔨 Jetzt (Oberfläche)
 

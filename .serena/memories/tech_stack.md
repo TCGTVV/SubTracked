@@ -10,7 +10,7 @@
 
 ## SQLite-Pfad
 
-`sqlite:subtracker.db` — registriert in `src-tauri/src/lib.rs`. Liegt im OS-spezifischen App-Data-Verzeichnis von Tauri.
+`sqlite:subtracker.db` — registriert in `src-tauri/src/lib.rs`. Das `tauri-plugin-sql` legt die Datei im **App-Config-Dir** ab (nicht Data-Dir, Sonderheit — siehe `app_config_dir()` in `tauri-plugin-sql/src/wrapper.rs`). Auf Linux: `~/.config/com.tcgtvv.subtracked/subtracker.db`. macOS: `~/Library/Application Support/com.tcgtvv.subtracked/`. Windows: `%APPDATA%\com.tcgtvv.subtracked\`. WAL-Mode aktiv (`journal_mode=wal`).
 
 ## TypeScript
 
