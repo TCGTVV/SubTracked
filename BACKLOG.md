@@ -52,16 +52,13 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## 📐 Tests & Qualität
 
-- [ ] **Test- & Qualitätssicherungs-Strategie festlegen** (Diskussion vor Umsetzung). Aktueller Stand: nur `tsc` + `cargo check`, keine Tests, kein Lint, kein Formatter. Themen für die Diskussion:
-  - **Unit-Tests**: vitest für reines TS (`recurrence.ts`, `coverage.ts`, `format.ts`, `reminders.ts` mit Mock-DB)
-  - **Komponenten-Tests**: vitest + React Testing Library für Dialoge & Banner
-  - **E2E/Smoke**: nötig? Tauri-WebDriver-Setup ist nicht-trivial — vielleicht erst ab Beta
-  - **Lint**: ESLint mit `eslint-plugin-react` + `typescript-eslint`? Oder Biome (eine Tool-Chain, schneller)?
-  - **Formatter**: Prettier (Standard) oder Biome (s.o.)
-  - **Rust-Seite**: `cargo clippy` mit `-D warnings` als Pflicht; `cargo fmt --check`
-  - **Pre-Commit-Hook** (lefthook bevorzugt, weil leichter als husky)
-  - **CI**: was läuft wann (Push, PR, Tag)? GitHub Actions vermutlich, sobald das CI-Matrix-Item aus "Später" angegangen wird
-  - Reihenfolge der Einführung: was ist High-ROI zuerst? (Wahrscheinlich Formatter + Clippy + vitest-Unit für die pure Logik.)
+Strategie am 2026-06-05 mit dem User diskutiert und festgelegt. Stack-Entscheidungen: **Biome** statt ESLint+Prettier (eine Tool, Rust-basiert, vernünftige Defaults), **vitest** für Pure-Logic-Tests jetzt (Komponenten/E2E später, siehe "Später"), **Lefthook** statt husky (leichter), **GitHub Actions** für CI (nicht der Matrix-Build, der bleibt separat). Schritte in Reihenfolge:
+
+- [x] **Schritt 1: Biome eingerichtet** (2026-06-05) — `biome.json` mit Spaces 2 / lineWidth 100, `pnpm lint` und `pnpm lint:fix` als Scripts, initialer Format-Pass über die ganze Codebase.
+- [ ] **Schritt 2: Rust-Strenge** — `cargo clippy -- -D warnings` + `cargo fmt --check` einmal lokal durchlaufen, Warnings aufräumen. Beides als dokumentierte Befehle.
+- [ ] **Schritt 3: vitest** für Pure-Logic-Tests — installieren, konfigurieren, dann Tests für `recurrence.ts` (anker-additive Logik, das ist die kritischste), `coverage.ts` (Geld-Summen), `format.ts`. `reminders.ts` evtl. mit DB-Mock.
+- [ ] **Schritt 4: Lefthook** als Pre-Commit-Hook — eine Binary, kein Node-Hook-Dance. Hooks: `cargo fmt --check`, `cargo clippy`, `pnpm lint`, `pnpm vitest run` (nur die schnellen Unit-Tests).
+- [ ] **Schritt 5: GitHub Actions CI** — gleiche Checks wie lokal, triggert auf Push zu `main`. **Nicht** der große Matrix-Build (der bleibt im "Später"-Punkt für Release-Tags).
 
 ## 🌱 Später
 
@@ -76,6 +73,9 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [ ] `SubRow.interval`: aus SQLite kommt ein roher `string` — sauberer Cast in `mapSub` statt implizit auf `Interval` zu vertrauen (DB-`CHECK` greift, aber Typ ist optimistisch)
 - [ ] `tauri-plugin-opener` entfernen, falls nicht für externe Links genutzt (aktuell ungenutzt)
 - [ ] **Lokalisierung der Eingaben** — Inputs sollten DE-Konventionen tolerieren, nicht nur HTML-Standards. Konkret: Beträge mit Komma *und* Punkt als Dezimaltrenner annehmen (z.B. `12,99` und `12.99` beide gültig), Tausendertrennzeichen ignorieren. Mittelfristig: ein gemeinsamer Eingabe-Parser für Beträge an einer Stelle
+- [ ] **Komponenten-Tests via React Testing Library**, wenn UI komplexer wird (SubscriptionDialog hat schon viel State, SettingsDialog wird wachsen). Setzt vitest aus dem Tests-Block voraus.
+- [ ] **E2E-Tests via Tauri WebDriver** vor `v1.0`. Großer Setup-Aufwand, ROI erst wenn echte User-Flows stabil bleiben müssen.
+- [ ] **`CoverageItem` um `subscription_id` erweitern**, damit der React-Key in `OverviewSection` (`${subscription}-${date}`) trivial eindeutig wird. Aktuell pragmatische Annahme: pro Konto keine zwei Subs mit identischem Namen UND identischem Fälligkeitstag.
 
 ## Hinweise
 
