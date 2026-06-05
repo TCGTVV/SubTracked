@@ -9,6 +9,7 @@ import { formatAmount, formatNextDue } from "./lib/format";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { OverviewSection } from "./components/OverviewSection";
+import { runReminderCheck } from "./lib/reminders";
 import "./App.css";
 
 function App() {
@@ -48,6 +49,17 @@ function App() {
   useEffect(() => {
     void reloadAll();
   }, [reloadAll]);
+
+  useEffect(() => {
+    const tick = () => {
+      void runReminderCheck().catch((e) => {
+        console.error("runReminderCheck fehlgeschlagen:", e);
+      });
+    };
+    tick();
+    const handle = setInterval(tick, 60 * 60 * 1000);
+    return () => clearInterval(handle);
+  }, []);
 
   useEffect(() => {
     if (subOpenSeq > 0) subDialogRef.current?.showModal();
