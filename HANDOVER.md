@@ -9,6 +9,76 @@
 
 ---
 
+## 2026-06-05 — Tests-Strategie Schritte 2+3 (Rust-Strenge + vitest)
+
+Direkt im Anschluss an die Logo-Mini-Session weiter im Plan: zwei Tests-Strategie-Schritte abgeräumt. Außerdem User-Korrektur am vorherigen HANDOVER-Eintrag eingearbeitet (Logo-Optimierung gehört als TODO ins Backlog, nicht als Gotcha hier) plus User-Beobachtung am Logo-Hintergrund ins Backlog.
+
+### Was passierte
+
+- **Backlog-Aufräumarbeit**:
+  - Logo-Optimierungs-TODO aus dem HANDOVER-Gotcha-Block in den Backlog verschoben (User-Hinweis).
+  - Backlog-Item für Logo-Bug ergänzt: Schachbrettmuster im Hintergrund ist *kein* Alpha-Kanal, sondern wurde versehentlich als Pixel mit-exportiert (Editor-Anzeige-Konvention für Transparenz fälschlich gerastert). Mit dem Komprimierungs-Item zu einem Re-Export-Item konsolidiert. Commit `5c130cf`.
+- **Schritt 2: Rust-Strenge** (Commit `1fb3b57`):
+  - `cargo clippy --all-targets -- -D warnings` clean ohne Eingriffe.
+  - `cargo fmt --check` zeigte zwei triviale Abweichungen in `src-tauri/src/lib.rs` — eine manuell umgebrochene Zeile die unter 100 Zeichen passt + fehlende Final-Newline. Per `cargo fmt` automatisch korrigiert.
+  - Backlog-Schritt-2 abgehakt.
+- **Schritt 3: vitest** (Commit `64ee85e`):
+  - `vitest@4.1.8` als devDependency installiert.
+  - **Separate `vitest.config.ts`** (env `node`, include `src/**/*.test.ts`), entkoppelt von `vite.config.ts` (dort steht Tauri-Server/HMR-Setup, das Tests nicht brauchen).
+  - Scripts `pnpm test` (watch) und `pnpm test:run` (einmalig/CI).
+  - **3 Test-Files, 26 Tests, alle grün**:
+    - `src/lib/recurrence.test.ts` (11): `monthsPer`-Mapping, `nextDueDate`-Sprünge für alle drei Intervalle, **expliziter Anker-Additiv-Drift-Beweis** (Anker 31.01.2025 → 28.02 → 31.03 → 30.04 → 31.05 → 30.06 → 31.07 statt naiv iterativ 28.02 → 28.03 → 28.04 …). `dueDatesWithin` mit Endpunkt-Inklusivität, leerem Range, Jahres-Sprünge.
+    - `src/lib/coverage.test.ts` (9): Bucket-Gruppierung nach Konto, Platzhalter für `null`/verwaiste accountId, Sortierungen, Math.round-Reihenfolge in `computeMonthlyBaseline` (10000/12 = 833.33 → 833).
+    - `src/lib/format.test.ts` (6): Locale-tolerante Regex-Matcher (`/^9,99\s*€$/` statt exakter Strings — Intl.NumberFormat nutzt ggf. NBSP zwischen Zahl und €), dd.MM.yyyy-Ausgabe, ISO-Format-Pattern.
+  - Backlog-Schritt-3 abgehakt.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal 4 Commits vor `origin/main` (Push folgt mit diesem HANDOVER) |
+| HEAD | HANDOVER-Commit folgt; Code-Commits zuvor: `5c130cf` (Backlog-Reorg), `1fb3b57` (Rust-Strenge), `64ee85e` (vitest + Tests) |
+| Working tree | clean nach diesem Commit |
+| Build | `pnpm lint` clean, `pnpm test:run` 26/26 grün, `cargo clippy --all-targets -- -D warnings` clean, `cargo fmt --check` clean, `pnpm exec tsc --noEmit` clean |
+| App | nicht angefasst |
+
+### Nächster Schritt
+
+📐 Tests & Qualität weiter:
+
+- **Schritt 4: Lefthook** als Pre-Commit-Hook. Eine Binary, kein Node-Hook-Dance. Hooks: `cargo fmt --check`, `cargo clippy -- -D warnings`, `pnpm lint`, `pnpm test:run`. Dadurch laufen die Checks automatisch vor jedem Commit — sonst kommen unsortierte Imports oder fehlgeschlagene Tests erst in CI auf.
+- **Schritt 5: GitHub Actions CI** als CI-Mantel über alles. Gleiche Checks wie lokal, triggert auf Push zu `main`. **Nicht** der große Matrix-Build (der bleibt für Release-Tags im "Später"-Block).
+
+Parallel/Alternative weiterhin: 🚀 **Lokales Installer-Build** als Pause-Wechsel.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Separate `vitest.config.ts`** statt `test`-Block in `vite.config.ts`: Tauri-`vite.config.ts` hat fixed-Port-Server, HMR-Setup, `process.env.TAURI_DEV_HOST`-Trickserei — alles irrelevant für Tests und potenziell Reibungspunkte. Entkoppelt sauberer trennbar.
+- **Helper `d(year, month, day)` in den Tests** statt `new Date("YYYY-MM-DD")`: Timezone-Footgun beim ersten Lauf gefangen. ISO-only-Date wird als UTC-Mitternacht geparst, `startOfDay()` arbeitet aber lokal — daraus ergibt sich ein 23:00-Drift, der ALLE Date-Vergleiche kaputtmacht. `new Date(year, month-1, day)` baut lokale Mitternacht direkt. Im Test-File mit Kommentar erklärt, damit der Trick beim nächsten Lesen nicht überrascht.
+- **Locale-tolerante Regex** für `formatAmount` statt `toBe("9,99 €")`: `Intl.NumberFormat` setzt zwischen Zahl und Währungssymbol mal Space, mal NBSP, je nach ICU-Version. Exakter String-Vergleich wäre brüchig.
+- **Anker-Additiv-Drift-Test als zentrales Sicherheitsnetz**: HANDOVER-Liste markiert die Logik als kritischsten Punkt (`mem:conventions` ebenfalls). Test mit Anker 31.01.2025 und 6 Folgemonaten ist ein klarer Bug-Detektor — ein naiv iterativer Algorithmus würde ab Februar permanent auf 28. fallen, der Test schlägt sofort an.
+- **`describe/it/expect` explizit importiert** statt vitest-Globals: keine `vitest/globals` in `tsconfig.json` nötig, alles per Datei selbsterklärend, kein impliziter Magic.
+- **`reminders.ts`-Tests bewusst vertagt**: braucht DB-Mock, der allein doppelt so viel Code wie alle anderen Tests zusammen wäre. ROI gering, weil die Logik dort dünn ist (Permission-Check + `insertReminderIfNew`-Aufruf, beides Side-Effect-lastig). Im Backlog-Item erwähnt.
+
+### Gotchas / Stolperfallen
+
+- **Timezone-Trap in Date-Tests** (siehe oben). Wer neue Tests schreibt: immer `d(y, m, d)`-Helper oder `new Date(year, month-1, day)`, niemals ISO-only-Strings als Erwartung.
+- **`pnpm test` läuft im Watch-Mode**, `pnpm test:run` einmalig. Im Pre-Commit (Schritt 4) und CI (Schritt 5) muss `test:run` rein, sonst hängt der Hook/CI.
+- **vitest 4 nutzt `vitest/config`** für `defineConfig` — der ältere Pfad `vitest` wäre tot. Bei Doku-Suche darauf achten.
+- **`Intl.NumberFormat` in Node**: Node 20+ hat ICU eingebaut, daher Tests laufen ohne extra Setup. Auf älteren Nodes (≤14) wäre `Intl` ohne full-ICU englischsprachig — irrelevant für uns, weil wir Node 20+ voraussetzen (`package.json`-eng. siehe README).
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Logo-Re-Export (Transparenz + Größe) — Backlog-Item, wartet auf User-Aktion mit dem Quelltool.
+- Schritte 4 (Lefthook) und 5 (GitHub Actions CI) im Backlog für die nächste Session.
+- `reminders.ts`-Tests — vertagt, kein Datum.
+
+---
+
 ## 2026-06-05 — Logo ins Repo, im README eingebunden
 
 Kurze Mini-Session direkt im Anschluss an den Außendarstellungs-Nachtrag der Vor-Session. User hatte ein Logo entwerfen lassen und in den Repo-Root gelegt (`Logo.png`); Frage war `docs/` vs `assets/` als Zielort.
