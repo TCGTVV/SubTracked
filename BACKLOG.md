@@ -23,7 +23,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## ⏭️ Als Nächstes (Hintergrund-Betrieb)
 
-- [ ] **Tray-Icon** + Fenster beim Schließen nur verstecken (App läuft weiter)
+- [x] **Tray-Icon** + Fenster beim Schließen nur verstecken (App läuft weiter)
 - [ ] **Autostart beim Login** über Einstellungen aktivierbar (`@tauri-apps/plugin-autostart` `enable()`)
 - [x] Notification-Berechtigung sauber abfragen und Status anzeigen
 - [ ] Vorlaufzeit (`lead_days`) pro Abo in der UI editierbar
