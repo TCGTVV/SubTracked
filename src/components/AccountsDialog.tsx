@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type Ref } from "react";
+import { type FormEvent, type Ref, useId, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount } from "../lib/db";
 import type { Account } from "../types";
 
@@ -116,14 +116,13 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
           </div>
 
           {error && (
-            <p className="error" role="alert">Fehler: {error}</p>
+            <p className="error" role="alert">
+              Fehler: {error}
+            </p>
           )}
 
           <div className="form-actions">
-            <button
-              type="button"
-              onClick={(e) => e.currentTarget.closest("dialog")?.close()}
-            >
+            <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
               Schließen
             </button>
             <button type="submit" disabled={submitting || !name.trim()}>

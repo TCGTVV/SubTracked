@@ -1,5 +1,5 @@
-import { useEffect, useId, useState, type Ref } from "react";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { type Ref, useEffect, useId, useState } from "react";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
@@ -72,10 +72,7 @@ export function SettingsDialog({ ref }: Props) {
         )}
 
         <div className="form-actions">
-          <button
-            type="button"
-            onClick={(e) => e.currentTarget.closest("dialog")?.close()}
-          >
+          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
             Schließen
           </button>
         </div>

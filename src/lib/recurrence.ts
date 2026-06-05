@@ -16,11 +16,7 @@ export const monthsPer: Record<Interval, number> = {
  * (31.01. -> 28.02. -> 28.03. statt korrekt 31.03.). date-fns klemmt den
  * Monatstag jeweils relativ zum Original sauber ab.
  */
-export function nextDueDate(
-  anchor: Date,
-  interval: Interval,
-  from: Date = new Date(),
-): Date {
+export function nextDueDate(anchor: Date, interval: Interval, from: Date = new Date()): Date {
   const f = startOfDay(from);
   const step = monthsPer[interval];
   let k = 0;
@@ -33,12 +29,7 @@ export function nextDueDate(
 }
 
 /** Alle Fälligkeiten im Zeitraum [from, until] (inklusive) — für die Kontodeckung. */
-export function dueDatesWithin(
-  anchor: Date,
-  interval: Interval,
-  from: Date,
-  until: Date,
-): Date[] {
+export function dueDatesWithin(anchor: Date, interval: Interval, from: Date, until: Date): Date[] {
   const f = startOfDay(from);
   const u = startOfDay(until);
   const step = monthsPer[interval];

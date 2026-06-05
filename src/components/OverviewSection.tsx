@@ -22,25 +22,20 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
       <div className="overview-section">
         <h2>Monatliche Baseline</h2>
         <p className="overview-hint">
-          Was im Schnitt pro Monat fix abgeht (jährliche und quartalsweise
-          Beträge auf monatlich normiert). Hilft, das Konto-Polster zu
-          kalibrieren.
+          Was im Schnitt pro Monat fix abgeht (jährliche und quartalsweise Beträge auf monatlich
+          normiert). Hilft, das Konto-Polster zu kalibrieren.
         </p>
         <ul className="baseline-list">
           {baseline.map((b) => (
             <li key={b.account} className="baseline-item">
               <span className="baseline-account">{b.account}</span>
-              <span className="baseline-amount">
-                {formatAmount(b.monthlyCents, "EUR")}/Monat
-              </span>
+              <span className="baseline-amount">{formatAmount(b.monthlyCents, "EUR")}/Monat</span>
             </li>
           ))}
           {baseline.length > 1 && (
             <li className="baseline-item baseline-total">
               <span className="baseline-account">Gesamt</span>
-              <span className="baseline-amount">
-                {formatAmount(totalMonthly, "EUR")}/Monat
-              </span>
+              <span className="baseline-amount">{formatAmount(totalMonthly, "EUR")}/Monat</span>
             </li>
           )}
         </ul>
@@ -55,23 +50,16 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
             <details key={account.account} className="coverage-account">
               <summary>
                 <span className="coverage-name">{account.account}</span>
-                <span className="coverage-total">
-                  {formatAmount(account.totalCents, "EUR")}
-                </span>
+                <span className="coverage-total">{formatAmount(account.totalCents, "EUR")}</span>
               </summary>
               <ul className="coverage-items">
-                {account.items.map((it, i) => (
-                  <li
-                    key={`${it.subscription}-${it.date}-${i}`}
-                    className="coverage-row"
-                  >
+                {account.items.map((it) => (
+                  <li key={`${it.subscription}-${it.date}`} className="coverage-row">
                     <span className="coverage-row-name">{it.subscription}</span>
                     <span className="coverage-row-date">
                       {format(parseISO(it.date), "dd.MM.yyyy", { locale: de })}
                     </span>
-                    <span className="coverage-row-amount">
-                      {formatAmount(it.cents, "EUR")}
-                    </span>
+                    <span className="coverage-row-amount">{formatAmount(it.cents, "EUR")}</span>
                   </li>
                 ))}
               </ul>

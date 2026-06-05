@@ -1,10 +1,7 @@
-import {
-  isPermissionGranted,
-  sendNotification,
-} from "@tauri-apps/plugin-notification";
-import { startOfDay, subDays, isBefore, format } from "date-fns";
+import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification";
+import { format, isBefore, startOfDay, subDays } from "date-fns";
+import { insertReminderIfNew, listSubscriptions } from "./db";
 import { nextDueDate } from "./recurrence";
-import { listSubscriptions, insertReminderIfNew } from "./db";
 
 /**
  * Prüft alle aktiven Abos und sendet native Benachrichtigungen für Fälligkeiten,

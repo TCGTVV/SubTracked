@@ -1,5 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
-import type { Account, Subscription, Interval } from "../types";
+import type { Account, Interval, Subscription } from "../types";
 
 let _db: Database | null = null;
 
@@ -48,10 +48,10 @@ export async function listAccounts(): Promise<Account[]> {
 
 export async function addAccount(name: string, note?: string): Promise<number> {
   const db = await getDb();
-  const res = await db.execute(
-    "INSERT INTO accounts (name, note) VALUES ($1, $2)",
-    [name, note ?? null],
-  );
+  const res = await db.execute("INSERT INTO accounts (name, note) VALUES ($1, $2)", [
+    name,
+    note ?? null,
+  ]);
   return res.lastInsertId ?? 0;
 }
 

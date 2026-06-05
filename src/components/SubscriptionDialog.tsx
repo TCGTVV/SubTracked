@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type Ref } from "react";
+import { type FormEvent, type Ref, useId, useState } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
 import { todayISO } from "../lib/format";
 import type { Account, Interval, Subscription } from "../types";
@@ -35,9 +35,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   const leadId = useId();
 
   const [name, setName] = useState(subscription?.name ?? "");
-  const [amount, setAmount] = useState(
-    subscription ? centsToInput(subscription.amountCents) : "",
-  );
+  const [amount, setAmount] = useState(subscription ? centsToInput(subscription.amountCents) : "");
   const [currency, setCurrency] = useState<string>(subscription?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(subscription?.accountId ?? null);
   const [interval, setInterval] = useState<Interval>(subscription?.interval ?? "monthly");
@@ -117,13 +115,11 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
           </div>
           <div className="field field-narrow">
             <label htmlFor={currencyId}>Währung</label>
-            <select
-              id={currencyId}
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
+            <select id={currencyId} value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>
+                  {c}
+                </option>
               ))}
             </select>
           </div>
@@ -134,13 +130,13 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
           <select
             id={accountIdId}
             value={accountId === null ? "" : String(accountId)}
-            onChange={(e) =>
-              setAccountId(e.target.value === "" ? null : Number(e.target.value))
-            }
+            onChange={(e) => setAccountId(e.target.value === "" ? null : Number(e.target.value))}
           >
             <option value="">(kein Konto)</option>
             {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
             ))}
           </select>
         </div>
@@ -153,7 +149,9 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
             onChange={(e) => setInterval(e.target.value as Interval)}
           >
             {INTERVAL_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
             ))}
           </select>
         </div>
@@ -161,12 +159,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
         <div className="field-row">
           <div className="field">
             <label htmlFor={anchorId}>Erste Fälligkeit</label>
-            <DateField
-              id={anchorId}
-              value={anchorDate}
-              onChange={setAnchorDate}
-              required
-            />
+            <DateField id={anchorId} value={anchorDate} onChange={setAnchorDate} />
           </div>
           <div className="field field-narrow">
             <label htmlFor={leadId}>Vorlauf (Tage)</label>
@@ -185,24 +178,19 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
 
         <div className="field">
           <label className="setting-label">
-            <input
-              type="checkbox"
-              checked={notify}
-              onChange={(e) => setNotify(e.target.checked)}
-            />
+            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
             <span>Erinnerungen für dieses Abo</span>
           </label>
         </div>
 
         {error && (
-          <p className="error" role="alert">Fehler beim Speichern: {error}</p>
+          <p className="error" role="alert">
+            Fehler beim Speichern: {error}
+          </p>
         )}
 
         <div className="form-actions">
-          <button
-            type="button"
-            onClick={(e) => e.currentTarget.closest("dialog")?.close()}
-          >
+          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
             Abbrechen
           </button>
           <button type="submit" disabled={submitting}>

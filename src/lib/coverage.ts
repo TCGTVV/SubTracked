@@ -1,6 +1,6 @@
 import { addMonths, startOfDay } from "date-fns";
+import type { Account, Subscription } from "../types";
 import { dueDatesWithin, monthsPer } from "./recurrence";
-import type { Subscription, Account } from "../types";
 
 export interface CoverageItem {
   subscription: string;
@@ -32,11 +32,10 @@ export function computeCoverage(
   for (const sub of subscriptions) {
     const label =
       sub.accountId != null
-        ? accName.get(sub.accountId) ?? "(unbekanntes Konto)"
+        ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)")
         : "(kein Konto zugeordnet)";
 
-    const bucket =
-      buckets.get(label) ?? { account: label, totalCents: 0, items: [] };
+    const bucket = buckets.get(label) ?? { account: label, totalCents: 0, items: [] };
 
     for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
       bucket.totalCents += sub.amountCents;
@@ -75,7 +74,7 @@ export function computeMonthlyBaseline(
   for (const sub of subscriptions) {
     const label =
       sub.accountId != null
-        ? accName.get(sub.accountId) ?? "(unbekanntes Konto)"
+        ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)")
         : "(kein Konto zugeordnet)";
     const monthly = sub.amountCents / monthsPer[sub.interval];
     buckets.set(label, (buckets.get(label) ?? 0) + monthly);

@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from "react";
-import { DayPicker } from "react-day-picker";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
+import { useEffect, useRef, useState } from "react";
+import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 
 interface Props {
   id: string;
   value: string;
   onChange: (value: string) => void;
-  required?: boolean;
 }
 
-export function DateField({ id, value, onChange, required }: Props) {
+export function DateField({ id, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +47,6 @@ export function DateField({ id, value, onChange, required }: Props) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-required={required}
       >
         {label}
       </button>

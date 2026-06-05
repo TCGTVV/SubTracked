@@ -1,24 +1,17 @@
+import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Account, Subscription } from "./types";
-import {
-  deleteSubscription,
-  listAccounts,
-  listSubscriptions,
-} from "./lib/db";
-import { formatAmount, formatNextDue } from "./lib/format";
-import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { AccountsDialog } from "./components/AccountsDialog";
-import { SettingsDialog } from "./components/SettingsDialog";
-import { OverviewSection } from "./components/OverviewSection";
-import { runReminderCheck } from "./lib/reminders";
 import {
   NotificationPermissionBanner,
   type NotificationStatus,
 } from "./components/NotificationPermissionBanner";
-import {
-  isPermissionGranted,
-  requestPermission,
-} from "@tauri-apps/plugin-notification";
+import { OverviewSection } from "./components/OverviewSection";
+import { SettingsDialog } from "./components/SettingsDialog";
+import { SubscriptionDialog } from "./components/SubscriptionDialog";
+import { deleteSubscription, listAccounts, listSubscriptions } from "./lib/db";
+import { formatAmount, formatNextDue } from "./lib/format";
+import { runReminderCheck } from "./lib/reminders";
+import type { Account, Subscription } from "./types";
 import "./App.css";
 
 function App() {
@@ -35,10 +28,7 @@ function App() {
 
   const reloadAll = useCallback(async () => {
     try {
-      const [subRows, accountRows] = await Promise.all([
-        listSubscriptions(),
-        listAccounts(),
-      ]);
+      const [subRows, accountRows] = await Promise.all([listSubscriptions(), listAccounts()]);
       setSubs(subRows);
       setAccounts(accountRows);
       setError(null);
@@ -87,9 +77,7 @@ function App() {
   async function activateNotifications() {
     try {
       const result = await requestPermission();
-      setNotifStatus(
-        result === "granted" ? "granted" : result === "denied" ? "denied" : "default",
-      );
+      setNotifStatus(result === "granted" ? "granted" : result === "denied" ? "denied" : "default");
     } catch (e) {
       console.error("requestPermission fehlgeschlagen:", e);
     }
@@ -133,7 +121,7 @@ function App() {
   }
 
   const accountName = (id: number | null): string | null =>
-    id === null ? null : accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)";
+    id === null ? null : (accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)");
 
   return (
     <main className="container">
@@ -158,7 +146,11 @@ function App() {
       />
 
       {loading && <p>Lade …</p>}
-      {error && <p className="error" role="alert">Fehler: {error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          Fehler: {error}
+        </p>
+      )}
       {!loading && !error && subs.length === 0 && (
         <p className="empty">Noch keine Abos angelegt.</p>
       )}
@@ -177,9 +169,7 @@ function App() {
                   </span>
                 </div>
                 <div className="sub-meta">
-                  <span className="sub-amount">
-                    {formatAmount(sub.amountCents, sub.currency)}
-                  </span>
+                  <span className="sub-amount">{formatAmount(sub.amountCents, sub.currency)}</span>
                   <button
                     type="button"
                     className="sub-edit"
@@ -212,11 +202,7 @@ function App() {
         accounts={accounts}
         onSaved={handleSubSaved}
       />
-      <AccountsDialog
-        ref={accountsDialogRef}
-        accounts={accounts}
-        onChanged={reloadAccounts}
-      />
+      <AccountsDialog ref={accountsDialogRef} accounts={accounts} onChanged={reloadAccounts} />
       <SettingsDialog ref={settingsDialogRef} />
     </main>
   );
