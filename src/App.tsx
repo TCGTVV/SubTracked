@@ -1,87 +1,28 @@
-import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
-import {
-  NotificationPermissionBanner,
-  type NotificationStatus,
-} from "./components/NotificationPermissionBanner";
+import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
-import { deleteSubscription, listAccounts, listSubscriptions } from "./lib/db";
+import { useNotificationPermission } from "./hooks/useNotificationPermission";
+import { useReminderLoop } from "./hooks/useReminderLoop";
+import { useSubscriptions } from "./hooks/useSubscriptions";
+import { deleteSubscription } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
-import { runReminderCheck } from "./lib/reminders";
-import type { Account, Subscription } from "./types";
+import type { Subscription } from "./types";
 import "./App.css";
 
 function App() {
-  const [subs, setSubs] = useState<Subscription[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { subs, accounts, loading, error, setError, reloadAll, reloadAccounts } =
+    useSubscriptions();
+  const { status: notifStatus, activate: activateNotifications } = useNotificationPermission();
+  useReminderLoop();
+
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
-  const [notifStatus, setNotifStatus] = useState<NotificationStatus>("loading");
   const subDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
-
-  const reloadAll = useCallback(async () => {
-    try {
-      const [subRows, accountRows] = await Promise.all([listSubscriptions(), listAccounts()]);
-      setSubs(subRows);
-      setAccounts(accountRows);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const reloadAccounts = useCallback(async () => {
-    try {
-      setAccounts(await listAccounts());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    void reloadAll();
-  }, [reloadAll]);
-
-  useEffect(() => {
-    const tick = () => {
-      void runReminderCheck().catch((e) => {
-        console.error("runReminderCheck fehlgeschlagen:", e);
-      });
-    };
-    tick();
-    const handle = setInterval(tick, 60 * 60 * 1000);
-    return () => clearInterval(handle);
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const granted = await isPermissionGranted();
-        setNotifStatus(granted ? "granted" : "default");
-      } catch (e) {
-        console.error("isPermissionGranted fehlgeschlagen:", e);
-        setNotifStatus("default");
-      }
-    })();
-  }, []);
-
-  async function activateNotifications() {
-    try {
-      const result = await requestPermission();
-      setNotifStatus(result === "granted" ? "granted" : result === "denied" ? "denied" : "default");
-    } catch (e) {
-      console.error("requestPermission fehlgeschlagen:", e);
-    }
-  }
 
   useEffect(() => {
     if (subOpenSeq > 0) subDialogRef.current?.showModal();
