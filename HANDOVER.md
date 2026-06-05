@@ -9,6 +9,83 @@
 
 ---
 
+## 2026-06-05 — Tests-Strategie Schritt 5 (GitHub Actions CI) — Strategie komplett
+
+Letzter Schritt der Tests-/Qualitäts-Strategie. Plan-aufbauend auf Schritt 4 (Lefthook): dieselben vier Checks, aber auf GitHub-seitiger Compute, getriggert auf Push und PR. Damit ist die ganze 5-Schritt-Strategie erledigt.
+
+### Was passierte
+
+- **`.github/workflows/checks.yml`** angelegt — ein Job (`Lint, Tests, Cargo`) auf `ubuntu-latest`. Steps in Reihenfolge:
+  1. `actions/checkout@v4`
+  2. Tauri-Linux-Deps via apt: `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev build-essential file`. Diese braucht die Tauri-Crate beim `cargo clippy`-Compile, auch ohne Bundle-Build.
+  3. `pnpm/action-setup@v4` (zieht die Version aus dem neuen `packageManager`-Feld in `package.json`).
+  4. `actions/setup-node@v4` mit `node-version: 22`, `cache: pnpm`.
+  5. `dtolnay/rust-toolchain@stable` mit `components: rustfmt, clippy`.
+  6. `Swatinem/rust-cache@v2` mit `workspaces: src-tauri` für Cargo-Build-Caching.
+  7. `pnpm install --frozen-lockfile`, dann `pnpm lint` → `pnpm test:run` → `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings`.
+- **Triggers**: `push` auf `main` + `pull_request`. Concurrency-Group `checks-${{ github.ref }}` mit `cancel-in-progress: true` — neue Pushes überholen veraltete Runs.
+- **`packageManager: "pnpm@11.3.0"` in `package.json`**: macht die pnpm-Version deterministisch — kein Drift zwischen Lokal und CI.
+- **Erster CI-Run (`27012126265`) failte** im Setup-Node-Step: `pnpm@11.3.0` braucht `node:sqlite`-Builtin, das erst ab Node 22.5 existiert. Ich hatte `node-version: 20` gesetzt (an README "Node ≥ 20" orientiert), aber das ist für pnpm 11 zu alt. **Fix** in Commit `275ed0c`: auf `node-version: 22` umgestellt.
+- **Zweiter CI-Run (`27012193991`) grün** — alle Steps ✓.
+- Backlog-Schritt-5 abgehakt. Tests-Strategie-Sektion komplett.
+- **Serena-Memories `tech_stack` und `suggested_commands` aktualisiert** — beide hatten die in den heutigen Sessions hinzugefügten Tools (Biome, vitest, Lefthook, CI) noch nicht.
+- **Commits dieser Teil-Session**: `74b2131` (Workflow + Backlog), `275ed0c` (Node-Fix), dieser HANDOVER+Memory-Commit.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal eins vor `origin/main` (Push folgt nach diesem HANDOVER-Commit) |
+| HEAD | HANDOVER+Memory-Commit folgt; Code-Commits zuvor: `275ed0c` (Node-Fix), `74b2131` (CI initial) |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓, `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| **GitHub Actions** | **grün** auf `main` (Run `27012193991`). Concurrency-Group aktiv |
+| Hooks | aktiv (Lefthook), feuern bei jedem Commit |
+
+### Nächster Schritt
+
+Tests-Strategie ist abgeschlossen. Backlog-Lage:
+
+- **🐛 Bugs**: Datenpersistenz "beobachten" — kein aktiver Schritt.
+- **🚀 Distribution & Setup** — die naheliegende nächste Front:
+  - **Lokales Installer-Build** (`pnpm tauri build`) + .deb/.AppImage installieren, Tray + Autostart in der echten App testen. Macht aus SubTracked endlich eine richtige App statt dev-only.
+  - **Versions-Tag `v0.1.0`**, sobald Installer-Build abgenommen.
+  - **README-/GitHub-Polish bei v0.1.0** (UI-Screenshot fehlt noch).
+  - **Logo neu exportieren** (Transparenz-Bug + Größe) — wartet auf User mit Quelltool.
+- **🌱 Später**: UI-Redesign Richtung arsnova.eu (`mem:ui_vision`), `tauri-plugin-opener` entfernen, Komma/Punkt-Lokalisierung, Komponenten-Tests via RTL.
+
+Logische Reihenfolge: erst Installer-Build (sichert auch den Persistenz-Bug-Verdacht ab), dann ggf. UI-Polish vor v0.1.0.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`packageManager`-Field in `package.json`** statt explizitem `version:` in `pnpm/action-setup@v4`: corepack-kompatibel, single source of truth, automatisch von neueren pnpm/yarn-Setups respektiert. Drift zwischen lokaler und CI-Version wird strukturell vermieden.
+- **Node 22 statt 20** in CI: hätte ich aus pnpm-Doku ableiten können, habe ich nicht. Das Setup-Node-Failing war der schnellste mögliche Fehler-Pfad — nicht schlimm, einen Commit "verbraucht". README erwähnt "Node ≥ 20", was zu großzügig ist — sollte beim nächsten README-Polish auf 22 angehoben werden (Backlog-Vermerk hier).
+- **Concurrency-Group mit `cancel-in-progress: true`**: bei aktiver Iteration spart das pro nachgeschobenem Push die Minuten des überholten Runs. Bei einem Solo-Repo ohne PR-Verkehr selten relevant, kostet aber nichts.
+- **Linux-Only-Runner**: Matrix-Build (Win/macOS) ist im Backlog als "Später"-Item für Release-Tags vorgesehen. Tests/Lint/Clippy sind plattform-agnostisch genug, dass ein Runner reicht — die OS-Trennung wäre Theater.
+- **`pnpm install --frozen-lockfile`**: bricht ab, wenn `pnpm-lock.yaml` nicht zum `package.json` passt. Erzwingt deterministische Installs, deckt typische "ich hab gepusht ohne Lockfile-Update"-Fehler im PR-Review ab.
+- **Kein dedizierter `tsc --noEmit`-Step**: Biome deckt strukturelle JS-Issues ab, `vitest`/`tsc` über `pnpm build` würde redundant compilen. Wenn TypeScript-Errors auftauchen würden, fielen sie spätestens beim `pnpm tauri build` auf. Bewusst weggelassen, um den Hot-Path schnell zu halten.
+
+### Gotchas / Stolperfallen
+
+- **pnpm-Major-Bump = Node-Major-Bump**: pnpm 11 verlangt Node 22.13+, pnpm 12 wird vermutlich Node 24+ wollen. Wer in CI Node fix-pint, muss bei pnpm-Updates mitdenken.
+- **GitHub-Action-Annotation**: "Node.js 20 actions are deprecated. Actions will be forced to Node.js 24 by default starting June 16th, 2026." Das bezieht sich auf die Action-Runtimes (`actions/checkout@v4` etc.), nicht auf unseren Code. Lösung ist nicht in unserer Hand — die Action-Maintainer müssen Releases mit Node-24-Runtime publishen. Bei `setup-node`/`checkout` schon angekündigt, aktuell noch v4 mit Node-20-Runtime. Nicht-blockierend; im Backlog vermerkt.
+- **`packageManager`-Field ist eine Corepack-Konvention** — wenn jemand auf der Maschine kein Corepack hat, schmeißt pnpm beim `pnpm install` keinen Fehler, weil es die Version nicht erzwingt (anders als yarn's berry). In CI sorgt aber `pnpm/action-setup@v4` für genau die deklarierte Version.
+- **`Swatinem/rust-cache@v2` mit `workspaces: src-tauri`**: muss explizit gesetzt werden, weil unsere Cargo-Crate nicht im Repo-Root liegt. Default würde versuchen, im Repo-Root zu cachen — nichts finden, leerer Cache, jeder Run baut von Null.
+- **Tauri-Linux-Deps-Liste**: `libwebkit2gtk-4.1-dev` (Tauri 2 — Tauri 1 hatte `-4.0`), `libayatana-appindicator3-dev` für Tray. Wer auf alte Tauri-1-Tutorials guckt, baut sich mit `-4.0` ein Repo-Fehler-Theater.
+
+### Geänderte/neue Memories
+
+- **Serena `tech_stack`**: Biome / vitest / Lefthook / GitHub Actions ergänzt; Node-Anforderung auf `>=22.13` aktualisiert (war "ne sagte nichts").
+- **Serena `suggested_commands`**: `pnpm lint`, `pnpm lint:fix`, `pnpm test`, `pnpm test:run`, `pnpm exec lefthook run pre-commit --force` (Hook-Trockenlauf), `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` ergänzt.
+
+### Offen / nicht geklärt
+
+- README-Node-Minimum von "≥ 20" auf "≥ 22" anheben — minimal, beim nächsten README-Polish.
+- Node-24-Migration für die Action-Runtimes — wartet auf Action-Maintainer.
+- Reminders-Tests mit DB-Mock — weiterhin Später-Sektion.
+
+---
+
 ## 2026-06-05 — Tests-Strategie Schritt 4 (Lefthook)
 
 Direkt im Anschluss an Schritte 2+3 weiter im Plan. Schritt 4 war von Anfang an als kurz geplant — die Mechanik ist 1:1 die Befehle aus den vorigen Schritten, nur in einem Hook gebündelt. Hauptarbeit war pnpm-Sicherheits-Default + Workspace-Settings einzusortieren.
