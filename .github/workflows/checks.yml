@@ -1,0 +1,71 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Bei neuem Push auf dieselbe Ref alte, noch laufende Runs abbrechen.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, Tests, Cargo
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # System-Deps fuer die Tauri-Crate. cargo clippy/check braucht webkit2gtk
+      # & co., obwohl wir hier keine Bundles bauen — die Tauri-Crate selbst
+      # compiliert die Bindings.
+      - name: Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            file
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Biome (lint + format)
+        run: pnpm lint
+
+      - name: Vitest (unit tests)
+        run: pnpm test:run
+
+      - name: cargo fmt
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
