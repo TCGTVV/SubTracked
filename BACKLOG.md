@@ -50,14 +50,17 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
   - DB-Pfad identisch zum Dev-Build (siehe Bugs)
 - [ ] **Versions-Tag `v0.1.0`** schneiden, sobald die UI stabil läuft und der Installer-Punkt oben abgenommen ist.
 - [ ] **README-/GitHub-Polish bei v0.1.0**: Screenshot oder kleines GIF einbetten (Tray-Icon, Hauptfenster, Settings-Dialog), README-Funktionen-Sektion bei Bedarf erweitern, ggf. Demo-Video für die GitHub-Release-Page. Logo ist seit 2026-06-05 unter `assets/logo.png` im README, fehlt also nur noch der UI-visueller-Anker — bewusst noch nicht jetzt, weil die UI noch im Wandel ist.
-- [ ] **Logo verlustfrei komprimieren.** `assets/logo.png` ist aktuell 2752×1536 / 5,1 MiB — für die GitHub-Anzeige weit überdimensioniert und landet so in der Git-History. Vor dem nächsten Logo-Update erledigen (sonst spart man nur das nächste Delta). Konkret: `pngquant --quality=85-95 assets/logo.png --output assets/logo.png --force` oder `oxipng -o 4 assets/logo.png`. Erwartung: ~80-95 % kleiner ohne sichtbaren Qualitätsverlust. Tools sind aktuell nicht lokal installiert.
+- [ ] **Logo neu exportieren / fixen.** Zwei Probleme am aktuellen `assets/logo.png`:
+  - **Transparenz fehlt**: Das Schachbrettmuster im Hintergrund ist *kein* Alpha-Kanal, sondern wurde versehentlich als Pixel mit-exportiert (das Schachbrett ist eine *Anzeige-Konvention* in Bild-Editoren für Transparenz, aber hier eben mit gerastert worden). Auf GitHub-Hellmode sieht das hässlich aus. Fix: im Quelltool den Hintergrund auf wirklich transparent stellen, dann als PNG-mit-Alpha exportieren.
+  - **Größe übertrieben**: 2752×1536 / 5,1 MiB — für die GitHub-Anzeige weit überdimensioniert und landet so dauerhaft in der Git-History. Bei Re-Export gleich auf eine vernünftige Zielbreite (z.B. 1200 px) gehen und mit `pngquant --quality=85-95` oder `oxipng -o 4` nachverdichten. Erwartung: ~80-95 % kleiner ohne sichtbaren Qualitätsverlust. Tools aktuell nicht lokal installiert.
+  - Beides am besten in einem Aufwasch: ein sauberer Re-Export löst beide Punkte gleichzeitig.
 
 ## 📐 Tests & Qualität
 
 Strategie am 2026-06-05 mit dem User diskutiert und festgelegt. Stack-Entscheidungen: **Biome** statt ESLint+Prettier (eine Tool, Rust-basiert, vernünftige Defaults), **vitest** für Pure-Logic-Tests jetzt (Komponenten/E2E später, siehe "Später"), **Lefthook** statt husky (leichter), **GitHub Actions** für CI (nicht der Matrix-Build, der bleibt separat). Schritte in Reihenfolge:
 
 - [x] **Schritt 1: Biome eingerichtet** (2026-06-05) — `biome.json` mit Spaces 2 / lineWidth 100, `pnpm lint` und `pnpm lint:fix` als Scripts, initialer Format-Pass über die ganze Codebase.
-- [ ] **Schritt 2: Rust-Strenge** — `cargo clippy -- -D warnings` + `cargo fmt --check` einmal lokal durchlaufen, Warnings aufräumen. Beides als dokumentierte Befehle.
+- [x] **Schritt 2: Rust-Strenge** (2026-06-05) — `cargo clippy --all-targets -- -D warnings` clean ohne Eingriffe; `cargo fmt --check` hatte zwei triviale Abweichungen in `lib.rs` (eine künstlich umgebrochene Zeile + fehlende Final-Newline), per `cargo fmt` korrigiert.
 - [ ] **Schritt 3: vitest** für Pure-Logic-Tests — installieren, konfigurieren, dann Tests für `recurrence.ts` (anker-additive Logik, das ist die kritischste), `coverage.ts` (Geld-Summen), `format.ts`. `reminders.ts` evtl. mit DB-Mock.
 - [ ] **Schritt 4: Lefthook** als Pre-Commit-Hook — eine Binary, kein Node-Hook-Dance. Hooks: `cargo fmt --check`, `cargo clippy`, `pnpm lint`, `pnpm vitest run` (nur die schnellen Unit-Tests).
 - [ ] **Schritt 5: GitHub Actions CI** — gleiche Checks wie lokal, triggert auf Push zu `main`. **Nicht** der große Matrix-Build (der bleibt im "Später"-Punkt für Release-Tags).
