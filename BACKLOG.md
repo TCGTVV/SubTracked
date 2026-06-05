@@ -49,7 +49,8 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
   - Tray-Icon + Autostart funktionieren wie im Dev
   - DB-Pfad identisch zum Dev-Build (siehe Bugs)
 - [ ] **Versions-Tag `v0.1.0`** schneiden, sobald die UI stabil läuft und der Installer-Punkt oben abgenommen ist.
-- [ ] **README-/GitHub-Polish bei v0.1.0**: Screenshot oder kleines GIF einbetten (Tray-Icon, Hauptfenster, Settings-Dialog), README-Funktionen-Sektion bei Bedarf erweitern, ggf. Demo-Video für die GitHub-Release-Page. Anlass: aktuell hat das README noch keinen visuellen Anker, weil die UI noch im Wandel ist.
+- [ ] **README-/GitHub-Polish bei v0.1.0**: Screenshot oder kleines GIF einbetten (Tray-Icon, Hauptfenster, Settings-Dialog), README-Funktionen-Sektion bei Bedarf erweitern, ggf. Demo-Video für die GitHub-Release-Page. Logo ist seit 2026-06-05 unter `assets/logo.png` im README, fehlt also nur noch der UI-visueller-Anker — bewusst noch nicht jetzt, weil die UI noch im Wandel ist.
+- [ ] **Logo verlustfrei komprimieren.** `assets/logo.png` ist aktuell 2752×1536 / 5,1 MiB — für die GitHub-Anzeige weit überdimensioniert und landet so in der Git-History. Vor dem nächsten Logo-Update erledigen (sonst spart man nur das nächste Delta). Konkret: `pngquant --quality=85-95 assets/logo.png --output assets/logo.png --force` oder `oxipng -o 4 assets/logo.png`. Erwartung: ~80-95 % kleiner ohne sichtbaren Qualitätsverlust. Tools sind aktuell nicht lokal installiert.
 
 ## 📐 Tests & Qualität
 

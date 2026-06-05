@@ -51,7 +51,7 @@ Anmerkung zum Backlog-Item **"README-/GitHub-Polish bei v0.1.0"** (🚀 Distribu
 
 ### Gotchas / Stolperfallen
 
-- **Originalauflösung 2752×1536 / 5,1 MiB ist groß**. Das Logo wandert in die Git-History und bleibt dort dauerhaft (auch bei späterem Ersatz). Optimierung lohnt sich, aber muss vor weiteren Logo-Updates passieren — sonst spart man nur das nächste Delta. Konkret später: `pngquant --quality=85-95 assets/logo.png --output assets/logo.png --force` oder `oxipng -o 4 assets/logo.png`. Erwartung: ~80-95% Größenreduktion ohne sichtbaren Qualitätsverlust.
+- **Originalauflösung 2752×1536 / 5,1 MiB ist groß** — als konkretes Backlog-Item in 🚀 Distribution & Setup verschoben (gehört dort als TODO hin, nicht als Gotcha hier).
 - **Relative Bild-URL `assets/logo.png` ist korrekt für GitHub**. Wenn das README irgendwann auf einer externen Seite eingebettet wird, müsste man auf absolute `https://raw.githubusercontent.com/...`-URL umstellen.
 - **Logo war nie git-getrackt**, deshalb `mv` statt `git mv`. Für künftige Verschiebungen bereits getrackter Dateien gilt: `git mv` nutzen, behält History.
 
@@ -61,7 +61,7 @@ Anmerkung zum Backlog-Item **"README-/GitHub-Polish bei v0.1.0"** (🚀 Distribu
 
 ### Offen / nicht geklärt
 
-- Logo-Optimierung (siehe Gotchas) — wartet auf v0.1.0-Polish-Round oder spätesten Zeitpunkt vor nächstem Logo-Update.
+- Logo-Optimierung als Backlog-Item in 🚀 Distribution & Setup gelandet.
 - Backlog im Übrigen unverändert.
 
 ---
