@@ -1,6 +1,5 @@
 import {
   isPermissionGranted,
-  requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { startOfDay, subDays, isBefore, format } from "date-fns";
@@ -13,10 +12,11 @@ import { listSubscriptions, insertReminderIfNew } from "./db";
  * Pro Fälligkeit nur einmal (Idempotenz über die reminders-Tabelle).
  *
  * Beim App-Start und danach in Intervallen aufrufen (siehe App-Komponente).
+ * Permission anfragen ist Sache der UI; ohne Permission entfällt nur das Senden,
+ * der DB-Eintrag passiert weiterhin (Idempotenz bleibt erhalten).
  */
 export async function runReminderCheck(): Promise<number> {
-  let granted = await isPermissionGranted();
-  if (!granted) granted = (await requestPermission()) === "granted";
+  const granted = await isPermissionGranted();
 
   const today = startOfDay(new Date());
   const subs = await listSubscriptions(true);

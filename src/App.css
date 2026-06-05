@@ -461,4 +461,36 @@ select:focus-visible {
     background-color: #2a2a2a;
     color: #f6f6f6;
   }
+
+  .permission-banner {
+    background-color: rgba(57, 108, 216, 0.18);
+  }
+
+  .permission-banner--denied {
+    background-color: rgba(192, 57, 43, 0.2);
+  }
+}
+
+.permission-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(57, 108, 216, 0.35);
+  border-radius: 8px;
+  background-color: rgba(57, 108, 216, 0.08);
+  font-size: 0.9rem;
+}
+
+.permission-banner--denied {
+  border-color: rgba(192, 57, 43, 0.35);
+  background-color: rgba(192, 57, 43, 0.08);
+}
+
+.permission-banner button {
+  font-size: 0.85rem;
+  padding: 0.35em 0.9em;
+  white-space: nowrap;
 }

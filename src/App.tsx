@@ -10,6 +10,14 @@ import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { OverviewSection } from "./components/OverviewSection";
 import { runReminderCheck } from "./lib/reminders";
+import {
+  NotificationPermissionBanner,
+  type NotificationStatus,
+} from "./components/NotificationPermissionBanner";
+import {
+  isPermissionGranted,
+  requestPermission,
+} from "@tauri-apps/plugin-notification";
 import "./App.css";
 
 function App() {
@@ -19,6 +27,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
+  const [notifStatus, setNotifStatus] = useState<NotificationStatus>("loading");
   const subDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
 
@@ -60,6 +69,29 @@ function App() {
     const handle = setInterval(tick, 60 * 60 * 1000);
     return () => clearInterval(handle);
   }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const granted = await isPermissionGranted();
+        setNotifStatus(granted ? "granted" : "default");
+      } catch (e) {
+        console.error("isPermissionGranted fehlgeschlagen:", e);
+        setNotifStatus("default");
+      }
+    })();
+  }, []);
+
+  async function activateNotifications() {
+    try {
+      const result = await requestPermission();
+      setNotifStatus(
+        result === "granted" ? "granted" : result === "denied" ? "denied" : "default",
+      );
+    } catch (e) {
+      console.error("requestPermission fehlgeschlagen:", e);
+    }
+  }
 
   useEffect(() => {
     if (subOpenSeq > 0) subDialogRef.current?.showModal();
@@ -110,6 +142,11 @@ function App() {
           </button>
         </div>
       </header>
+
+      <NotificationPermissionBanner
+        status={notifStatus}
+        onActivate={() => void activateNotifications()}
+      />
 
       {loading && <p>Lade …</p>}
       {error && <p className="error" role="alert">Fehler: {error}</p>}
