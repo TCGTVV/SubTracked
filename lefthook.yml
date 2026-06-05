@@ -1,0 +1,17 @@
+# Pre-Commit-Hooks fuer SubTracked.
+# Laeuft automatisch vor jedem `git commit`. Mit --no-verify umgehbar, aber bitte
+# nicht zur Routine machen — wenn etwas fehlschlaegt, lieber fixen.
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      run: pnpm lint
+    - name: vitest
+      run: pnpm test:run
+    - name: cargo-fmt
+      root: src-tauri/
+      run: cargo fmt --check
+    - name: cargo-clippy
+      root: src-tauri/
+      run: cargo clippy --all-targets -- -D warnings
