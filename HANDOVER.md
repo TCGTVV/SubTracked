@@ -9,6 +9,80 @@
 
 ---
 
+## 2026-06-05 — Tests-Strategie Schritt 4 (Lefthook)
+
+Direkt im Anschluss an Schritte 2+3 weiter im Plan. Schritt 4 war von Anfang an als kurz geplant — die Mechanik ist 1:1 die Befehle aus den vorigen Schritten, nur in einem Hook gebündelt. Hauptarbeit war pnpm-Sicherheits-Default + Workspace-Settings einzusortieren.
+
+### Was passierte
+
+- **`lefthook@2.1.9`** als devDependency.
+- **`lefthook.yml`** mit vier parallelen `pre-commit`-Jobs:
+  - `biome` → `pnpm lint`
+  - `vitest` → `pnpm test:run`
+  - `cargo-fmt` → `cargo fmt --check` (mit `root: src-tauri/`)
+  - `cargo-clippy` → `cargo clippy --all-targets -- -D warnings` (mit `root: src-tauri/`)
+- **`prepare`-Script** `lefthook install` in `package.json`: bei jedem `pnpm install` werden die Hooks in `.git/hooks/` eingeklinkt — kein manueller Init-Schritt für Cloner.
+- **`pnpm-workspace.yaml`** `allowBuilds.lefthook: true`: gibt das postinstall-Script von lefthook frei, das die Go-Binary plattform-spezifisch downloadet. Pnpm v11 blockt das per Default aus Sicherheitsgründen (Ignored Builds). Die Zeile war im File schon als Placeholder vorbereitet ("set this to true or false"), nur noch auf `true` gesetzt.
+- **Pnpm-Block aus `package.json` entfernt**: pnpm v11 liest `package.json:pnpm.*` nicht mehr und warnte bei jedem Install. Settings sind jetzt in `pnpm-workspace.yaml` zu Hause.
+- **Verifiziert**:
+  - `pnpm exec lefthook run pre-commit --force` → alle 4 grün in 1,5 s parallel.
+  - Echter Commit `059507f` mit nur Config/Docs-Files staged: `cargo-*` automatisch geskippt (`no matching staged files` wegen `root: src-tauri/`), `biome` + `vitest` liefen. **Sinnvolles Verhalten**: wer nur am README schreibt, wartet nicht auf einen unnötigen Cargo-Build.
+  - `pnpm exec lefthook run pre-commit --file src-tauri/src/lib.rs` → alle 4 grün. Cargo-Jobs feuern wie gewünscht, sobald Rust-Code staged ist.
+- Backlog-Schritt-4 abgehakt.
+- **Commit**: `059507f` "Qualitaet: Lefthook Schritt 4 — Pre-Commit-Hooks fuer alle Checks". HANDOVER-Commit folgt.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal eins vor `origin/main` (Push folgt nach HANDOVER-Commit) |
+| HEAD | HANDOVER-Commit folgt; Code-Commit zuvor: `059507f` |
+| Working tree | clean |
+| Hooks | aktiv. Jeder weitere `git commit` triggert die vier Checks automatisch |
+| Build/Tests | `pnpm test:run` 26/26 ✓, `pnpm lint` ✓, `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+
+### Nächster Schritt
+
+**Schritt 5 (letzter Tests-Strategie-Schritt): GitHub Actions CI** — gleiche Checks wie lokal, triggert auf Push zu `main`. Plan-Skelett:
+
+- Eine Workflow-Datei `.github/workflows/checks.yml`.
+- Triggers: `push` auf `main` + `pull_request` (auch wenn aktuell keine PRs gefahren werden — vorbereitet schadet nicht).
+- Jobs: setup-node + pnpm, Rust toolchain, dann `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm test:run`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`.
+- Linux-Runner reicht (Tauri-Linux-Deps installieren via apt im Workflow oder via einem prebuilt-Image).
+- **Nicht** der große Matrix-Build (der bleibt für Release-Tags im "Später"-Block, separate Workflow-Datei dann).
+
+Danach ist die Tests-Strategie komplett abgeschlossen. Alternativen für danach: 🚀 Lokales Installer-Build oder 🌱 Später-Sektion.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`prepare`-Script statt manuellem `lefthook install`-README-Hinweis**: zero-friction für Cloner. Funktioniert deterministisch über npm/yarn/pnpm hinweg, weil `prepare` der standardisierte Lifecycle-Hook nach `install` ist.
+- **`allowBuilds.lefthook: true` in `pnpm-workspace.yaml`** statt globalem `pnpm config set ...`: Setting ist im Repo committet, jeder Cloner hat es automatisch. Globale Config wäre lokal-only.
+- **`root: src-tauri/` für die Cargo-Jobs**: setzt nicht nur das Working-Directory, sondern aktiviert die "skip if no matching staged files"-Heuristik. Schöner Bonus: README-Commits werden nicht durch unnötige Cargo-Builds verlangsamt.
+- **`parallel: true`** statt sequentiell: alle vier Checks sind unabhängig voneinander. Trockenlauf 1,5 s parallel vs. ~2,3 s sequentiell — bei jedem Commit ein bisschen Lebensqualität.
+- **Keine Globs/Filter auf biome und vitest**: könnte man via `glob: "**/*.{ts,tsx,...}"` filtern, würde aber bei reinen Config-Commits einen Vitest-Run sparen (1,5 s). Pragmatisch bewusst weggelassen — die Hooks bleiben einfach zu lesen, und 1,5 s sind keine Schmerzgrenze. Bei zukünftigem Frust eine Zeile Glob ergänzen.
+- **vitest ohne `--reporter=verbose` o.ä.**: Default-Output ist knapp, das ist im Hook-Kontext genau richtig.
+
+### Gotchas / Stolperfallen
+
+- **pnpm v11 Ignored Builds**: jeder neue dep mit postinstall-Script muss in `pnpm-workspace.yaml:allowBuilds` freigeschaltet werden. Sonst lädt die Binary nicht herunter und der CLI-Aufruf scheitert mit "command failed". Symptom beim ersten Versuch: `pnpm exec lefthook version` failed mit cryptic stack trace.
+- **`pnpm install` zeigt am Ende exit 1, wenn Builds ignoriert wurden**, obwohl Pakete eigentlich installiert sind. Der Exit ist ein "approve-builds"-Reminder, kein echter Install-Fehler.
+- **Lefthook 2.x ≠ 1.x**: in v2 ist die Job-Konfiguration unter `jobs:` (mit `name:`) statt früher direkt unter `commands:` (mit Hash-Map-Keys). Wer alte Tutorials liest, baut sonst ein Config-Schema, das v2 ignoriert oder ablehnt.
+- **`root:` macht zwei Sachen gleichzeitig** (working-dir wechseln + Files-Filter). Wer `root:` schreibt, ohne sich der File-Filter-Semantik bewusst zu sein, kann sich wundern, warum sein Hook bei manchen Commits "stillschweigend" skippt. → Im `lefthook.yml`-Kommentar erklärt wäre vielleicht hilfreich; aktuell nur hier dokumentiert.
+- **Echter `git commit` triggert die Hooks ab sofort**: Wer mit `--no-verify` arbeitet, umgeht sie. Default-Anweisung: nicht ausschalten, sondern fixen. Sonst ist der Sinn von Pre-Commit-Hooks weg.
+- **`pnpm exec lefthook run pre-commit` ohne Flag** zeigt nur Skips wenn `git diff --cached` leer ist. Für Trockenlauf den Flag `--force` (alles) oder `--file <path>` (gezielt) nutzen.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Schritt 5 (GitHub Actions CI) als letzter Tests-Strategie-Schritt.
+- Logo-Re-Export (Backlog).
+- Reminders-Tests mit DB-Mock (Später-Sektion).
+
+---
+
 ## 2026-06-05 — Tests-Strategie Schritte 2+3 (Rust-Strenge + vitest)
 
 Direkt im Anschluss an die Logo-Mini-Session weiter im Plan: zwei Tests-Strategie-Schritte abgeräumt. Außerdem User-Korrektur am vorherigen HANDOVER-Eintrag eingearbeitet (Logo-Optimierung gehört als TODO ins Backlog, nicht als Gotcha hier) plus User-Beobachtung am Logo-Hintergrund ins Backlog.
