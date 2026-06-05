@@ -8,6 +8,7 @@ import {
 import { formatAmount, formatNextDue } from "./lib/format";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { AccountsDialog } from "./components/AccountsDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { OverviewSection } from "./components/OverviewSection";
 import { runReminderCheck } from "./lib/reminders";
 import {
@@ -30,6 +31,7 @@ function App() {
   const [notifStatus, setNotifStatus] = useState<NotificationStatus>("loading");
   const subDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
+  const settingsDialogRef = useRef<HTMLDialogElement>(null);
 
   const reloadAll = useCallback(async () => {
     try {
@@ -111,6 +113,10 @@ function App() {
     accountsDialogRef.current?.showModal();
   }
 
+  function openSettings() {
+    settingsDialogRef.current?.showModal();
+  }
+
   function handleSubSaved() {
     subDialogRef.current?.close();
     void reloadAll();
@@ -134,6 +140,9 @@ function App() {
       <header className="header">
         <h1>SubTracked</h1>
         <div className="header-actions">
+          <button type="button" onClick={openSettings}>
+            Einstellungen
+          </button>
           <button type="button" onClick={openAccounts}>
             Konten
           </button>
@@ -207,6 +216,7 @@ function App() {
         accounts={accounts}
         onChanged={reloadAccounts}
       />
+      <SettingsDialog ref={settingsDialogRef} />
     </main>
   );
 }
