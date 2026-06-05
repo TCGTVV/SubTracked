@@ -55,6 +55,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
   - **Transparenz fehlt**: Das Schachbrettmuster im Hintergrund ist *kein* Alpha-Kanal, sondern wurde versehentlich als Pixel mit-exportiert (das Schachbrett ist eine *Anzeige-Konvention* in Bild-Editoren für Transparenz, aber hier eben mit gerastert worden). Auf GitHub-Hellmode sieht das hässlich aus. Fix: im Quelltool den Hintergrund auf wirklich transparent stellen, dann als PNG-mit-Alpha exportieren.
   - **Größe übertrieben**: 2752×1536 / 5,1 MiB — für die GitHub-Anzeige weit überdimensioniert und landet so dauerhaft in der Git-History. Bei Re-Export gleich auf eine vernünftige Zielbreite (z.B. 1200 px) gehen und mit `pngquant --quality=85-95` oder `oxipng -o 4` nachverdichten. Erwartung: ~80-95 % kleiner ohne sichtbaren Qualitätsverlust. Tools aktuell nicht lokal installiert.
   - Beides am besten in einem Aufwasch: ein sauberer Re-Export löst beide Punkte gleichzeitig.
+- [ ] Github Projekt Fallow anschauen. Macht das für dieses Projekt sinn? Wann sollten wir es einführen? Lieber jetzt oder später? https://github.com/fallow-rs/fallow
 
 ## 📐 Tests & Qualität
 
