@@ -23,9 +23,9 @@
 
 | Bereich | Stand |
 |---|---|
-| Branch | `main`, **noch nicht gepusht** (1 Commit lokal voraus, dieser HANDOVER kommt als zweiter dazu) |
-| HEAD | `d3fb014` (Code) bzw. der HANDOVER-Commit |
-| Working tree | clean nach beiden Commits |
+| Branch | `main`, **synchron mit `origin/main`** (gepusht) |
+| HEAD | `18c56db` (HANDOVER-Commit), Code-Commit davor: `d3fb014` |
+| Working tree | clean |
 | Build | grün (`pnpm build` → 288,05 KB JS / 13,57 KB CSS, gzipped 89,62 KB / 3,07 KB) |
 | App | startbar wie zuvor mit `pnpm tauri dev` |
 | Test-Daten | unverändert (DB-Inhalt der Dev-Instanz hängt am lokalen Zustand) |
