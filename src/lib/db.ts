@@ -17,11 +17,18 @@ interface SubRow {
   amount_cents: number;
   currency: string;
   account_id: number | null;
-  interval: Interval;
+  interval: string;
   anchor_date: string;
   lead_days: number;
   active: number;
   notify: number;
+}
+
+function parseInterval(s: string): Interval {
+  if (s !== "monthly" && s !== "quarterly" && s !== "yearly") {
+    throw new Error(`Unbekanntes Intervall aus DB: ${s}`);
+  }
+  return s;
 }
 
 function mapSub(r: SubRow): Subscription {
@@ -31,7 +38,7 @@ function mapSub(r: SubRow): Subscription {
     amountCents: r.amount_cents,
     currency: r.currency,
     accountId: r.account_id,
-    interval: r.interval,
+    interval: parseInterval(r.interval),
     anchorDate: r.anchor_date,
     leadDays: r.lead_days,
     active: r.active === 1,
