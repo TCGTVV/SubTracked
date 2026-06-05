@@ -9,6 +9,67 @@
 
 ---
 
+## 2026-06-05 — Architektur-Diskussion + Plan, Hands-on auf Punkt ➊
+
+User-Wunsch: Zweitmeinung zu Codex' Aussage "alles perfekt, keine Luft nach oben". Diskussion durchgeführt, acht konkrete Themen mit File-Belegen in `BACKLOG.md` unter neuer Sektion 🏛️ Architektur dokumentiert (Commit `3b61620`).
+
+### Was passierte
+
+- **Architektur-Sektion im Backlog** angelegt mit acht Diskussions-Themen — State-Konzept App.tsx, Backend-Logik im Frontend, Reminder-Loop im Webview, Komponenten-Testbarkeit, Concerns-Mix in reminders.ts, Reload-Pattern, Error-Boundary, i18n.
+- **Pragmatische Einordnung gegeben**: für MVP-Solo-Eigenbedarf ist der Stand OK, aber "perfekt" stimmt nicht. Vor allem App.tsx (7 useState + 3 useEffect auf 211 Zeilen) und der Webview-Reminder-Loop (pausiert bei minimiertem Fenster — funktionaler UX-Defekt für eine Notification-zentrale App) wären sinnvolle Verbesserungen.
+- **Ranking nach Wert-pro-Aufwand mit User festgelegt** — Reihenfolge der Umsetzung:
+  1. **➊ Custom Hooks** für die App.tsx-Orchestrierung (niedrigster Aufwand, höchster Aufräumeffekt, ebnet ➍).
+  2. **➋ Reminder-Loop ins Rust-Backend** (mittlerer Aufwand, behebt echten UX-Defekt).
+  3. **➌ Tauri-Commands** statt direktem `plugin-sql`-Zugriff (größter Aufwand, größte konzeptionelle Klärung — eigene Session wert).
+- **User-Erwartung explizit gesetzt**: heute schaffen wir wahrscheinlich nicht alles. Plan ist im Backlog persistiert.
+- **Hands-on jetzt auf Punkt ➊**.
+
+### Status am Sitzungsende (Stand dieses HANDOVER-Commits)
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, gleich vor `origin/main` (Push folgt) |
+| HEAD | HANDOVER-Commit folgt; Backlog-Commit zuvor: `3b61620` |
+| Working tree | clean nach Backlog-Commit; Code-Refactor folgt |
+| Hands-on | startet jetzt mit Punkt ➊ Custom Hooks |
+
+### Nächster Schritt
+
+**Punkt ➊ Custom Hooks** für App.tsx — drei Hooks rausziehen:
+
+- `useSubscriptions()` → kapselt `subs`/`accounts`/`loading`/`error`/`reloadAll`/`reloadAccounts`.
+- `useNotificationPermission()` → kapselt `notifStatus` + `activate()`-Logik.
+- `useReminderLoop(intervalMs?)` → kapselt das `setInterval`-Setup für `runReminderCheck`.
+
+Damit sinkt App.tsx von 7 useState + 3 useEffect auf 1–2 useState (UI-State wie `editingSub`, `subOpenSeq`) + 0 useEffect (kommt aus den Hooks).
+
+Wenn ➊ in dieser Session nicht durch wird oder Folge-Items ausbleiben: nächste Session liest BACKLOG → 🏛️ Architektur, sieht die Reihenfolge ➊→➋→➌ und nimmt die nächste offene Nummer.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Eigene Architektur-Sektion** statt Items in "Später" verstreuen: Diskussions-Material braucht eigenen Platz, sonst geht's unter und wird nie geführt. Analog zur 📐 Tests-Sektion, die als Strategie-Container für die fünf Schritte funktioniert hat.
+- **Reihenfolge ➊→➋→➌ nicht "schwerstes zuerst"**: ➊ ist Vorarbeit für ➍ (Testbarkeit), ➋ ist UX-Defekt-Fix, ➌ ist konzeptionelle Umstellung mit doppelten Type-Definitionen — letzteres rechtfertigt eine eigene Session statt zwischendrin gequetscht.
+- **Ranking offen kommuniziert** statt "ich entscheide einfach": User ist Anfänger, soll die Trade-offs verstehen können. Memory `user_role` ("Konzepte erklären, nicht voraussetzen") gibt das vor.
+- **Punkte 4–8 als Diskussions-Material belassen**: keine voreilige Festlegung. Vor allem ➐ (Error-Boundary) und ➎ (Reminders-Concerns-Mix) lohnen ihre eigene Mini-Diskussion, weil sie thematisch anders gelagert sind.
+
+### Gotchas / Stolperfallen
+
+- **`reloadAll` setzt error, aber `handleDelete` in App.tsx setzt error auch**: beim Hook-Split muss der Hook entweder `setError` exposen oder die delete-Operation auch kapseln. Pragmatisch: `setError` exposen, App.tsx behält `handleDelete`. Keine Über-Abstraktion.
+- **Reminder-Loop-Hook leere Dependency-`[intervalMs]`**: in StrictMode-Dev läuft der Effect zweimal → zwei parallele Intervalle. Wie heute schon, harmlos wegen Idempotenz. Wer das später ändert, muss aufpassen.
+- **Permission-Banner braucht `NotificationStatus`-Type**: aktuell exportiert `NotificationPermissionBanner.tsx` den Type. Beim Hook-Split bleibt die Wahrheit dort, der Hook importiert nur. Kein zweiter Definitions-Ort.
+
+### Geänderte/neue Memories
+
+- Keine in dieser Diskussions-Phase. Wenn ➊ durch ist und die Hook-Konvention sich etabliert, ggf. Serena-Memory `conventions` ergänzen.
+
+### Offen / nicht geklärt
+
+- ➊ Custom Hooks beginnt jetzt.
+- ➋ ➌ in dieser Session vermutlich nicht mehr — gehen in nächste Sessions.
+- Punkte ➍ bis ⓼ warten auf separate Mini-Diskussionen, sobald ein passender Moment kommt.
+
+---
+
 ## 2026-06-05 — Mikro-Cleanups (Opener, SubRow-Cast, README-Node)
 
 Drei kleine Aufräumarbeiten als Pause-Wechsel nach der Tests-Strategie-Marathon. Alle drei lagen entweder im Backlog (Später-Sektion) oder als "Offen"-Notiz aus der CI-Session.
