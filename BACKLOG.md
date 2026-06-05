@@ -25,7 +25,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 - [ ] **Tray-Icon** + Fenster beim Schließen nur verstecken (App läuft weiter)
 - [ ] **Autostart beim Login** über Einstellungen aktivierbar (`@tauri-apps/plugin-autostart` `enable()`)
-- [ ] Notification-Berechtigung sauber abfragen und Status anzeigen
+- [x] Notification-Berechtigung sauber abfragen und Status anzeigen
 - [ ] Vorlaufzeit (`lead_days`) pro Abo in der UI editierbar
 - [ ] **Notifications pro Abo stummschaltbar** — bei bekannten regelmäßigen Abos (z.B. Netflix monatlich) will man keinen Spam. Neue Spalte `notify INTEGER DEFAULT 1` via Migration, UI-Toggle pro Abo, `runReminderCheck` überspringt stumme Abos. Sie bleiben aber sichtbar in Liste/Fixkosten-Übersicht
 
