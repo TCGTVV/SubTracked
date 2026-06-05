@@ -42,8 +42,8 @@ Sammeleintrag für drei Themen seit dem letzten HANDOVER.
 
 | Bereich | Stand |
 |---|---|
-| Branch | `main`, **noch nicht gepusht** (Code-Commits + dieser HANDOVER-Commit lokal voraus) |
-| HEAD | HANDOVER-Commit; davor `9634cf5`, `18f4c6d`, `3a73b58` |
+| Branch | `main`, **synchron mit `origin/main`** (gepusht) |
+| HEAD | `cf72f3a` (HANDOVER); davor `9634cf5`, `18f4c6d`, `3a73b58` |
 | Working tree | clean |
 | Build | `pnpm build` grün (290,93 KB JS / 14,55 KB CSS, gzipped 90,39 KB / 3,26 KB), `cargo check` grün |
 | App | Mute-Toggle vom User abgenommen ("sollte passen"); Migration v2 läuft beim nächsten `pnpm tauri dev` automatisch auf der existierenden Dev-DB |
