@@ -49,6 +49,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
   - Tray-Icon + Autostart funktionieren wie im Dev
   - DB-Pfad identisch zum Dev-Build (siehe Bugs)
 - [ ] **Versions-Tag `v0.1.0`** schneiden, sobald die UI stabil läuft und der Installer-Punkt oben abgenommen ist.
+- [ ] **README-/GitHub-Polish bei v0.1.0**: Screenshot oder kleines GIF einbetten (Tray-Icon, Hauptfenster, Settings-Dialog), README-Funktionen-Sektion bei Bedarf erweitern, ggf. Demo-Video für die GitHub-Release-Page. Anlass: aktuell hat das README noch keinen visuellen Anker, weil die UI noch im Wandel ist.
 
 ## 📐 Tests & Qualität
 
