@@ -30,7 +30,6 @@ pub fn run() {
                 .add_migrations("sqlite:subtracker.db", migrations)
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let show_item = MenuItem::with_id(app, "show", "Fenster zeigen", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
