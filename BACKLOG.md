@@ -75,8 +75,8 @@ Strategie am 2026-06-05 mit dem User diskutiert und festgelegt. Stack-Entscheidu
 - [ ] Optionale weitere Kanäle (z.B. Telegram) als Alternative zu nativen Notifications
 - [ ] Auf Windows und macOS testen
 - [ ] Migration: `ON DELETE CASCADE` für `reminders.subscription_id`, damit beim Löschen eines Abos keine Waisen-Reminder zurückbleiben
-- [ ] `SubRow.interval`: aus SQLite kommt ein roher `string` — sauberer Cast in `mapSub` statt implizit auf `Interval` zu vertrauen (DB-`CHECK` greift, aber Typ ist optimistisch)
-- [ ] `tauri-plugin-opener` entfernen, falls nicht für externe Links genutzt (aktuell ungenutzt)
+- [x] `SubRow.interval`-Cast (2026-06-05) — `SubRow.interval: string` (wie aus SQLite kommt), neuer privater `parseInterval(s)`-Helper in `db.ts` validiert und narrowed beim Mapping, wirft bei unbekanntem Wert. Defense-in-Depth gegen DB-Manipulation von außen.
+- [x] `tauri-plugin-opener` entfernt (2026-06-05) — war seit Tauri-Template-Setup eingebunden, im Frontend nirgends genutzt. Vier Stellen weg (Cargo.toml/Lock, lib.rs, capabilities/default.json, package.json/Lock). `cargo check` + `pnpm install` clean.
 - [ ] **Lokalisierung der Eingaben** — Inputs sollten DE-Konventionen tolerieren, nicht nur HTML-Standards. Konkret: Beträge mit Komma *und* Punkt als Dezimaltrenner annehmen (z.B. `12,99` und `12.99` beide gültig), Tausendertrennzeichen ignorieren. Mittelfristig: ein gemeinsamer Eingabe-Parser für Beträge an einer Stelle
 - [ ] **Komponenten-Tests via React Testing Library**, wenn UI komplexer wird (SubscriptionDialog hat schon viel State, SettingsDialog wird wachsen). Setzt vitest aus dem Tests-Block voraus.
 - [ ] **E2E-Tests via Tauri WebDriver** vor `v1.0`. Großer Setup-Aufwand, ROI erst wenn echte User-Flows stabil bleiben müssen.

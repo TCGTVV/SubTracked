@@ -9,6 +9,68 @@
 
 ---
 
+## 2026-06-05 — Mikro-Cleanups (Opener, SubRow-Cast, README-Node)
+
+Drei kleine Aufräumarbeiten als Pause-Wechsel nach der Tests-Strategie-Marathon. Alle drei lagen entweder im Backlog (Später-Sektion) oder als "Offen"-Notiz aus der CI-Session.
+
+### Was passierte
+
+- **README Node-Mindestversion 20 → 22.13** (Commit `827eaf6`). Aus der CI-Erkenntnis von vorhin: pnpm@11 verlangt `node:sqlite`-Builtin (ab Node 22.5). README-Voraussetzung war damit zu großzügig formuliert.
+- **`SubRow.interval`-Cast** (Commit `4a83712`). `SubRow.interval` war als Union-Typ `Interval` (`"monthly" | "quarterly" | "yearly"`) typisiert, aus SQLite kommt aber ein roher `string`. Fix: `SubRow.interval: string`, neuer privater `parseInterval(s: string): Interval`-Helper in `src/lib/db.ts`, der die drei erlaubten Werte validiert und bei Mismatch eine Exception wirft. DB-`CHECK` greift bereits in der Migration, aber Defense-in-Depth gegen DB-Manipulation von außen kostet nichts.
+- **`tauri-plugin-opener` entfernt** (Commit `ddc4e4c`). War seit Tauri-Template-Setup eingebunden, Frontend nutzte's nirgends. Vier Stellen entfernt:
+  - `src-tauri/Cargo.toml` + `Cargo.lock`
+  - `src-tauri/src/lib.rs`: `.plugin(tauri_plugin_opener::init())`
+  - `src-tauri/capabilities/default.json`: `"opener:default"`-Permission
+  - `package.json` + `pnpm-lock.yaml`
+  - Bonus: Biome verdichtet das durch die Entfernung kürzer gewordene `permissions`-Array jetzt auf eine Zeile (Default-Heuristik).
+  - `cargo check` + `pnpm install` clean.
+- **Backlog**: zwei Items in "Später" abgehakt (Opener, SubRow.interval-Cast). README-Node-Bump war kein eigenes Backlog-Item, nur eine HANDOVER-Notiz.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal 4 Commits vor `origin/main` (Push folgt) |
+| HEAD | HANDOVER-Commit folgt; Code-Commits zuvor: `ddc4e4c`, `4a83712`, `827eaf6` |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓, `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| Hooks | aktiv, haben einen Biome-Format-Fix erzwungen (siehe Gotchas) |
+
+### Nächster Schritt
+
+Aus dem Block "🚀 Distribution & Setup" wird der **Lokale Installer-Build** zur naheliegenden nächsten Front: `pnpm tauri build` → `.deb`/`.AppImage` → installieren → Tray/Autostart in der echten App testen. Bonus: klärt den Persistenz-Bug-Verdacht (Dev-DB vs. installierte DB sind verschiedene Pfade).
+
+Alternativen aus dem Backlog:
+- 🌱 Später-Items: `CoverageItem.subscription_id` (winzig), Lokalisierung Komma/Punkt für Beträge (eigene Mini-Session), UI-Redesign (groß, braucht Lib-Auswahl).
+- 🎨 Logo-Re-Export wartet auf User mit Quelltool.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`parseInterval` als interne Funktion in `db.ts`** statt exportiert + getestet: 3-Werte-Check ist trivial korrekt, ein Vitest-Test wäre Theater. Sollte das Modul jemals wachsen oder mehrere Caller bekommen, kann man's leicht extrahieren.
+- **Throw bei unbekanntem Wert** statt `?? "monthly"`-Fallback: silent Fallback würde DB-Korruption maskieren. `runReminderCheck` und `coverage` verlassen sich auf das Interval — falscher Wert dort führt zu stillen falschen Berechnungen. Lieber laut sterben.
+- **Opener-Entfernung sauber, nicht kommentiert weglassen**: Tauri-Permission-Sets sind zentral, ein vergessenes `"opener:default"` ist Permission-Kruft, der spätere Audits schwerer macht.
+- **Drei separate Commits** statt ein gebündeltes: drei distinkte Themen mit eigener Begründung, im Git-Log lesbar (User-Memory `feedback_workflow.md`: "Solo-Frühphase, oft committen").
+- **Cargo.lock + pnpm-lock.yaml mit committet**: Reproducibility — kein Drift zwischen lokalem und CI-Build.
+
+### Gotchas / Stolperfallen
+
+- **Biome formatiert JSON-Arrays kontext-abhängig**: das `permissions`-Array hatte mit 5 Einträgen Multi-Line, mit 4 will Biome One-Line. **Beim ersten Commit-Versuch lief lefthook scheinbar grün durch** (alle Symbole `✓`), aber das Tail im Bash-Output schnitt die wichtige Zeile "Found 1 error" weg — ich sah die `summary:`-Zeile, nicht die echten Errors. Erst `lefthook run pre-commit --force` mit voller Ausgabe machte's sichtbar. Lehre: bei vermeintlich "grünem" Hook ohne Commit-Hash im Output **nicht** dem Tail vertrauen, sondern `git log` prüfen.
+- **`cargo check` mutiert `Cargo.lock`** wenn Deps geändert wurden. Wer nur die staged Files committet (`Cargo.toml`), vergisst sonst die Lock. Defensive: `git add` immer beide explizit zusammen.
+- **Generated schemas in `src-tauri/gen/schemas/`** referenzieren das Opener-Plugin noch (kommen vom letzten `tauri build`). Sind aber Build-Output, regenerieren sich beim nächsten `pnpm tauri build` / `cargo check`. Nicht manuell editieren.
+- **Biome's `useFlatConfig` für JSON ist Default**: Lehre aus dem Opener-Entfernen — wer wieder einen Eintrag hinzufügt und das Array dadurch ≥5 Einträge bekommt, sieht Biome wieder auf Multi-Line zurückwechseln. Diff-Rauschen, das man im Hinterkopf haben sollte.
+
+### Geänderte/neue Memories
+
+- Keine. Die Cleanups sind aus dem Code ableitbar; der Workflow-Hinweis ("nicht dem Hook-Tail vertrauen") gehört eher in den HANDOVER-Verlauf als in eine Memory.
+
+### Offen / nicht geklärt
+
+- Installer-Build steht weiter aus.
+- Logo-Re-Export wartet auf User.
+- Persistenz-Bug-Verdacht bleibt "beobachten" bis zum echten Installer-Lauf.
+
+---
+
 ## 2026-06-05 — Tests-Strategie Schritt 5 (GitHub Actions CI) — Strategie komplett
 
 Letzter Schritt der Tests-/Qualitäts-Strategie. Plan-aufbauend auf Schritt 4 (Lefthook): dieselben vier Checks, aber auf GitHub-seitiger Compute, getriggert auf Push und PR. Damit ist die ganze 5-Schritt-Strategie erledigt.
