@@ -9,6 +9,72 @@
 
 ---
 
+## 2026-06-05 — Architektur ➊ erledigt (Custom Hooks)
+
+Punkt ➊ aus der Architektur-Sektion durchgezogen. Erste Hands-on-Architektur-Verbesserung der heutigen Marathon.
+
+### Was passierte
+
+- **Drei Custom Hooks unter `src/hooks/`** rausgezogen (Commit `1e936ba`):
+  - `useSubscriptions()` — `subs`, `accounts`, `loading`, `error`, `setError`, `reloadAll`, `reloadAccounts`. Mount-Effect ruft `reloadAll` selbst.
+  - `useNotificationPermission()` — `status` + `activate()`. Mount-Effect prüft Berechtigung, `activate` triggert OS-Prompt.
+  - `useReminderLoop(intervalMs?)` — `setInterval`-Setup mit Default 1 h. JSDoc verweist explizit auf den Folge-Architektur-Punkt ➋ (Verlagerung ins Rust-Backend).
+- **`App.tsx` von 211 → 152 Zeilen** (-28%). State-Count: 7 useState + 3 useEffect → **2 useState + 1 useEffect** (nur noch UI-State wie `editingSub`/`subOpenSeq`) + 3 Hook-Aufrufe.
+- **Permission-Banner-`NotificationStatus`-Type** bleibt im Banner-Modul (single source of truth) — Hook importiert nur.
+- **`reloadAll`-Error-Path im Hook**: `setError` wird exposed, damit App.tsx weiterhin `handleDelete`-Fehler in den gemeinsamen Error-State schreiben kann. Keine Over-Abstraktion durch Wrapper-Delete im Hook.
+- **Verifikation**: `pnpm exec tsc --noEmit` ✓, `pnpm lint` ✓ (34 statt 31 Files), `pnpm test:run` 26/26 ✓, `pnpm build` ✓ (Bundle 290,88 → 291,27 KB JS, +0,4 KB durch die drei Hook-Files — vernachlässigbar).
+- Backlog ➊ abgehakt.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal eins vor `origin/main` (Push folgt mit diesem HANDOVER) |
+| HEAD | HANDOVER-Commit folgt; Code-Commit zuvor: `1e936ba` |
+| Working tree | clean nach Commit |
+| Build/Tests | alle vier Gates lokal grün + `pnpm build` durch |
+| App-UI | Verhalten unverändert (reines Refactor) — keine UI-Verifikation gegen Tauri-App nötig, weil keine User-facing Logik geändert |
+
+### Nächster Schritt
+
+**Architektur ➋: Reminder-Loop ins Rust-Backend.** Plan-Skelett:
+
+- Rust-Side: ein eigener `tokio::spawn`-Task im Setup-Block von `lib.rs` (oder als separater Modul), der minütlich/stündlich tickt.
+- Reminder-Logik aus `src/lib/reminders.ts` portieren: DB-Query → Due-Berechnung → Notification senden → `reminders`-Insert (idempotent).
+- Frontend-`useReminderLoop` entfernen, weil obsolet.
+- Migration-/Schema-Strategie für die `reminders`-Tabelle bleibt unverändert (sie liegt bereits im Plugin-DB).
+- Tauri-Notification-API funktioniert auch aus dem Rust-Hauptprozess (`tauri::AppHandle::notification()`).
+
+Größerer Block als ➊ — möglicherweise eigene Session, weil Rust-Code geschrieben und das Reminder-Verhalten ggf. mit dem User abgenommen werden müsste. Plan ist im Backlog persistiert.
+
+Alternativ pausieren oder zu Distribution-Items wechseln (Installer-Build) — User-Call.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`setError` aus dem Hook exponiert** statt `handleDelete` in den Hook zu ziehen: minimal-invasiv. Der Hook bleibt fokussiert auf das Lade-/Reload-Pattern, `handleDelete` ist `confirm()` + DB-Op + Reload — gehört ergonomisch in App.tsx, weil die UI das `window.confirm` steuert.
+- **`useReminderLoop` nimmt `intervalMs` als Parameter** mit Default: erlaubt zukünftigen Tests, ein kürzeres Intervall reinzureichen, ohne Magic-Mock auf `setInterval`. Default-Konstante intern definiert, nicht exportiert (interner Default).
+- **JSDoc-Kommentar auf `useReminderLoop`** mit Verweis auf Architektur ➋: der Hook bleibt nicht "stillschweigend MVP" — wer ihn liest, weiß dass das ein bekanntes Limit ist und wohin es als Nächstes geht.
+- **`Account`-Import aus `types` weg**: TypeScript inferrt das aus dem Hook-Return-Type. Weniger Imports, kein Typ-Drift möglich.
+- **Verzeichnis `src/hooks/`** statt Hooks irgendwo verstreut: konventionelle React-Struktur, scanbar bei wachsendem Projekt. Co-Located in `src/components/`-Geschwister.
+
+### Gotchas / Stolperfallen
+
+- **`useEffect` mit `[reloadAll]` als Dependency**: weil `reloadAll` mit `useCallback([])` stabil ist, läuft der Effect genau einmal. Würde jemand die Deps von `useCallback` ändern, würde der Effect bei jedem Re-Aufruf neu laufen → unerwünschter Vollreload.
+- **`useReminderLoop`-StrictMode-Doppellauf in Dev**: bei React StrictMode-Doppel-Mount fährt der Effect zweimal hoch, also zwei parallele Intervalle. Wegen Idempotenz harmlos, aber in Devtools sieht man doppelte DB-Calls. In Prod-Builds nicht.
+- **Bundle-Size +0,4 KB JS** durch die drei Hook-Files: Trade-off bewusst gewählt — Lesbarkeit/Testbarkeit > minimale Bundle-Optimierung.
+
+### Geänderte/neue Memories
+
+- Keine. Hook-Konvention ist aus dem Code ablesbar. Wenn sich beim Folge-Refactor (➋, ➌) Patterns wiederholen, kann eine `conventions`-Ergänzung in Serena sinnvoll werden.
+
+### Offen / nicht geklärt
+
+- Architektur ➋ (Reminder ins Rust) als Nächstes geplant.
+- Architektur ➌ (Tauri-Commands) wartet auf eigene Session.
+- Punkte ➍–➑ stehen weiter im Backlog als Diskussions-Material.
+
+---
+
 ## 2026-06-05 — Architektur-Diskussion + Plan, Hands-on auf Punkt ➊
 
 User-Wunsch: Zweitmeinung zu Codex' Aussage "alles perfekt, keine Luft nach oben". Diskussion durchgeführt, acht konkrete Themen mit File-Belegen in `BACKLOG.md` unter neuer Sektion 🏛️ Architektur dokumentiert (Commit `3b61620`).
