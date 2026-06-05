@@ -23,6 +23,7 @@ export async function runReminderCheck(): Promise<number> {
   let sent = 0;
 
   for (const sub of subs) {
+    if (!sub.notify) continue; // User hat dieses Abo stummgeschaltet — auch keinen DB-Eintrag, damit beim Wieder-Aktivieren in derselben Periode noch eine Notification kommt
     const due = nextDueDate(new Date(sub.anchorDate), sub.interval, today);
     const remindFrom = subDays(due, sub.leadDays);
     if (isBefore(today, remindFrom)) continue; // noch nicht im Fenster

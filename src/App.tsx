@@ -173,6 +173,7 @@ function App() {
                   <span className="sub-next">
                     nächste Fälligkeit: {formatNextDue(sub)}
                     {account && <> · {account}</>}
+                    {!sub.notify && <> · stumm</>}
                   </span>
                 </div>
                 <div className="sub-meta">

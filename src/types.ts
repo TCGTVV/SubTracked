@@ -16,4 +16,5 @@ export interface Subscription {
   anchorDate: string; // ISO "YYYY-MM-DD"
   leadDays: number;
   active: boolean;
+  notify: boolean;
 }

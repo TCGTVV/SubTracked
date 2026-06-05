@@ -21,6 +21,7 @@ interface SubRow {
   anchor_date: string;
   lead_days: number;
   active: number;
+  notify: number;
 }
 
 function mapSub(r: SubRow): Subscription {
@@ -34,6 +35,7 @@ function mapSub(r: SubRow): Subscription {
     anchorDate: r.anchor_date,
     leadDays: r.lead_days,
     active: r.active === 1,
+    notify: r.notify === 1,
   };
 }
 
@@ -79,13 +81,16 @@ export async function listSubscriptions(onlyActive = true): Promise<Subscription
 }
 
 export async function addSubscription(
-  s: Omit<Subscription, "id" | "active"> & { active?: boolean },
+  s: Omit<Subscription, "id" | "active" | "notify"> & {
+    active?: boolean;
+    notify?: boolean;
+  },
 ): Promise<number> {
   const db = await getDb();
   const res = await db.execute(
     `INSERT INTO subscriptions
-       (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       s.name,
       s.amountCents,
@@ -95,6 +100,7 @@ export async function addSubscription(
       s.anchorDate,
       s.leadDays,
       s.active === false ? 0 : 1,
+      s.notify === false ? 0 : 1,
     ],
   );
   return res.lastInsertId ?? 0;
@@ -105,8 +111,8 @@ export async function updateSubscription(s: Subscription): Promise<void> {
   await db.execute(
     `UPDATE subscriptions
        SET name = $1, amount_cents = $2, currency = $3, account_id = $4,
-           interval = $5, anchor_date = $6, lead_days = $7, active = $8
-     WHERE id = $9`,
+           interval = $5, anchor_date = $6, lead_days = $7, active = $8, notify = $9
+     WHERE id = $10`,
     [
       s.name,
       s.amountCents,
@@ -116,6 +122,7 @@ export async function updateSubscription(s: Subscription): Promise<void> {
       s.anchorDate,
       s.leadDays,
       s.active ? 1 : 0,
+      s.notify ? 1 : 0,
       s.id,
     ],
   );

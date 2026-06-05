@@ -43,6 +43,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   const [interval, setInterval] = useState<Interval>(subscription?.interval ?? "monthly");
   const [anchorDate, setAnchorDate] = useState(subscription?.anchorDate ?? todayISO());
   const [leadDays, setLeadDays] = useState(subscription?.leadDays ?? 60);
+  const [notify, setNotify] = useState(subscription?.notify ?? true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +66,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
         interval,
         anchorDate,
         leadDays,
+        notify,
       };
       if (isEdit && subscription) {
         await updateSubscription({
@@ -179,6 +181,17 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
               required
             />
           </div>
+        </div>
+
+        <div className="field">
+          <label className="setting-label">
+            <input
+              type="checkbox"
+              checked={notify}
+              onChange={(e) => setNotify(e.target.checked)}
+            />
+            <span>Erinnerungen für dieses Abo</span>
+          </label>
         </div>
 
         {error && (
