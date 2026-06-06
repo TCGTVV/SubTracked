@@ -9,6 +9,67 @@
 
 ---
 
+## 2026-06-06 — Architektur ➌ Konten-Charge: drei weitere Commands portiert (7/12)
+
+Direkt im Anschluss an die Foundation-Session — Momentum genutzt, um den Konten-Pfad in einem Rutsch nach Rust zu ziehen. Keine neuen Entscheidungen, einfach das etablierte Muster auf die nächsten drei Calls angewandt.
+
+### Was passierte
+
+- **Drei neue Tauri-Commands** in `src-tauri/src/commands.rs`:
+  - `add_account(state, name: String, note: Option<String>) -> i64` — INSERT, gibt `last_insert_rowid` zurück.
+  - `delete_account(state, id: i64) -> ()` — plain DELETE. FK-Bedacht: `subscriptions.account_id` referenziert `accounts(id)`. Bewusst **keine** Application-Logik-Kaskade (im Gegensatz zu `delete_subscription`), weil die UI vor dem Delete `countSubsForAccount` als Soft-Check nutzt und den Benutzer zu Tat-Anpassungen zwingt. Wenn jemand das umgeht, wirft der DB-FK eine etwas hässliche, aber sachlich korrekte Defense-in-Depth-Meldung.
+  - `count_subs_for_account(state, account_id: i64) -> i64` — `SELECT COUNT(*) FROM subscriptions WHERE account_id = ?`, via `query_as::<_, (i64,)>` als Tuple destructured.
+- **`src-tauri/src/lib.rs`**: drei neue Commands im `generate_handler!`-Macro registriert.
+- **`src/lib/db.ts`**: drei Funktionen auf `invoke` umgestellt:
+  - `addAccount(name, note)` → `invoke("add_account", { name, note: note ?? null })` — explizites `null` für die `note?`-Variante, weil `undefined` über die JSON-Bridge zu fehlendem Feld wird und Rust dann `Option<String>::None` korrekt nimmt; explizites `null` ist aber dokumentierender und symmetrisch zur Schreibweise im Rest der Codebase.
+  - `deleteAccount(id)` → `invoke("delete_account", { id })`.
+  - `countSubsForAccount(accountId)` → `invoke("count_subs_for_account", { accountId })` — camelCase-Key wegen `#[tauri::command(rename_all = "camelCase")]`.
+- **PoC vom User verifiziert**: Konto anlegen, Konto ohne Subs löschen, Konto mit Subs löschen versuchen (Soft-Check blockt) — alle drei Pfade OK.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal Commit-Push folgt |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓ (implizit über Lefthook), `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓, `pnpm exec tsc --noEmit` ✓ |
+| **Architektur ➌** | **7 von 12 Calls portiert** (58%) |
+
+### Nächster Schritt
+
+Verbleibender Rest auf `tauri-plugin-sql`:
+
+- `updateSubscription` — analog zu `add_subscription`, aber mit `WHERE id = ?`.
+- `insertReminderIfNew` — der `INSERT OR IGNORE`-Pfad. Klein, weil die Idempotenz im SQL liegt (UNIQUE(subscription_id, due_date)).
+- `getDb`, `parseInterval`, `narrowSub`, `SubFromRust` — Helper. `getDb` wird obsolet sobald alle Frontend-Calls portiert sind, der Rest bleibt für das `interval`-Narrowing relevant.
+
+Eine letzte Mini-Session schließt ➌ ab, dann komplettes Entfernen von `@tauri-apps/plugin-sql` aus dem Frontend und der `tauri-plugin-sql`-Crate aus `Cargo.toml`. Anschließend `tech_stack`-Memory aktualisieren und ➋ angehen.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`delete_account` *ohne* Application-Logik-Kaskade**: bewusst andere Entscheidung als bei `delete_subscription`. Begründung: bei Subscriptions sind die Reminders ein reines Implementierungs-Detail (Idempotenz-Tracking), die der User nicht "selbst aufräumt". Bei Accounts dagegen sind die zugeordneten Subscriptions echte User-Daten, die der User aktiv migrieren/umordnen muss. Kaskade wäre Datenverlust; Soft-Check + harter FK-Schutz im DB-Layer ist die richtige Semantik.
+- **`add_account` mit zwei separaten Parametern statt einem `NewAccount`-Struct**: weil's nur zwei sind und `note` als `Option` natürlich passt. Bei `add_subscription` waren es neun Felder — da rechtfertigte ein Struct den Aufwand. Pragmatisch.
+- **`count_subs_for_account` via Tuple-Destructuring**: `query_as::<_, (i64,)>` ist schlanker als ein eigener `Count`-Struct. `let (n,): (i64,) = ...` ist idiomatisch sqlx.
+- **Note-Feld als `note: note ?? null` ans invoke**: `undefined` würde in JSON zu fehlendem Feld → Rust kriegt `None`. Funktioniert auch. Aber `null` ist expliziter und macht's beim Lesen der Frontend-Logik klarer.
+
+### Gotchas / Stolperfallen
+
+- **Cargo-Aufruf aus Repo-Root wieder vergessen**: zweites Mal heute, dass `cargo clippy` / `cargo fmt` aus `/home/legr/SubTracked` lief und "could not find Cargo.toml" failed. **Lerne ich aus dem Schmerz** — sollte mir das endlich angewöhnen.
+- **`Option<String>` in Tauri-Command-Parametern**: wenn JS `null` schickt, kriegt Rust `None`; wenn JS das Feld weglässt, auch `None`. Konsistent und vorhersagbar. Falls man eine echte "wurde nicht gesetzt vs. wurde gesetzt aber leer"-Unterscheidung bräuchte, müsste man auf `Option<Option<String>>` mit `#[serde(default, deserialize_with = "...")]` ausweichen — nicht hier nötig.
+
+### Geänderte/neue Memories
+
+- Keine Änderung. `tech_stack`-Update wartet weiter auf ➌-Abschluss.
+
+### Offen / nicht geklärt
+
+- 5 verbleibende Helper/Funktionen in db.ts (siehe "Nächster Schritt").
+- Komplettes Entfernen von `@tauri-apps/plugin-sql` und `tauri-plugin-sql`-Crate, sobald alle Calls portiert sind.
+- `tech_stack`-Memory-Update wartet weiter auf ➌-Abschluss.
+- Architektur ➋ (Reminder in Rust) wartet auf ➌-Abschluss.
+
+---
+
 ## 2026-06-06 — Architektur ➌ Foundation: eigener Rust-DB-Pool + erste vier Tauri-Commands
 
 Erster Hands-on-Schritt der ➌-Etappe. Reihenfolge wurde vor Hands-on auf **➊→➌→➋** getauscht (statt ➊→➋→➌) — Diskussion mit konkreten Aufwand-Zahlen unten.
