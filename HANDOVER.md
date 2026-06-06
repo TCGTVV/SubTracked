@@ -11,7 +11,7 @@
 
 ## 2026-06-06 — Quick-Win: Logo-Hintergrund + Größe gefixt
 
-Folge-Quick-Win zum Dropdown-Fix. Logo hatte das Editor-Schachbrettmuster als Pixel im Bild und war 5,1 MiB groß — beides per Backlog-Item bekannt, war auf User-Re-Export gewartet.
+Folge-Quick-Win zum Dropdown-Fix. Logo hatte das Editor-Schachbrettmuster als Pixel im Bild und war 5,1 MiB groß — beides per Backlog-Item bekannt, war auf User-Re-Export gewartet. **Nachtrag 2026-06-06:** User meldete kurz, das Schachbrettmuster sei auf der GitHub-Page noch sichtbar — war ein Browser-Cache-Issue, nach Browser-Neustart sauber. Logo auf GitHub mit korrekter Transparenz.
 
 ### Was passierte
 
