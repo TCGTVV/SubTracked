@@ -5,7 +5,6 @@ import { OverviewSection } from "./components/OverviewSection";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
-import { useReminderLoop } from "./hooks/useReminderLoop";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { deleteSubscription } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
@@ -16,7 +15,6 @@ function App() {
   const { subs, accounts, loading, error, setError, reloadAll, reloadAccounts } =
     useSubscriptions();
   const { status: notifStatus, activate: activateNotifications } = useNotificationPermission();
-  useReminderLoop();
 
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
