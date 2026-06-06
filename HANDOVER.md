@@ -9,6 +9,76 @@
 
 ---
 
+## 2026-06-06 — Architektur ➌ vollständig: letzte zwei Commands + Plugin-Entfernung (12/12)
+
+Letzte Charge — `update_subscription` und `insert_reminder_if_new` portiert, dann `tauri-plugin-sql` aus dem ganzen Projekt entfernt. Damit ist Architektur-Punkt ➌ abgeschlossen.
+
+### Was passierte
+
+- **Zwei neue Tauri-Commands** in `src-tauri/src/commands.rs`:
+  - `update_subscription(state, sub: Subscription) -> ()` — UPDATE-Statement mit allen neun Feldern; `Subscription` als kompletter Input inkl. `id`.
+  - `insert_reminder_if_new(state, subscription_id: i64, due_date: String) -> bool` — `INSERT OR IGNORE` (die UNIQUE-Index-Idempotenz aus dem Schema), Rückgabe `res.rows_affected() > 0`.
+- **Plugin komplett entfernt**:
+  - `src/lib/db.ts`: `Database`-Import + `getDb`/`_db`-Singleton raus, alle Funktionen sind jetzt schlanke `invoke<T>(...)`-Wrapper. `parseInterval`/`narrowSub`/`SubFromRust` bleiben für das `interval`-Narrowing.
+  - `src-tauri/capabilities/default.json`: `"sql:default"` und `"sql:allow-execute"` aus der Permissions-Liste raus (nur noch `core:default` + `notification:default`).
+  - `src-tauri/src/lib.rs`: `.plugin(tauri_plugin_sql::Builder::default().build())` raus.
+  - `src-tauri/Cargo.toml`: `tauri-plugin-sql`-Dep raus.
+  - `package.json`: `@tauri-apps/plugin-sql` via `pnpm remove` raus, `pnpm-lock.yaml` mit ge-updatet.
+- **`tech_stack`-Memory aktualisiert** (Serena): DB-Block beschreibt jetzt den eigenen sqlx-Pool, neuer Abschnitt "Rust-Architektur" mit den drei Dateien (`lib.rs` / `db.rs` / `commands.rs`), SQLite-Pfad-Beschreibung adjusted (Pool öffnet direkt via `app_config_dir`), Opener-Util-Lasch-Erwähnung aus dem Memory entfernt (war seit gestern Mikro-Cleanup veraltet).
+- **PoC-Verifikation vom User**: Bearbeiten eines Abos funktioniert, App läuft ohne Fehler-Banner — Reminder-Pfad nicht direkt provoziert, aber implizit OK durch normalen App-Lauf.
+- **Bundle Status**: `pnpm build` wurde nicht erneut gemessen für diese Charge (die letzten Messungen vom heutigen Start: 290,64 KB JS). `@tauri-apps/plugin-sql` als Frontend-Dep weg sollte das Bundle nochmal kleiner machen; messen wir bei nächstem `pnpm build`-Anlass.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal Commit-Push folgt |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm exec tsc --noEmit` ✓, `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ (nach Auto-Format einer zu langen Zeile in `insert_reminder_if_new`) |
+| **Architektur ➌** | **12/12 abgeschlossen** ✅ |
+| `tauri-plugin-sql` | komplett raus (Crate + Frontend-Paket + Capability + Plugin-Init) |
+
+### Nächster Schritt
+
+**Architektur ➋ (Reminder-Loop in Rust)** — der versprochene Tagesausflug. Plan-Skelett:
+
+- `tokio::spawn`-Task im Setup-Block von `lib.rs`, der z.B. minütlich tickt (Default-Interval einfach konfigurierbar lassen).
+- Reminder-Logik aus `src/lib/reminders.ts` portieren: DB-Query auf fällige Subs → Due-Berechnung mit `recurrence`-Logik → Notification senden via `tauri::AppHandle::notification()` → `INSERT OR IGNORE INTO reminders` (idempotent dank UNIQUE-Index).
+- Frontend-Hook `useReminderLoop` entfernen (samt JSDoc-Verweis auf ➋ — der ist eingehalten).
+- App-Start-Trigger (`runReminderCheck()` in `App.tsx`) ebenfalls weg, weil der Rust-Task das beim Hochfahren erledigt.
+
+`recurrence.ts` darf logisch im Frontend bleiben (es ist pure Logik mit 11 grünen Tests in `recurrence.test.ts`). Eine sauberere Variante wäre, die `nextDueDate`-Logik nach Rust zu spiegeln — aber: die Tests sind unser Sicherheitsnetz gegen die anker-additive Drift-Falle und liegen im TS-Test-Setup. Pragmatisch zunächst: `recurrence`-Pendant in Rust schreiben, JS-Variante (und Tests) zur Sicherheit behalten als doppelter Wahrheitsbeweis. Drift-Risiko ist minimal, weil die Logik einmal geschrieben und nie wieder angefasst werden sollte.
+
+Alternative Pause-Wechsel statt ➋: Installer-Build, Dropdown-Bug, README-Polish.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`update_subscription` nimmt komplette `Subscription` statt nur die ge-änderten Felder**: einfache Semantik, kein Patch-Diff-Tracking nötig. Bei neun Feldern verkraftbar.
+- **`insert_reminder_if_new` mit zwei separaten Parametern statt einem `NewReminder`-Struct**: nur zwei Felder, kein semantischer Mehrwert in einem extra Struct. Symmetrie zu `add_account` (auch 2 Params).
+- **`getDb` ersatzlos gestrichen**: die Funktion war ein Singleton-Cache für die Plugin-`Database`-Instanz. Ohne Plugin: kein State mehr im Frontend nötig, jeder `invoke`-Call ist self-contained. **Schöner Lieferantenmoment** — eine ganze Abstraktion fällt weg, weil die Architektur dahin gewachsen ist.
+- **`capabilities/default.json` direkt mit angepasst**: `sql:*`-Permissions in der Capability sind ohne Plugin sinnlos — beim nächsten `pnpm tauri build` würde Tauri vermutlich warnen oder sogar failen. Gleich aufgeräumt.
+- **`tech_stack`-Memory inline aktualisiert** statt zu warten: die Foundation-Session-Notiz "Memory-Update wartet auf ➌-Abschluss" wird jetzt eingelöst. Künftige Sessions sehen den korrekten Stack.
+
+### Gotchas / Stolperfallen
+
+- **Cargo-Build dauerte 55 s** statt der gewohnten 9 s — weil das Entfernen von `tauri-plugin-sql` als Dependency die Tauri-Plugin-Tree-Struktur veränderte und Tauri + Wry + viele GTK-Crates neu gebaut wurden. Bei größeren Dep-Tree-Änderungen ist das normal. Wer nachher denkt "was, schon wieder langsam?" — das ist Cache-Invalidierung, nicht Code-Bug.
+- **Cargo fmt hat eine zu lange Zeile** in `insert_reminder_if_new` automatisch umgebrochen (`let res =` auf eigene Zeile, dann die `sqlx::query`-Kette eingerückt). Lefthook fängt das beim Commit; lokal vorher `cargo fmt` laufen lassen spart Reibung.
+- **`Subscription` als Input in `update_subscription`** akzeptiert auch Felder mit ungültigen Werten wie `interval = "foobar"` — die DB-CHECK-Constraint fängt das, aber der User-facing Fehler ist hässlich. Frontend-Typ `Interval` als Union ist die erste Verteidigungslinie; Rust-Defense-in-Depth wäre `interval: Interval` als Rust-Enum mit `#[serde(rename_all = "lowercase")]`. Heute nicht gemacht, weil's keinen aktiven Bug gibt — Backlog-Item für ➍/Aufräumphase.
+- **`Database.load("sqlite:subtracker.db")`** brauchte das `sqlite:`-Prefix für das Plugin. Unser Pool nutzt `sqlite://` (mit Slashes) als URI für `SqliteConnectOptions::from_str`. Wichtiger Unterschied — wer im git-Log alte Snippets kopiert, baut sich einen Verbindungsfehler.
+
+### Geänderte/neue Memories
+
+- **`tech_stack`-Memory** (Serena) aktualisiert: DB-Block, neuer Rust-Architektur-Abschnitt, SQLite-Pfad-Block-Adjustment, Opener-Util-Erwähnung entfernt.
+- Keine neuen Auto-Memories.
+
+### Offen / nicht geklärt
+
+- Architektur ➋ (Reminder-Loop in Rust) als nächste Hands-on-Etappe.
+- Restliche Architektur-Punkte ➍–➑ als Diskussions-Material im Backlog.
+- Bundle-Size-Messung beim nächsten `pnpm build`-Anlass (eine kleine Reduktion ist zu erwarten).
+
+---
+
 ## 2026-06-06 — Architektur ➌ Konten-Charge: drei weitere Commands portiert (7/12)
 
 Direkt im Anschluss an die Foundation-Session — Momentum genutzt, um den Konten-Pfad in einem Rutsch nach Rust zu ziehen. Keine neuen Entscheidungen, einfach das etablierte Muster auf die nächsten drei Calls angewandt.
