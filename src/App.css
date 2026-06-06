@@ -426,6 +426,10 @@ select:focus-visible {
   :root {
     color: #f6f6f6;
     background-color: #2f2f2f;
+    /* Signalisiert dem UA, native Form-Controls (Dropdown-Popup, Calendar
+       etc.) im dunklen System-Stil zu rendern. Ohne dieses Property
+       ignoriert WebKitGTK das <option>-Styling und zeichnet weiss. */
+    color-scheme: dark;
   }
 
   .sub-item {
