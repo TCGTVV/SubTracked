@@ -9,6 +9,42 @@
 
 ---
 
+## 2026-06-06 — Quick-Win: Logo-Hintergrund + Größe gefixt
+
+Folge-Quick-Win zum Dropdown-Fix. Logo hatte das Editor-Schachbrettmuster als Pixel im Bild und war 5,1 MiB groß — beides per Backlog-Item bekannt, war auf User-Re-Export gewartet.
+
+### Was passierte
+
+- **Nano-Banana-Re-Export hat nicht geholfen** — User hat zwei neue Versionen runtergeladen (`logo2.png`, `logo3.png`), beide haben das Schachbrett weiterhin als Pixel drin. Das Tool exportiert offenbar das Editor-Transparenz-Pattern systematisch mit, egal was man im Quelltool macht.
+- **Lösungswechsel: algorithmisch via ImageMagick**. Schachbrett-Pixel-Sampling ergab `#CCCCCC` (hellgrau) und `~#F7F7F7` (fast-weiß) als die zwei Pattern-Farben. Logo-Farben (Teal `#2c6e7a`-ish und Orange `#e9a06a`-ish) sind weit davon entfernt — algorithmisches Entfernen kann nicht versehentlich Logo-Pixel mitreißen.
+- **Befehl**: `magick assets/logo2.png -fuzz 12% -transparent "#cccccc" -fuzz 12% -transparent "#f7f7f7" -resize 1200x -strip /tmp/logo-test.png`. `-strip` entfernt PNG-Metadaten.
+- **Ergebnis**: 2752×1536 / 5,1 MiB → 1200×670 / 146 KiB (≈ -97 %). Anti-Aliasing-Kanten am Logo unversehrt (Stichprobe Teal-Rahmen und Münzen-Outline).
+- **User hat die saubere Version selbst auf `assets/logo.png` getauscht.**
+
+### Status
+
+- `assets/logo.png` ersetzt (1200×670, RGBA, 146 KiB).
+- Backlog-Item "Logo neu exportieren / fixen" als erledigt markiert.
+- `assets/logo2.png` und `assets/logo3.png` liegen lokal als untracked Dateien im assets-Ordner herum (User-Backup-Material) — nicht im Repo. Wer aufräumen will, kann sie lokal löschen; sie stören nichts.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Algorithmisch statt User-Tool-Loop**: nach zwei gescheiterten Nano-Banana-Re-Exports wurde klar, dass das Tool das Pattern systematisch mit-rendert. ImageMagick-Pfad war zuverlässiger und reproduzierbar (Befehl im Backlog-Item dokumentiert für später).
+- **`-fuzz 12 %`**: hoch genug für die JPEG-ähnlichen Farb-Variationen, die im PNG-Resampling auftraten (z.B. `#CDCBCC` statt exakt `#CCCCCC`); niedrig genug, um Logo-Anti-Aliasing-Pixel nicht zu erwischen.
+- **`-resize 1200x` + `-strip`** in einem Schritt: einmaliger Pass spart einen Re-Encode-Roundtrip.
+
+### Gotchas / Stolperfallen
+
+- **AI-Bildgeneratoren wie Nano Banana** exportieren manchmal Editor-Transparenz-Pattern als sichtbare Pixel, weil sie das Bild beim "Flatten" auf einen weißen oder gemusterten Hintergrund komponieren. Wer wirklich Alpha-PNG braucht, muss vor dem Export einen Transparent-Background-Modus aktivieren — bei Nano Banana ist der Pfad dahin offenbar nicht zuverlässig.
+- **`fish`-Shell und ImageMagick-Bracket-Syntax**: `magick file.png[1x1+50+50]` muss in fish gequotet werden (`"file.png[1x1+50+50]"`), sonst "no matches found".
+- **ImageMagick 7 `magick` vs. 6 `convert`**: aktuelle Distros haben `magick` als Hauptbefehl; `convert` ist Legacy-Alias.
+
+### Offen / nicht geklärt
+
+- Anderer Quick-Wins (Error-Boundary, README-Polish, KRW+Subdivisions, CoverageItem.subscription_id, Backlog-Sweep) weiter offen.
+
+---
+
 ## 2026-06-06 — Quick-Win: Dropdown-Lesbarkeit im Dark-Mode gefixt
 
 Kleine Bonus-Runde nach dem ➋-Abschluss. User berichtete, dass die nativen `<select>`-Dropdowns im Dark-Mode unlesbar sind (weiß auf weiß). Quick-Fix.
