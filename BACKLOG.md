@@ -45,11 +45,11 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ## 🚀 Distribution & Setup
 
-- [ ] **Lokales Installer-Build & richtige App-Installation.** Aktuell läuft SubTracked nur via `pnpm tauri dev` aus dem Git-Klon. `pnpm tauri build` produziert OS-spezifische Artefakte (Linux: `.deb`/`.rpm`/`.AppImage` unter `src-tauri/target/release/bundle/`). Installieren und prüfen:
-  - App-Eintrag im Anwendungsmenü erscheint
-  - SubTracked normal von dort startbar (Desktop-Verknüpfung, Application-Launcher)
-  - Tray-Icon + Autostart funktionieren wie im Dev
-  - DB-Pfad identisch zum Dev-Build (siehe Bugs)
+- [x] **Lokales Installer-Build & richtige App-Installation** (2026-06-06) — Smoke-Test auf Cachyos bestanden. Drei Erkenntnisse aus dem Lauf, die direkt in den Code geflossen sind:
+  1. **Naming-Fix in `tauri.conf.json`**: `productName: "subtracked"` ergab überall lowercase (Binary, `.desktop`-File, Launcher-Anzeige). Auf `productName: "SubTracked"` + `mainBinaryName: "subtracked"` umgestellt — Display-Name groß (PascalCase), Binary klein (Unix-Konvention). Window-Title ebenfalls auf `SubTracked`.
+  2. **WebKit-Wayland-Bug**: Production-Build crashte beim Start mit `Gdk-Message Error 71 (Protokollfehler)` unter Wayland. In `lib.rs` ganz früh als `unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") }` mit `#[cfg(target_os = "linux")]`-Gate fest verankert. `pnpm tauri dev` setzt die Var implizit, der Release-Build nicht — deshalb erst beim Smoke-Test sichtbar. Auf X11 no-op, kein Schaden.
+  3. **Distribution auf Arch via `debtap`** (lokaler Workaround, kein Production-Pfad): `.deb` → `sudo debtap -Q SubTracked_0.1.0_amd64.deb` → `sudo pacman -U --assume-installed gtk=1 *.pkg.tar.zst`. Das `--assume-installed gtk=1` umgeht debtap's falsches Mapping `libgtk-3-0` → `gtk` (Arch heißt das `gtk3`, das tatsächlich auch separat als Dep gelistet ist). `.AppImage`-Bundling scheiterte lokal an fehlendem `fuse2`-Paket — auf CI-Runnern (siehe Matrix-Build in der Später-Sektion) kein Problem, weil GitHub-Linux-Runner FUSE installiert haben.
+  - Geprüft: App startet aus Anwendungsmenü ✓, Tray-Icon ✓, DB unter `~/.config/com.tcgtvv.subtracked/` ✓, App-Eintrag als „SubTracked" sichtbar ✓.
 - [ ] **Versions-Tag `v0.1.0`** schneiden, sobald die UI stabil läuft und der Installer-Punkt oben abgenommen ist.
 - [ ] **In-App Update-Mechanismus via `tauri-plugin-updater`** — sinnvoll *ab* v0.1.0, nicht früher. Ohne stabile, signierte Release-Pipeline wird der Updater-Pfad brüchig. Schritte:
   - Plugin einbinden (`pnpm tauri add updater`), Keypair via `pnpm tauri signer generate`, Public Key in `tauri.conf.json`, Private Key sicher als GitHub-Secret verwahren
