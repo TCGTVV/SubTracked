@@ -83,6 +83,10 @@ Erster Hands-on-Schritt der ➌-Etappe. Reihenfolge wurde vor Hands-on auf **➊
 - Architektur ➋ (Reminder in Rust) wartet auf ➌-Abschluss.
 - Restliche Architektur-Punkte ➍–➑ als Diskussions-Material im Backlog.
 
+### Nachtrag — Persistenz-Verifikation nach Reboot
+
+User hat nach der ➌-Foundation einen System-Reboot gemacht und SubTracked nochmal getestet → Abos sind alle da, Persistenz weiter gesund. Damit ist der seit 2026-06-05 als "Beobachtung beobachten" geführte Persistenz-Bug-Verdacht aus dem 🐛-Bugs-Block des Backlogs als **erledigt** markiert (BACKLOG.md). Der Bonus-Punkt: der neue sqlx-Pool nutzt explizit `journal_mode=Wal` + `create_if_missing=true` — beides war beim `tauri-plugin-sql` defaultmäßig vermutlich genauso, aber jetzt im Code sichtbar und unter eigener Kontrolle.
+
 ---
 
 ## 2026-06-05 — Marathon-Session-Abschluss
