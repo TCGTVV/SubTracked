@@ -23,6 +23,9 @@ pub fn run() {
             commands::list_accounts,
             commands::add_subscription,
             commands::delete_subscription,
+            commands::add_account,
+            commands::delete_account,
+            commands::count_subs_for_account,
         ])
         .setup(|app| {
             let config_dir = app

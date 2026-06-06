@@ -70,3 +70,41 @@ pub async fn delete_subscription(state: State<'_, AppState>, id: i64) -> Result<
     tx.commit().await.map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn add_account(
+    state: State<'_, AppState>,
+    name: String,
+    note: Option<String>,
+) -> Result<i64, String> {
+    let res = sqlx::query("INSERT INTO accounts (name, note) VALUES (?, ?)")
+        .bind(&name)
+        .bind(&note)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(res.last_insert_rowid())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_account(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    sqlx::query("DELETE FROM accounts WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn count_subs_for_account(
+    state: State<'_, AppState>,
+    account_id: i64,
+) -> Result<i64, String> {
+    let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM subscriptions WHERE account_id = ?")
+        .bind(account_id)
+        .fetch_one(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(n)
+}
