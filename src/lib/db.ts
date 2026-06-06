@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import Database from "@tauri-apps/plugin-sql";
 import type { Account, Interval, Subscription } from "../types";
 
@@ -9,20 +10,9 @@ export async function getDb(): Promise<Database> {
   return _db;
 }
 
-// --- Mapping DB-Zeile (snake_case, 0/1) <-> TS-Objekt ----------------------
-
-interface SubRow {
-  id: number;
-  name: string;
-  amount_cents: number;
-  currency: string;
-  account_id: number | null;
-  interval: string;
-  anchor_date: string;
-  lead_days: number;
-  active: number;
-  notify: number;
-}
+// Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`
+// kommt als String und muss zum engen `Interval`-Union narrowed werden.
+type SubFromRust = Omit<Subscription, "interval"> & { interval: string };
 
 function parseInterval(s: string): Interval {
   if (s !== "monthly" && s !== "quarterly" && s !== "yearly") {
@@ -31,26 +21,14 @@ function parseInterval(s: string): Interval {
   return s;
 }
 
-function mapSub(r: SubRow): Subscription {
-  return {
-    id: r.id,
-    name: r.name,
-    amountCents: r.amount_cents,
-    currency: r.currency,
-    accountId: r.account_id,
-    interval: parseInterval(r.interval),
-    anchorDate: r.anchor_date,
-    leadDays: r.lead_days,
-    active: r.active === 1,
-    notify: r.notify === 1,
-  };
+function narrowSub(s: SubFromRust): Subscription {
+  return { ...s, interval: parseInterval(s.interval) };
 }
 
 // --- Accounts --------------------------------------------------------------
 
 export async function listAccounts(): Promise<Account[]> {
-  const db = await getDb();
-  return db.select<Account[]>("SELECT id, name, note FROM accounts ORDER BY name");
+  return invoke<Account[]>("list_accounts");
 }
 
 export async function addAccount(name: string, note?: string): Promise<number> {
@@ -79,12 +57,8 @@ export async function countSubsForAccount(accountId: number): Promise<number> {
 // --- Subscriptions ---------------------------------------------------------
 
 export async function listSubscriptions(onlyActive = true): Promise<Subscription[]> {
-  const db = await getDb();
-  const sql = onlyActive
-    ? "SELECT * FROM subscriptions WHERE active = 1 ORDER BY name"
-    : "SELECT * FROM subscriptions ORDER BY name";
-  const rows = await db.select<SubRow[]>(sql);
-  return rows.map(mapSub);
+  const rows = await invoke<SubFromRust[]>("list_subscriptions", { onlyActive });
+  return rows.map(narrowSub);
 }
 
 export async function addSubscription(
@@ -93,24 +67,7 @@ export async function addSubscription(
     notify?: boolean;
   },
 ): Promise<number> {
-  const db = await getDb();
-  const res = await db.execute(
-    `INSERT INTO subscriptions
-       (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [
-      s.name,
-      s.amountCents,
-      s.currency,
-      s.accountId,
-      s.interval,
-      s.anchorDate,
-      s.leadDays,
-      s.active === false ? 0 : 1,
-      s.notify === false ? 0 : 1,
-    ],
-  );
-  return res.lastInsertId ?? 0;
+  return invoke<number>("add_subscription", { sub: s });
 }
 
 export async function updateSubscription(s: Subscription): Promise<void> {
@@ -136,8 +93,7 @@ export async function updateSubscription(s: Subscription): Promise<void> {
 }
 
 export async function deleteSubscription(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM subscriptions WHERE id = $1", [id]);
+  await invoke("delete_subscription", { id });
 }
 
 // --- Reminders -------------------------------------------------------------

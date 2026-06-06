@@ -1,36 +1,49 @@
+mod commands;
+mod db;
+
+use std::str::FromStr;
+
+use crate::db::AppState;
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
+use sqlx::SqlitePool;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
-use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![
-        Migration {
-            version: 1,
-            description: "create initial tables",
-            sql: include_str!("../migrations/0001_init.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "add notify column to subscriptions",
-            sql: include_str!("../migrations/0002_add_notify.sql"),
-            kind: MigrationKind::Up,
-        },
-    ];
-
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_sql::Builder::new()
-                .add_migrations("sqlite:subtracker.db", migrations)
-                .build(),
-        )
+        .plugin(tauri_plugin_sql::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            commands::list_subscriptions,
+            commands::list_accounts,
+            commands::add_subscription,
+            commands::delete_subscription,
+        ])
         .setup(|app| {
+            let config_dir = app
+                .path()
+                .app_config_dir()
+                .expect("failed to resolve app config dir");
+            std::fs::create_dir_all(&config_dir)?;
+            let db_path = config_dir.join("subtracker.db");
+            let pool = tauri::async_runtime::block_on(async move {
+                let options = SqliteConnectOptions::from_str(&format!(
+                    "sqlite://{}",
+                    db_path.to_string_lossy()
+                ))?
+                .create_if_missing(true)
+                .journal_mode(SqliteJournalMode::Wal);
+                let pool = SqlitePool::connect_with(options).await?;
+                sqlx::migrate!("./migrations").run(&pool).await?;
+                Ok::<SqlitePool, Box<dyn std::error::Error>>(pool)
+            })?;
+            app.manage(AppState { db: pool });
+
             let show_item = MenuItem::with_id(app, "show", "Fenster zeigen", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
