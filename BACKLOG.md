@@ -23,6 +23,7 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
   4. Wenn DB leer → Connection-Lifecycle in `tauri-plugin-sql` auditieren; PRAGMA `journal_mode`/`synchronous`; prüfen ob das Verzeichnis von außen geleert wird.
 
   **DB-Pfad-Sonderheit**: `tauri-plugin-sql` nutzt `app_config_dir()`, nicht `app_data_dir()` — die Datei landet daher im Config-Dir (`~/.config/...` auf Linux), obwohl es Nutzdaten sind. Footgun für Suchen am falschen Ort.
+- [ ] **Aus dem System Tray heraus kann man das Fenster nicht aufpoppen lassen.** Es wird lediglich in der Taskleiste highlightet.
 
 ## 🔨 Jetzt (Oberfläche)
 
@@ -92,6 +93,7 @@ User hat am 2026-06-05 explizit eine Architektur-Diskussion angestoßen, weil ei
 - [ ] App-Icon / Branding
 - [ ] Import/Export (CSV) der Abos
 - [ ] Mehrwährungs-Handling in der Kontodeckung (Umrechnung)
+- [ ] **Südkoreanischer Won (KRW) in der Währungs-Auswahl ergänzen** — `CURRENCY_OPTIONS` in [SubscriptionDialog.tsx:13](src/components/SubscriptionDialog.tsx#L13) um `"KRW"` erweitern. Achtung: KRW hat keine Subdivision (kein „Cent"), die aktuelle `amount_cents / 100`-Anzeige in [format.ts](src/lib/format.ts) zeigt damit falsche Werte. Sauber wäre eine kleine Lookup-Tabelle für Währungs-Subdivisions; für die reine Auswahl im UI reicht zunächst das Erweitern.
 - [ ] Optionale weitere Kanäle (z.B. Telegram) als Alternative zu nativen Notifications
 - [ ] Auf Windows und macOS testen
 - [x] Waisen-Reminder beim Löschen eines Abos verhindern (2026-06-06) — gelöst in der Application-Logik des neuen `delete_subscription`-Commands (Architektur ➌): Transaktion löscht zuerst alle Reminders des Abos, dann das Abo selbst. Schöne Konsequenz: der FK-Constraint, der vorher schweigend im Schema schlief und unter dem strikteren sqlx-Pool plötzlich aktiv wurde, wird jetzt sauber bedient — ohne Schema-Rebuild via `ON DELETE CASCADE` (der unter sqlx::migrate! durch die Auto-Transaction-Semantik mit `PRAGMA foreign_keys=OFF` umständlich gewesen wäre).
