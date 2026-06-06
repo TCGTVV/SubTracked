@@ -54,7 +54,7 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
               </summary>
               <ul className="coverage-items">
                 {account.items.map((it) => (
-                  <li key={`${it.subscription}-${it.date}`} className="coverage-row">
+                  <li key={`${it.subscriptionId}-${it.date}`} className="coverage-row">
                     <span className="coverage-row-name">{it.subscription}</span>
                     <span className="coverage-row-date">
                       {format(parseISO(it.date), "dd.MM.yyyy", { locale: de })}

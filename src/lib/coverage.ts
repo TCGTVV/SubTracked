@@ -3,6 +3,7 @@ import type { Account, Subscription } from "../types";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
 export interface CoverageItem {
+  subscriptionId: number;
   subscription: string;
   date: string; // ISO
   cents: number;
@@ -40,6 +41,7 @@ export function computeCoverage(
     for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
       bucket.totalCents += sub.amountCents;
       bucket.items.push({
+        subscriptionId: sub.id,
         subscription: sub.name,
         date: d.toISOString().slice(0, 10),
         cents: sub.amountCents,
