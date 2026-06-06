@@ -9,6 +9,82 @@
 
 ---
 
+## 2026-06-06 — Architektur ➌ Foundation: eigener Rust-DB-Pool + erste vier Tauri-Commands
+
+Erster Hands-on-Schritt der ➌-Etappe. Reihenfolge wurde vor Hands-on auf **➊→➌→➋** getauscht (statt ➊→➋→➌) — Diskussion mit konkreten Aufwand-Zahlen unten.
+
+### Was passierte
+
+- **Architektur-Diskussion ➋ vs ➌** geführt mit Belegen aus dem Code (db.ts: 12 DB-Funktionen, lib.rs: 78 Zeilen reines Setup ohne `#[tauri::command]`). Ergebnis: Reihenfolge tauschen auf ➊→➌→➋. ➋ allein würde einen zweiten Rust-DB-Pool neben `tauri-plugin-sql` brauchen (Concurrency-Risiko mit `SQLITE_BUSY` unter Last, doppelte Migration-Verantwortung) und der dann später unter ➌ wieder fliegt → Code für die Tonne. Mit ➌ zuerst wird die ganze DB-Schicht entkoppelt, ➋ wird zum Tagesausflug. Backlog-Architektur-Sektion aktualisiert.
+- **Drei Vorab-Entscheidungen geführt und beschlossen**:
+  1. **`tauri-plugin-sql` behalten oder rauswerfen?** Heute behalten als JS-DB-API-Compat-Shim für die noch nicht portierten Calls; Migrations-Konfiguration aber abgehängt (statt `Builder::new().add_migrations(...)` jetzt `Builder::default().build()`). Migrations laufen ab heute via `sqlx::migrate!("./migrations")`.
+  2. **Type-Sync Rust↔TS** — entgegen meiner ersten Empfehlung **manuelle Spiegelung** statt `tauri-specta`. Begründung: Setup-Reibung in dieser Foundation-Session vermeiden. Wenn Drift-Schmerz real wird (vermutlich ab 6+ Commands), specta nachträglich ergänzen. Frontend nutzt die existierende `parseInterval`-Logik zum Narrowen von `interval: string` (Rust) auf `Interval` (TS-Union).
+  3. **Tagesziel** — Foundation + 3–4 Commands als End-to-End-PoC, nicht alle 12.
+- **Cargo-Deps**: `sqlx = "0.9.0"` mit `default-features = false` und `features = ["runtime-tokio", "sqlite", "macros", "migrate"]`. Auto-Install brachte sqlx-core, sqlx-sqlite, sqlx-macros und die typischen Cryptographie- + Hash-Crates mit (Cargo.lock +448 Zeilen).
+- **`src-tauri/src/db.rs` neu**: `pub struct AppState { pub db: SqlitePool }`, plus drei `#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]`-Structs mit `#[serde(rename_all = "camelCase")]`: `Subscription`, `Account`, `NewSubscription` (für `add_subscription`-Body, mit `Option<bool>` für `active`/`notify`).
+- **`src-tauri/src/commands.rs` neu**: vier `#[tauri::command(rename_all = "camelCase")]`-Funktionen, alle async:
+  - `list_subscriptions(state, only_active: Option<bool>)` — Vec<Subscription>, ORDER BY name
+  - `list_accounts(state)` — Vec<Account>
+  - `add_subscription(state, sub: NewSubscription)` — i64 (last_insert_rowid)
+  - `delete_subscription(state, id: i64)` — Transaktional: DELETE FROM reminders WHERE subscription_id = ? → DELETE FROM subscriptions WHERE id = ? → COMMIT. **Fix für den heute aufgetauchten FK-Bug** (Detail unter Gotchas).
+- **`src-tauri/src/lib.rs` angepasst**: `tauri_plugin_sql::Builder::default().build()` (ohne Migrations), `.invoke_handler(generate_handler![...])` registriert die vier Commands, Setup-Block öffnet den `SqlitePool` via `app_config_dir() + "subtracker.db"` (gleicher Pfad wie das Plugin → Plugin und unser Pool teilen die Datei), `journal_mode = Wal`, `create_if_missing = true`, anschließend `sqlx::migrate!("./migrations").run(&pool).await`, dann `app.manage(AppState { db: pool })`. Sync-Wrap via `tauri::async_runtime::block_on`.
+- **`src/lib/db.ts` umgestellt**: `listAccounts`, `listSubscriptions`, `addSubscription`, `deleteSubscription` rufen jetzt `invoke<T>(...)` aus `@tauri-apps/api/core`. `SubRow` und `mapSub` (alte snake_case → camelCase + 0/1 → bool-Konvertierung) wurden entfernt — kommt jetzt direkt typkonform aus Rust dank `#[serde(rename_all = "camelCase")]`. Neuer `narrowSub`-Helper für das `interval`-Narrowing. Die anderen acht Funktionen (`addAccount`, `deleteAccount`, `countSubsForAccount`, `updateSubscription`, `insertReminderIfNew`, plus `getDb`) bleiben unverändert auf `tauri-plugin-sql`.
+- **PoC verifiziert mit dem User**: Abos lesen, Konten lesen, neues Abo anlegen, bestehendes Abo löschen (nach FK-Fix) — alles funktioniert.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal eins vor `origin/main` (Push folgt nach Commit) |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓, `pnpm build` ✓ (290,64 KB JS, -0,6 KB durch Mapping-Entfernung), `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| App-UI | Smoke-Test durch User OK — CRUD für Abos läuft End-to-End über die neue Rust-Schicht |
+| **Architektur ➌** | **4 von 12 Calls portiert** (33%), Foundation steht |
+
+### Nächster Schritt
+
+**Restliche 8 Frontend-Calls auf invoke umstellen** (eigene Mini-Session pro 2–3 Calls realistisch, oder eine größere Session für alle 8):
+
+- **Schreib-Pfade**: `updateSubscription`, `addAccount`, `deleteAccount` (auch hier vermutlich FK-Bedacht — `subscriptions.account_id` hat FK ohne CASCADE; `countSubsForAccount` ist schon der Soft-Check, der das verhindern soll, aber portieren wir das sauber zusammen mit `deleteAccount`).
+- **Reminder-Pfad**: `insertReminderIfNew` als Command — kleiner als gedacht, weil die Idempotenz im SQL liegt (`INSERT OR IGNORE` + UNIQUE-Index).
+- Wenn alle Frontend-Calls portiert sind: `getDb` + `@tauri-apps/plugin-sql`-Import aus `db.ts` entfernen, dann `@tauri-apps/plugin-sql` aus `package.json` raus. `tauri-plugin-sql` aus `Cargo.toml` kann dann auch fliegen, weil Migrations bei uns laufen.
+- Erst **danach** sinnvoll: **Architektur ➋** (Reminder-Loop in Rust). Plan unverändert.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Reihenfolge ➊→➌→➋ statt ➊→➋→➌**: oben unter "Was passierte" mit den konkreten Aufwand-Zahlen begründet. Hauptpunkt: ➋ allein wäre Brücken-Code, der ➌ wieder überholt.
+- **`tauri-plugin-sql` bleibt vorerst drin, aber ohne Migrations-Konfiguration**: Übergangs-Kompromiss. Würden wir's heute komplett rauswerfen, müssten wir alle 12 Calls in einer Session portieren — riskant für eine Foundation-Session, wenn Edge-Cases auftauchen (siehe Gotchas: der FK-Bug ist genau so einer). So bleibt der Code lauffähig nach jedem Schritt.
+- **Migrations bei uns via `sqlx::migrate!`** statt beim Plugin: erzwingt deterministische Reihenfolge (unser Setup läuft vor dem ersten Frontend-`Database.load()`). Schöner Nebeneffekt: `tauri-plugin-sql` nutzt intern dieselbe sqlx-Migrations-Tabelle (`_sqlx_migrations`), also würden Plugin-Migrations bei einem Frontend-`Database.load()` einfach "0 to run" sehen — kein Konflikt. Hatten wir vorab als Glücksfall identifiziert.
+- **Manuelle Type-Spiegelung statt `tauri-specta`**: Entscheidung gegen meine erste Empfehlung. Begründung: für 12 Calls und 3 Typen ist der Drift-Schmerz überschaubar; `tauri-specta`-Setup hat eigene Reibung (RC-Versionen, build.rs, Output-Pfad) und hätte die Foundation-Session zerstreut. Wenn Drift sich beim Portieren der nächsten 8 Calls als Schmerz erweist, ergänzen wir specta nachträglich.
+- **`#[tauri::command(rename_all = "camelCase")]` explizit** auf jedem Command, statt auf den Default zu vertrauen: Tauri-2-Default ist unsicher in Erinnerung (snake_case auf JS-Seite? camelCase?). Mit explizitem `rename_all` ist die JS-API deterministisch camelCase — passt zum Rest der Frontend-Konvention.
+- **`delete_subscription` als Transaktion**: zwei DELETE-Statements müssen atomar sein. Wenn der zweite DELETE failt, sollen die Reminders nicht weg sein. `state.db.begin()` + `tx.commit()` ist das idiomatische sqlx-Muster.
+- **`SqliteConnectOptions::from_str` + `create_if_missing(true)`** beim Pool-Setup statt einfach `SqlitePool::connect(url)`: Wir wollen explizite Kontrolle über `journal_mode = Wal` und `create_if_missing`. Letzteres ist wichtig, weil die DB-Datei bei ganz frischer Installation noch nicht existiert — ohne dieses Flag failt `SqlitePool::connect_with` mit "unable to open database file".
+- **PoC mit `delete_subscription` als 4. Command**: ursprünglich nur 3 Commands geplant. Der FK-Bug beim User-Test machte das Portieren des 4. zwingend, weil eine zweistufige DELETE-Transaktion über `tauri-plugin-sql`'s JS-API umständlich gewesen wäre (kein offensichtlicher Transaction-Wrapper auf der JS-Seite des Plugins). Symbiose: Bug-Fix und nächster Architektur-Schritt fallen zusammen.
+
+### Gotchas / Stolperfallen
+
+- **FK-Constraint-Bug beim Löschen** war heute der wichtigste Lehr-Moment. Symptom beim User-Test: `Fehler: error returned from database: (code: 787) FOREIGN KEY constraint failed`. Ursache: `reminders.subscription_id` referenziert `subscriptions(id)` ohne `ON DELETE CASCADE`. Bei aktiven FKs blockt SQLite den DELETE auf `subscriptions`. **Warum es vorher nie aufgetreten ist**, ist nicht eindeutig — wahrscheinlich entweder (a) der frühere `tauri-plugin-sql`-Pool hatte FKs nicht enforced (Plugin-Config-Default unklar) oder (b) der User hatte bisher noch nie ein Abo mit existierenden Reminders gelöscht. Unter unserem neuen sqlx-Pool sind FKs offenbar enforced (sqlx-sqlite-Default? `SqliteConnectOptions::foreign_keys(true)` ist Default). Fix oben dokumentiert. Lehre: **Schema-Constraints, die "still" da liegen, können plötzlich aktiv werden, wenn der DB-Treiber wechselt** — und nichts ist hinterlistiger als ein FK, der im Schema deklariert ist, aber zur Laufzeit nie greift.
+- **`ON DELETE CASCADE` im Schema wäre die eigentlich saubere Lösung**, aber unter `sqlx::migrate!` ein Krampf: sqlx wickelt Migrations in eine Transaction, und SQLite ignoriert `PRAGMA foreign_keys=OFF/ON` innerhalb einer Transaction (no-op). Der kanonische "12-step procedure" für FK-Änderungen (CREATE neue Tabelle, INSERT-SELECT, DROP alte, RENAME neue, mit ausgeschalteten FKs) ist damit nicht trivial machbar. Pragmatische Lösung in Application-Logik ist im SubTracked-Kontext OK.
+- **Tauri-2 Parameter-Konvention für `invoke`-Commands ist verwirrend**: ohne `#[tauri::command(rename_all = "camelCase")]` ist nicht deterministisch, ob `only_active` (Rust) im JS-`invoke({...})`-Objekt als `only_active` oder `onlyActive` erwartet wird. Lehre: **explizit annotieren** spart Debug-Zeit.
+- **`tauri::async_runtime::block_on` im Setup-Block**: das `setup`-Callback ist sync, async-Init braucht `block_on`. Tauri 2 bringt einen tokio-Runtime intern, deshalb funktioniert das ohne weiteres tokio-Setup-Boilerplate.
+- **Bash `cd src-tauri && cargo ...` aus dem Repo-Root**: zwei der parallelen cargo-Calls liefen aus dem Root und failten mit "could not find Cargo.toml" — `cd src-tauri && ...` oder `--manifest-path src-tauri/Cargo.toml` ist nötig. Schon mehrfach passiert, sollte ich mir merken: **alle cargo-Calls explizit aus `src-tauri/`**.
+- **Suspekt schnelles `cargo check`** beim ersten Lauf (`Finished in 0.23s`) ohne `Checking`-Zeile — Ursache: cargo cached die Build-Outputs, und wenn nichts touched wurde, gibt's nichts zu checken. Ein `touch src/lib.rs` triggert den Re-Check zuverlässig.
+
+### Geänderte/neue Memories
+
+- **`tech_stack`-Memory ist ab heute veraltet**: `sqlx 0.9.0` ist neuer Bestandteil; SQLite-Beschreibung als "via `tauri-plugin-sql ~2.4`" muss um den eigenen Pool ergänzt werden. **Sollte in der nächsten Session aktualisiert werden, sobald ➌ vollständig ist** — vorher noch zu viel im Fluss.
+- Keine neuen Auto-Memories — Patterns sind aus dem Code ablesbar.
+
+### Offen / nicht geklärt
+
+- Restliche 8 db.ts-Funktionen auf `invoke` umstellen (nächste Sessions).
+- Komplettes Entfernen von `@tauri-apps/plugin-sql` und `tauri-plugin-sql`-Crate, sobald alle Calls portiert sind.
+- `tech_stack`-Memory-Update wartet auf ➌-Abschluss.
+- Architektur ➋ (Reminder in Rust) wartet auf ➌-Abschluss.
+- Restliche Architektur-Punkte ➍–➑ als Diskussions-Material im Backlog.
+
+---
+
 ## 2026-06-05 — Marathon-Session-Abschluss
 
 Sessions-Wrap-Up. Tagesabschluss nach einem langen Tag mit vielen Strängen — Tests-/Qualitäts-Strategie komplett (5/5), Mikro-Cleanups, Architektur-Diskussion + Hands-on auf ➊ durchgezogen. Detail-Einträge stehen unten — dies ist die Übersicht plus der konkrete Stand zur nächsten Session.
