@@ -1,7 +1,10 @@
 mod commands;
 mod db;
+mod recurrence;
+mod reminders;
 
 use std::str::FromStr;
+use std::time::Duration as StdDuration;
 
 use crate::db::AppState;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
@@ -11,6 +14,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+
+const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -46,7 +51,21 @@ pub fn run() {
                 sqlx::migrate!("./migrations").run(&pool).await?;
                 Ok::<SqlitePool, Box<dyn std::error::Error>>(pool)
             })?;
-            app.manage(AppState { db: pool });
+            app.manage(AppState { db: pool.clone() });
+
+            // Reminder-Scheduler im Rust-Hauptprozess: initial Check + stuendlich.
+            // Loest die Webview-Pause-Probleme der frueheren useReminderLoop-Variante.
+            let app_handle = app.handle().clone();
+            let pool_for_loop = pool;
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    if let Err(e) = reminders::run_reminder_check(&pool_for_loop, &app_handle).await
+                    {
+                        eprintln!("Reminder-Check fehlgeschlagen: {e}");
+                    }
+                    tokio::time::sleep(REMINDER_INTERVAL).await;
+                }
+            });
 
             let show_item = MenuItem::with_id(app, "show", "Fenster zeigen", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
