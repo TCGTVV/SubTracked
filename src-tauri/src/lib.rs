@@ -17,7 +17,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::list_subscriptions,
             commands::list_accounts,
@@ -26,6 +25,8 @@ pub fn run() {
             commands::add_account,
             commands::delete_account,
             commands::count_subs_for_account,
+            commands::update_subscription,
+            commands::insert_reminder_if_new,
         ])
         .setup(|app| {
             let config_dir = app

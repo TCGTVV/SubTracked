@@ -108,3 +108,46 @@ pub async fn count_subs_for_account(
         .map_err(|e| e.to_string())?;
     Ok(n)
 }
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_subscription(
+    state: State<'_, AppState>,
+    sub: Subscription,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE subscriptions \
+         SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
+             interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
+         WHERE id = ?",
+    )
+    .bind(&sub.name)
+    .bind(sub.amount_cents)
+    .bind(&sub.currency)
+    .bind(sub.account_id)
+    .bind(&sub.interval)
+    .bind(&sub.anchor_date)
+    .bind(sub.lead_days)
+    .bind(sub.active)
+    .bind(sub.notify)
+    .bind(sub.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn insert_reminder_if_new(
+    state: State<'_, AppState>,
+    subscription_id: i64,
+    due_date: String,
+) -> Result<bool, String> {
+    let res =
+        sqlx::query("INSERT OR IGNORE INTO reminders (subscription_id, due_date) VALUES (?, ?)")
+            .bind(subscription_id)
+            .bind(&due_date)
+            .execute(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+    Ok(res.rows_affected() > 0)
+}
