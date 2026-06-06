@@ -9,6 +9,138 @@
 
 ---
 
+## 2026-06-06 — Tagesabschluss
+
+Marathon-Tag 2 in Folge — heute war komplett der Architektur-Strang ➌→➋ dran, beide vollständig erledigt. Detail-Einträge stehen unten, hier nur die Übersicht.
+
+### Heute insgesamt erledigt
+
+| Thema | Commits | HANDOVER-Eintrag |
+|---|---|---|
+| Architektur ➌ Foundation (sqlx-Pool + 4 Commands) | `fd3ad67`, `8a5bc9c` | "➌ Foundation" |
+| Persistenz-Verdacht endgültig erledigt | `7651403` | "Persistenz-Verifikation" (Nachtrag im Foundation-Eintrag) |
+| Architektur ➌ Konten-Charge (3 Commands) | `7e05ad5`, `863f1f7` | "➌ Konten-Charge" |
+| Architektur ➌ Abschluss + Plugin-Entfernung | `6c67d1d`, `bbe71f7` | "➌ vollständig" |
+| Architektur ➋ Reminder-Loop in Rust | (folgt) | hier |
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, lokal Commit-Push folgt |
+| Working tree | clean nach Commit |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 26/26 ✓, `cargo test` 5/5 ✓ (alle neu in `recurrence.rs`), `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| **Architektur ➊ + ➋ + ➌** | alle drei großen Hands-on-Punkte abgeschlossen |
+| `tauri-plugin-sql` | komplett raus |
+| Frontend-Reminder-Code | weg (Hook + reminders.ts gelöscht) |
+
+### Nächster Schritt
+
+Die drei „aktiven" Architektur-Punkte sind durch. Im Backlog liegen weiter:
+
+- **🏛️ Architektur ➍–➑** als Diskussions-Material (Komponenten-Testbarkeit, Concerns-Mix in reminders [jetzt nach Rust verlagert, also obsolet?], Reload-Pattern, Error-Boundary, i18n, Dokumentations-Strategie).
+- **🚀 Distribution & Setup**: Installer-Build, v0.1.0-Tag, README-Polish, README-Philosophie umformulieren, Logo neu exportieren.
+- **🐛 Dropdown-Bug Dark-Mode** als Quick-Fix bei Gelegenheit.
+
+Sinnvolle Reihenfolge für die nächste Session: **Installer-Build**, weil er drei Sachen auf einmal klärt — App ist nicht mehr nur dev-only, Tray/Autostart-Verhalten unter echter Installation, und der frühere Persistenz-Verdacht ist damit endgültig nachverfolgt im echten Build-Pfad. Plus: macht es psychologisch zum ersten "richtigen" Release-Kandidaten.
+
+### Wichtige Erkenntnisse (Tages-Summe)
+
+- **Reihenfolge-Tausch auf ➊→➌→➋** war die richtige Entscheidung. ➋ allein hätte einen Zweit-Pool gebraucht (Concurrency-Risiko) oder hätte ➌ vorweggenommen. So fiel ➋ am Ende des Tages zum Tagesausflug aus (ca. 2 Std mit Tests + Cleanup).
+- **Manuelle Type-Spiegelung statt `tauri-specta`** hat für die neun Commands plus die Reminder-Logik problemlos gereicht. Kein Drift, kein Tests-Setup-Overhead. Wenn das Projekt auf 30+ Commands oder ein wachsendes Backend kommt, kann specta nachgerüstet werden.
+- **Migrations-State-Tabelle ist plugin-übergreifend** (`_sqlx_migrations`): `tauri-plugin-sql` und `sqlx::migrate!` teilen sie sich nahtlos, weil das Plugin intern auch sqlx nutzt. Das machte den Plugin-Übergang risikofrei.
+- **FK-Constraints, die "still" im Schema schlafen**, können plötzlich aktiv werden, wenn der DB-Treiber wechselt — siehe das `delete_subscription`-Bug-Symbiose-Moment am Vormittag. Lehre: Schema-Constraints sind ein versteckter Vertrag, der erst im Treiber-Wechsel sichtbar wird.
+- **Doppelte Recurrence-Wahrheit** (TS + Rust) ist eine bewusste Akzeptanz: `recurrence.ts` bleibt fürs Frontend (Kontodeckungs-Ansicht), `recurrence.rs` für den Rust-Reminder. Beide Test-Suites halten die Drift-Sicherheit; die Logik selbst ändert sich konzeptionell nie wieder.
+
+### Geänderte/neue Memories
+
+- **Serena `tech_stack`** im Laufe des Tages zweimal aktualisiert: nach ➌-Abschluss (DB-Block + Rust-Architektur-Section), nach ➋-Abschluss (chrono + tokio + recurrence/reminders).
+
+### Offen / nicht geklärt
+
+- Architektur-Punkte ➍–➑ — vermutlich zum Teil obsolet durch heute, zum Teil weiter relevant.
+- Distribution-Items.
+- Quick-Fix Dropdown.
+- Logo-Re-Export wartet auf User mit Quelltool.
+
+---
+
+## 2026-06-06 — Architektur ➋: Reminder-Loop im Rust-Hauptprozess
+
+Letzte Architektur-Etappe des Tages. Nach dem ➌-Abschluss war ➋ wie versprochen ein Tagesausflug.
+
+### Was passierte
+
+- **Neue Cargo-Deps**: `chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }` für Date-Math; `tokio = { version = "1", features = ["time"] }` für den Sleep-Loop.
+- **`src-tauri/src/recurrence.rs`** (neu): `months_per_interval(&str) -> Result<u32, String>` und `next_due_date(anchor: NaiveDate, interval: &str, from: NaiveDate) -> Result<NaiveDate, String>`. Anker-additive Logik via `NaiveDate::checked_add_months(Months::new(k * step))`. Plus `#[cfg(test)]`-Block mit fünf Tests:
+  - `months_mapping`: Mapping monthly/quarterly/yearly/Fehler.
+  - **`anker_additive_drift_31`**: der zentrale Sicherheitsbeweis — Anker 31.01.2025, sechs Folgeschritte, alle korrekt (28./31./30./31./30./31. statt naiv iterativer 28er-Drift).
+  - `quarterly_step` und `yearly_step_leap` (Schaltjahr 29.02. → 28.02.).
+  - `unbekanntes_interval`: Fehlerpfad.
+- **`src-tauri/src/reminders.rs`** (neu): `pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u32, String>`. Genaue Pendant zur TS-Version:
+  - Permission-Check via `app.notification().permission_state() == PermissionState::Granted`.
+  - `Local::now().date_naive()` als heute.
+  - SELECT aktiver Subs (nutzt `crate::db::Subscription`).
+  - Pro Sub: Skip wenn `!sub.notify`, parse `anchor_date` (Format `%Y-%m-%d`), `next_due_date`, `remind_from = due - Duration::days(lead_days)`, Skip wenn `today < remind_from`.
+  - `INSERT OR IGNORE INTO reminders` (idempotent); wenn rows_affected = 0, Skip Notification.
+  - Sonst: `app.notification().builder().title(...).body(...).show()`. Title `"<name> fällig"`, Body `"<dd.MM.yyyy>: <amount>.<cents> <currency>. Konto rechtzeitig decken."` — wortwörtlich wie die alte TS-Version.
+- **`src-tauri/src/lib.rs`** angepasst: zwei neue `mod`-Statements, `REMINDER_INTERVAL` als Konstante (1h), und im Setup-Block ein `tauri::async_runtime::spawn` mit:
+  ```
+  loop {
+      if let Err(e) = reminders::run_reminder_check(&pool_for_loop, &app_handle).await {
+          eprintln!("Reminder-Check fehlgeschlagen: {e}");
+      }
+      tokio::time::sleep(REMINDER_INTERVAL).await;
+  }
+  ```
+  Initial-Check ist der erste Loop-Durchlauf, dann sleep, dann nächster Check.
+- **Frontend-Cleanup**:
+  - `src/App.tsx`: Import + `useReminderLoop()`-Aufruf raus.
+  - `src/hooks/useReminderLoop.ts` gelöscht.
+  - `src/lib/reminders.ts` gelöscht.
+  - `src/lib/recurrence.ts` bleibt, weil `coverage.ts` (Kontodeckungs-Ansicht) `dueDatesWithin` weiter nutzt.
+- **User-Verifikation**: App startet sauber, keine Console-Errors, normales CRUD-Verhalten unverändert. Notification-Pfad nicht direkt provoziert, aber die Idempotenz und der initiale Tick im Spawn sind beim App-Start abgespielt worden — wenn ein neues fälliges Abo angelegt wird, wird beim nächsten Tick (≤ 1h später) eine Notification kommen.
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Working tree | clean nach Commit |
+| Build/Tests lokal | wie oben in der Tages-Übersicht |
+| **Architektur ➋** | abgeschlossen ✅ |
+| Reminder-Pfad | komplett im Rust-Hauptprozess, kein Webview-Pause-Problem mehr |
+
+### Wichtige Entscheidungen + Begründung
+
+- **`chrono` mit `default-features = false` + `clock` + `std`**: schmalere Build-Footprint als die Default-Features (kein `wasmbind`, kein `serde`, das wir nicht brauchen). `clock` für `Local::now()`, `std` für die Standard-Operatoren.
+- **`tokio::time::sleep` statt `tokio::time::interval`**: einfacher zu lesen, "Drift" um die Compute-Zeit der `run_reminder_check` ist bei stündlichem Tick vernachlässigbar. `interval` würde verlangen, einen ersten `interval.tick().await` zu skippen, was Boilerplate ist ohne klaren Gewinn.
+- **`recurrence.ts` im Frontend NICHT gelöscht**: `coverage.ts` braucht weiter `dueDatesWithin` für die Kontodeckungs-Ansicht. Eine spätere Session könnte auch die Coverage-Logik nach Rust ziehen, aber:
+  - `coverage.ts` ist pure Frontend-Logik mit Tests, kein klarer Architektur-Treiber.
+  - Doppelte `recurrence`-Wahrheit (TS + Rust) ist klein und drift-stabil (Anker-additiv ist einfach), beide haben Test-Suiten.
+- **`crate::db::Subscription` in `run_reminder_check` wiederverwendet** statt eigenem `SubMinimal`-Struct: weniger Code-Duplikation, kostet ein paar überflüssig gelesene Bytes pro Sub. Pragmatisch.
+- **Notification-Body in deutscher Sprache hardcoded** wie in der TS-Version (`"Konto rechtzeitig decken."`): einheitlich zur UI-Sprache (Memory `mem:conventions` verlangt deutsche UI-Texte). i18n-Refactor kommt eines Tages, wir würden hier auch ein t() einbauen müssen — Folge-Item.
+- **`REMINDER_INTERVAL` als Modul-Konstante** statt Tauri-Setting oder UI-konfigurierbar: 1h ist konservativ genug für jede Notification-zentrale App, gleichzeitig schnell genug für Stunden-Test (User kann eine Stunde warten und schauen). Wenn jemand das überhaupt jemals tunen will, eine Zeile.
+
+### Gotchas / Stolperfallen
+
+- **`NaiveDate::checked_add_months(Months::new(n))`** klemmt automatisch auf den letzten gültigen Tag des Folgemonats — identisches Verhalten wie `date-fns::addMonths`. Glücklicher Default; hätte man eine Library erwischt, die das nicht macht, wäre die ganze Drift-Logik manuell.
+- **`tokio::time::sleep` braucht `tokio = { features = ["time"] }`**: das Default-Tokio (auf das sqlx mitkommt) hat das Feature nicht zwingend aktiviert. Explizit hinzufügen.
+- **`pool.clone()` für AppState UND Spawn**: SqlitePool ist Arc-based, also Clone billig. Aber: wer den Pool nur in einer der beiden Stellen nutzt und das `clone()` vergisst, kriegt Move-Error.
+- **Cargo-Fmt bricht Asserts in Tests vertikal um**, sobald sie über lineWidth liegen. Hat zwei Sessions in Folge die Test-Dateien aufgeblasen. Lesbar bleibt's, aber Code-Volume +30%.
+- **Rust-Build nach Cargo.toml-Änderung**: `pnpm tauri dev` ist trotz aller Caches noch ~3,5 s — sehr schnell, weil chrono und tokio kleine Crates sind im Vergleich zu Tauri/Wry.
+
+### Geänderte/neue Memories
+
+- **Serena `tech_stack`** finale Update nach ➋: chrono + tokio als Deps, `cargo test` als zusätzlicher Test-Runner, Rust-Architektur-Section um `recurrence.rs` und `reminders.rs` erweitert, Reminder-Scheduler-Spawn in der `lib.rs`-Beschreibung.
+
+### Offen / nicht geklärt
+
+- Concerns-Mix-Item im Backlog (Architektur ➎): war ursprünglich für `reminders.ts` formuliert, aber `reminders.ts` ist jetzt weg und der Rust-`run_reminder_check` ist sauberer strukturiert (DB-Read → Logik-Pass → Side-Effects sind aber weiterhin in einer Funktion vermischt). Das Item kann beim nächsten Backlog-Sweep neu bewertet werden.
+- Architektur-Punkte ➍, ➏, ➐, ➑ unverändert offen.
+- Distribution + Quick-Fixes wie gehabt.
+
+---
+
 ## 2026-06-06 — Architektur ➌ vollständig: letzte zwei Commands + Plugin-Entfernung (12/12)
 
 Letzte Charge — `update_subscription` und `insert_reminder_if_new` portiert, dann `tauri-plugin-sql` aus dem ganzen Projekt entfernt. Damit ist Architektur-Punkt ➌ abgeschlossen.
