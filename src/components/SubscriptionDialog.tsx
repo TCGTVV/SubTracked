@@ -10,7 +10,7 @@ const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
   { value: "yearly", label: "Jährlich" },
 ];
 
-const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF"] as const;
+const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF", "KRW"] as const;
 
 interface Props {
   ref: Ref<HTMLDialogElement>;

@@ -32,6 +32,14 @@ describe("formatAmount", () => {
   it("behandelt 0 Cent korrekt", () => {
     expect(formatAmount(0, "EUR")).toMatch(/^0,00\s*€$/);
   });
+
+  it("behandelt Waehrungen ohne Subdivision (KRW) als ganze Einheit", () => {
+    // KRW hat kein "Cent" - der DB-Wert ist direkt Won, nicht Won/100.
+    // Intl gibt KRW ohne Decimal-Stellen aus; das Symbol ist Won (₩) oder KRW.
+    expect(formatAmount(1500, "KRW")).toMatch(/1\.500/);
+    expect(formatAmount(1500, "KRW")).toMatch(/₩|KRW/);
+    expect(formatAmount(1500, "KRW")).not.toMatch(/15,00|15\.00/);
+  });
 });
 
 describe("formatNextDue", () => {
