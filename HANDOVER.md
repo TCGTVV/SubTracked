@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-06-06 — Quick-Win: Dropdown-Lesbarkeit im Dark-Mode gefixt
+
+Kleine Bonus-Runde nach dem ➋-Abschluss. User berichtete, dass die nativen `<select>`-Dropdowns im Dark-Mode unlesbar sind (weiß auf weiß). Quick-Fix.
+
+### Was passierte
+
+- **Erster Versuch**: `select option { color: #f6f6f6; background-color: #2a2a2a; }` im Dark-Mode-Media-Query — wirkungslos. WebKitGTK rendert das `<option>`-Popup als native GTK-Component und ignoriert CSS-Regeln auf `<option>`-Elementen weitgehend.
+- **Zweiter Versuch, der gegriffen hat**: `color-scheme: dark` auf `:root` im Dark-Mode-Media-Query. Das ist das standardisierte Signal an den UA, native Form-Controls im dunklen System-Stil zu zeichnen. WebKitGTK respektiert es, der Dropdown ist jetzt dunkel mit hellem Text. Nebeneffekt: auch andere native Controls (Date-Picker-Popups, Scrollbars) sollten konsistent dunkel werden.
+- Den nicht-greifenden ersten Versuch nach der Verifikation wieder aus dem Code geworfen — die `color-scheme: dark`-Zeile reicht und ist die idiomatische Lösung.
+
+### Status
+
+- Backlog-Bug "Dropdown-Lesbarkeit im Dark-Mode" als erledigt markiert (2026-06-06).
+- Lokale Gates: nur `pnpm lint` lief (rein CSS-Änderung) — clean.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`color-scheme` statt CSS-Override**: standardisierter, schmaler, und löst nebenbei verwandte Probleme (Scrollbars, andere native Controls). CSS-Override auf `<option>` hätte je nach Plattform unterschiedlich gewirkt und wäre brüchig.
+- **Den ersten Versuch sauber wieder rausgeworfen** statt als Defense-in-Depth zu behalten: SubTracked ist Tauri-only, also immer WebView-basiert. Eine zweite Stilebene wäre toter Code mit irreführendem Kommentar.
+
+### Gotchas / Stolperfallen
+
+- **WebKitGTK ignoriert `<option>`-CSS** in den allermeisten Fällen. Wer "weiß auf weiß"-Probleme im Dark-Mode hat, sollte als erstes `color-scheme: dark` versuchen, nicht das Option-Styling.
+- **Vite-HMR übernimmt CSS-Änderungen sofort** — kein App-Restart nötig zum Verifizieren. Praktisch.
+
+### Offen / nicht geklärt
+
+- Andere Quick-Wins aus dem Backlog (CoverageItem-key, README-Polish, Error-Boundary, KRW+Subdivisions, Backlog-Sweep) weiter offen.
+
+---
+
 ## 2026-06-06 — Tagesabschluss
 
 Marathon-Tag 2 in Folge — heute war komplett der Architektur-Strang ➌→➋ dran, beide vollständig erledigt. Detail-Einträge stehen unten, hier nur die Übersicht.
