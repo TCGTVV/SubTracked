@@ -13,8 +13,12 @@ const CURRENCY_SUBDIVISIONS: Record<string, number> = {
   KRW: 1,
 };
 
+export function getCurrencySubdivisor(currency: string): number {
+  return CURRENCY_SUBDIVISIONS[currency] ?? 100;
+}
+
 export function formatAmount(cents: number, currency: string): string {
-  const divisor = CURRENCY_SUBDIVISIONS[currency] ?? 100;
+  const divisor = getCurrencySubdivisor(currency);
   return new Intl.NumberFormat("de-DE", {
     style: "currency",
     currency,

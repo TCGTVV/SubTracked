@@ -1,6 +1,6 @@
 import { type FormEvent, type Ref, useId, useState } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
-import { todayISO } from "../lib/format";
+import { getCurrencySubdivisor, todayISO } from "../lib/format";
 import type { Account, Interval, Subscription } from "../types";
 import { DateField } from "./DateField";
 
@@ -19,8 +19,10 @@ interface Props {
   onSaved: () => void;
 }
 
-function centsToInput(cents: number): string {
-  return (cents / 100).toFixed(2);
+function centsToInput(cents: number, currency: string): string {
+  const divisor = getCurrencySubdivisor(currency);
+  if (divisor === 1) return cents.toString();
+  return (cents / divisor).toFixed(2);
 }
 
 export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Props) {
@@ -35,7 +37,9 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   const leadId = useId();
 
   const [name, setName] = useState(subscription?.name ?? "");
-  const [amount, setAmount] = useState(subscription ? centsToInput(subscription.amountCents) : "");
+  const [amount, setAmount] = useState(
+    subscription ? centsToInput(subscription.amountCents, subscription.currency) : "",
+  );
   const [currency, setCurrency] = useState<string>(subscription?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(subscription?.accountId ?? null);
   const [interval, setInterval] = useState<Interval>(subscription?.interval ?? "monthly");
@@ -58,7 +62,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
     try {
       const payload = {
         name: trimmedName,
-        amountCents: Math.round(amountNumber * 100),
+        amountCents: Math.round(amountNumber * getCurrencySubdivisor(currency)),
         currency,
         accountId,
         interval,
@@ -105,8 +109,8 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
             <input
               id={amountId}
               type="number"
-              step="0.01"
-              min="0.01"
+              step={getCurrencySubdivisor(currency) === 1 ? "1" : "0.01"}
+              min={getCurrencySubdivisor(currency) === 1 ? "1" : "0.01"}
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
