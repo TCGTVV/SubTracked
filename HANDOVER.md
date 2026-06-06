@@ -9,6 +9,74 @@
 
 ---
 
+## 2026-06-06 — Quick-Win-Marathon: README, Smoke-Test, ErrorBoundary, KRW
+
+11 Commits am Nachmittag, fünf Backlog-Items abgehakt, plus der erste lokale Production-Smoke-Test als psychologischer Release-Kandidat. Nach den Architektur-Etappen ➊/➋/➌ vormittags ging es jetzt um Sauberkeit, Distribution-Test und Polish.
+
+### Was passierte (chronologisch)
+
+| Thema | Commits | Hinweise |
+|---|---|---|
+| README-Polish + Philosophie umformuliert | `b89e17e`, `077036c` | Tagline dreht sich jetzt um „native Desktop-App, Tray leise im Hintergrund" mit Anti-SaaS-Linie (drei Varianten zur Auswahl gestellt, B gewählt). Tech-Sektion komplett aktualisiert: sqlx-Pool statt `tauri-plugin-sql`, Rust-Reminder, Vitest/`cargo test`/Lefthook/CI. Neuer „Entwicklung"-Block mit den lokalen Befehlen. HANDOVER-Klarstellung: das gestern beobachtete „alte Logo auf GitHub-Page" war Browser-Cache, nach Neustart sauber. |
+| Backlog-Sweep + Updater-Item | `445543b`, `3a4c4b8` | Concerns-Mix-Item nach `reminders.ts`-Löschung auf `reminders.rs` umformuliert, klar niedrig priorisiert (Drift-Falle ist in `recurrence.rs` schon getestet). Komponenten-Testbarkeit-Item auf den heutigen Stand gezogen (direkt-`db.*` → Hooks + `invoke`-Wrapper). In-App-Updater-Item via `tauri-plugin-updater` neu eingefügt, klar als „ab v0.1.0 mit signierter Pipeline" markiert. |
+| Installer-Smoke-Test | `a4538f3`, `19c5c06` | Erster lokaler `pnpm tauri build` deckte zwei Production-only-Probleme auf: lowercase `productName: "subtracked"` zog sich durch Binary + .desktop + Launcher-Anzeige, plus WebKitGTK-Wayland-DMABUF-Bug crashed den Release-Build mit `Gdk-Message Error 71`. Beide Fixes fest verankert: `productName: "SubTracked"` + `mainBinaryName: "subtracked"` (Display groß, Binary klein), `WEBKIT_DISABLE_DMABUF_RENDERER=1` als `unsafe set_var` mit `cfg(target_os = "linux")` ganz früh in `run()`. Installation auf Cachyos via `debtap`-Konvertierung mit `--assume-installed gtk=1`-Workaround (Debian-Paketname `libgtk-3-0` wird zu `gtk` statt `gtk3`). |
+| Error-Boundary | `44c3681`, `444c9c4` | `src/components/ErrorBoundary.tsx` als Class-Component (React liefert kein Hook-Equivalent für `componentDidCatch`), in `main.tsx` um `<App />` gewickelt → fängt damit auch Errors beim allerersten App-Mount, nicht nur Sub-Komponenten. Fallback-UI nutzt die normale `.container`-Klasse für Layout-Konsistenz, neue `.error-details`-Klasse für die rot umrandete Error-Message-Box. Visuell verifiziert per temp-`throw` in `App()`. |
+| CoverageItem-Key | `36c5e5c` | `CoverageItem.subscriptionId: number` neu, in `computeCoverage` aus `sub.id` gefüllt, in `OverviewSection` als React-Key (`${it.subscriptionId}-${it.date}` statt vorher `${it.subscription}-${it.date}`). Eindeutig auch im theoretischen Edge-Case zweier Abos mit identischem Namen + Fälligkeitstag. |
+| KRW + Subdivisions | `5ef9238`, `7253226` | Zweistufig: erst KRW in `CURRENCY_OPTIONS` + `CURRENCY_SUBDIVISIONS`-Map + `getCurrencySubdivisor()`-Helper in `format.ts` (EUR/USD/GBP/CHF → 100, KRW → 1, Default 100); dann `SubscriptionDialog` mit conditional `step="1"`/`min="1"` und Subdivisor-aware `centsToInput` + Submit-Logik. DB-Schema bleibt unverändert — `amount_cents` ist semantisch „smallest currency unit", bei KRW direkt Won. Visuell verifiziert (Anlegen, Liste-Anzeige, Edit-Roundtrip, EUR-Sanity-Check). |
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, auf origin/main |
+| Working tree | clean bis auf untracked `assets/logo2.png`/`logo3.png` (User-Backup-Material aus den Nano-Banana-Versuchen) |
+| Build/Tests lokal | `pnpm lint` ✓, `pnpm test:run` 27/27 ✓ (+1 KRW-Test), `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt --check` ✓ |
+| Lokaler Production-Build | `.deb`/`.rpm` gebaut, `.AppImage` scheitert lokal an fehlendem `fuse2` (kein Problem auf CI). Installation via `debtap` → `pacman -U` läuft, App startet aus dem Anwendungsmenü als „SubTracked", Tray + DB-Persistenz verifiziert. |
+| Backlog-Sektion „🐛 Bugs" | 1 offen (Tray-Aufpopp-Bug) |
+| Backlog-Sektion „🚀 Distribution & Setup" | Smoke-Test abgehakt, Updater-Item ergänzt; v0.1.0 + README-Polish-Bilder + Fallow + Matrix-Build offen |
+| Backlog-Sektion „🏛️ Architektur" | ➊/➋/➌ erledigt, ➍ neu formuliert, ➎ niedrig priorisiert, ➏/➐ erledigt (Error-Boundary), ➑ offen (Doku-Strategie + i18n) |
+
+### Nächster Schritt
+
+Aktiver Quick-Win-Backlog ist abgearbeitet. Kandidaten für die nächste Session:
+
+- **🐛 Tray-Aufpopp-Bug** (Backlog Z. 26) — KDE-Plasma-Wayland-Debugging, „Fenster zeigen" aus dem Tray-Menü highlightet nur die Taskleiste statt das Fenster wirklich zu zeigen. Reproduziert vom User, noch nicht angefasst.
+- **🏛️ Architektur-Diskussion ➍/➑** — Komponenten-Testbarkeit-Hands-on (Setup für RTL via Backlog Z. 100), Doku-Strategie, i18n-Vorbereitung.
+- **🎨 UI-Redesign Richtung arsnova** (Backlog Z. 88) — vor v0.1.0 sinnvoll, aber großer Block, eigene Session-Reihe.
+- **🚀 Matrix-Build-Pipeline** (Z. 89) — `tauri-action`-Workflow als Vorbereitung für signierten v0.1.0-Release plus In-App-Updater (Backlog Z. 54).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Installer-Build als Smoke-Test, nicht als Distributions-Schritt**: bewusst keine GitHub-Release-Hand-Arbeit jetzt — der echte v0.1.0-Release soll mit `tauri-action`-Matrix-Build + signiertem Updater starten. Manueller v0.0.x-Release wäre Wegwerf-Arbeit, weil der Updater auf signierte Builds angewiesen ist.
+- **`debtap` als Arch-Workaround bewusst akzeptiert** statt FUSE2 nachzuinstallieren. Realer Distribution-Pfad führt über CI mit FUSE-Linux-Runner, nicht über lokales AppImage-Bundling. Die `--assume-installed gtk=1`-Krücke ist ein einmaliger Smoke-Test-Hack, kein dauerhafter Distribution-Pfad.
+- **Wayland-Workaround in `lib.rs` mit `cfg(target_os = "linux")`**: auf X11 no-op, daher kein Schaden. Bewusst nicht conditional auf `WAYLAND_DISPLAY`-Detection gegated — der Aufwand wäre höher als der Nutzen (Env-Var-Set ist 1-Mikrosekunde).
+- **ErrorBoundary in `main.tsx` um `<App />`, nicht in `App.tsx`**: damit fängt sie auch Errors beim allerersten App-Mount (z.B. wenn ein Hook beim ersten Render wirft), nicht nur in Sub-Komponenten.
+- **`getCurrencySubdivisor`-Helper exportiert statt Map direkt**: vereinheitlicht den Default-100-Fallback. Über-Abstraktion vermieden, weil's ein Einzeiler ist und der Helper-Aufruf gleich aussieht wie die Map-Lookup.
+- **KRW als zweistufiger Commit-Set** (Daten-Schicht + Dialog separat): saubere Trennung, jeweils mit grünen Tests. Der User wollte explizit erst (1)+(2), dann (3) — die Trennung war auch reviewbar besser.
+
+### Gotchas / Stolperfallen
+
+- **WebKitGTK-Wayland-DMABUF-Bug ist nur im Release-Build sichtbar**, weil `pnpm tauri dev` die Env-Var implizit setzt (Tauri-CLI hilft, sieht man am Output `WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri dev`). Der `cargo run --release`-Pfad bzw. das installierte Binary nicht. **Lehre: nach jeder größeren Tauri-Änderung Production-Smoke-Test** — der Dev-Modus kann Production-Probleme verbergen.
+- **`debtap` mapt Debian-Paketnamen 1:1**: `libgtk-3-0` wird zu `gtk` (existiert auf Arch nicht), nicht zu `gtk3`. Workaround: `--assume-installed gtk=1` beim `pacman -U`. Würde mit CI-Build (`tauri-action`) nicht passieren, weil die signierten Linux-Bundles direkt auf Ubuntu-Runner gebaut werden.
+- **Cachyos hat kein `dpkg`, kein `rpm`, kein `fuse2`** standardmäßig — alle drei wären für die nativen Linux-Bundle-Targets nötig. `debtap` aus dem AUR füllt die `.deb`-Lücke. `.AppImage` braucht FUSE2 zum Auspacken (linuxdeploy ist selbst ein AppImage), sonst Bundle-Failure mit unspezifischem „failed to run linuxdeploy".
+- **Biome wirft `noUnreachable`-Errors mehrfach**, sobald nach einem `throw` weiterer Code steht — auch wenn die Verifikation gewollt ist (temp-`throw` für Boundary-Test). `// biome-ignore lint/correctness/noUnreachable:` hilft nur lokal an der throw-Zeile; die Folge-Errors auf return-Statement-Zeilen blockieren `pnpm lint`. Lefthook beim Commit ist damit blockiert. Dev-Server (Vite) ignoriert Biome und läuft trotzdem. Pragmatisch: temp-`throw` für Verifikation nicht committen, nach OK rausnehmen.
+- **In-App-Updater wartet auf signierte Builds** (Keypair via `pnpm tauri signer generate`, Public-Key in `tauri.conf.json`, Private-Key als GitHub-Secret) plus `latest.json`-Asset bei jedem Release. Ohne stabile signierte Release-Pipeline ist Auto-Update brüchig — daher im Backlog explizit als „ab v0.1.0" markiert.
+
+### Geänderte/neue Memories
+
+- **`feedback_serena`** (auto-memory) um expliziten Pre-Flight-Check verstärkt: vor jedem `Read`/`Edit` explizit fragen „kann ein Serena-Tool das?". Grund: User musste den Hinweis ein zweites Mal geben („verwendest du das tool aktiv?"). Reflex-Problem ist real und nicht durch einmaliges Memory-Schreiben gelöst. Verstärkungs-Datum 2026-06-06 im Memory notiert.
+- Keine weiteren Memory-Änderungen.
+
+### Offen / nicht geklärt
+
+- **Tray-Aufpopp-Bug** (Backlog Z. 26) — wahrscheinlich KDE-Plasma-Wayland-spezifisch.
+- **Architektur-Diskussions-Punkte ➍/➑** offen.
+- **GitHub-Fallow** (Z. 57) noch nicht recherchiert.
+- **Untracked `assets/logo2.png`/`logo3.png`** — User-Backup-Material aus den Nano-Banana-Versuchen, kann lokal entfernt werden, stört nichts.
+- **AppImage lokal**: wenn der Smoke-Test irgendwann auch `.AppImage` decken soll, müsste `sudo pacman -S fuse2` einmalig laufen. Für jetzt verzichtet, weil CI-Pfad ohnehin der echte Distribution-Weg ist.
+
+---
+
 ## 2026-06-06 — Quick-Win: Logo-Hintergrund + Größe gefixt
 
 Folge-Quick-Win zum Dropdown-Fix. Logo hatte das Editor-Schachbrettmuster als Pixel im Bild und war 5,1 MiB groß — beides per Backlog-Item bekannt, war auf User-Re-Export gewartet. **Nachtrag 2026-06-06:** User meldete kurz, das Schachbrettmuster sei auf der GitHub-Page noch sichtbar — war ein Browser-Cache-Issue, nach Browser-Neustart sauber. Logo auf GitHub mit korrekter Transparenz.
