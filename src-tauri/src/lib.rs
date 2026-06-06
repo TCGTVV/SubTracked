@@ -19,6 +19,14 @@ const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK 2.46+ hat unter Wayland einen DMABUF-Renderer-Bug, der die App
+    // beim Start crashen laesst ("Gdk-Message Error 71"). Workaround: DMABUF aus.
+    // Auf X11 no-op, daher kein Aufruf-Schaden.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
