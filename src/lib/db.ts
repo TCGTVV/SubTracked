@@ -32,26 +32,15 @@ export async function listAccounts(): Promise<Account[]> {
 }
 
 export async function addAccount(name: string, note?: string): Promise<number> {
-  const db = await getDb();
-  const res = await db.execute("INSERT INTO accounts (name, note) VALUES ($1, $2)", [
-    name,
-    note ?? null,
-  ]);
-  return res.lastInsertId ?? 0;
+  return invoke<number>("add_account", { name, note: note ?? null });
 }
 
 export async function deleteAccount(id: number): Promise<void> {
-  const db = await getDb();
-  await db.execute("DELETE FROM accounts WHERE id = $1", [id]);
+  await invoke("delete_account", { id });
 }
 
 export async function countSubsForAccount(accountId: number): Promise<number> {
-  const db = await getDb();
-  const rows = await db.select<{ n: number }[]>(
-    "SELECT COUNT(*) AS n FROM subscriptions WHERE account_id = $1",
-    [accountId],
-  );
-  return rows[0]?.n ?? 0;
+  return invoke<number>("count_subs_for_account", { accountId });
 }
 
 // --- Subscriptions ---------------------------------------------------------
