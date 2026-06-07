@@ -4,6 +4,7 @@ import { NotificationPermissionBanner } from "./components/NotificationPermissio
 import { OverviewSection } from "./components/OverviewSection";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
+import { UpcomingSection } from "./components/UpcomingSection";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { deleteSubscription, setSubscriptionActive } from "./lib/db";
@@ -106,6 +107,10 @@ function App() {
       )}
       {!loading && !error && subs.length === 0 && (
         <p className="empty">Noch keine Abos angelegt.</p>
+      )}
+
+      {!loading && activeSubs.length > 0 && (
+        <UpcomingSection subscriptions={activeSubs} accounts={accounts} />
       )}
 
       {archivedCount > 0 && (

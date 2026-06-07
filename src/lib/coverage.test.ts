@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Account, Subscription } from "../types";
-import { computeCoverage, computeMonthlyBaseline } from "./coverage";
+import { computeCoverage, computeMonthlyBaseline, computeUpcoming } from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   id: 1,
@@ -163,5 +163,41 @@ describe("computeMonthlyBaseline", () => {
     ];
     const result = computeMonthlyBaseline(subs, [acc(1, "Klein"), acc(2, "Groß")]);
     expect(result.map((r) => r.account)).toEqual(["Groß", "Klein"]);
+  });
+});
+
+describe("computeUpcoming", () => {
+  it("listet Fälligkeiten innerhalb der nächsten N Tage chronologisch", () => {
+    const subs = [
+      sub({ id: 1, name: "Netflix", anchorDate: "2026-01-15" }),
+      sub({ id: 2, name: "Strom", anchorDate: "2026-01-05", amountCents: 5000 }),
+    ];
+    const result = computeUpcoming(subs, [acc(1, "Giro")], 30, NOW);
+    expect(result.map((i) => i.subscription)).toEqual(["Strom", "Netflix"]);
+    expect(result.map((i) => i.date)).toEqual(["2026-01-05", "2026-01-15"]);
+  });
+
+  it("liefert keine Fälligkeiten ausserhalb des Fensters", () => {
+    const result = computeUpcoming([sub({ anchorDate: "2026-03-15" })], [acc(1, "Giro")], 30, NOW);
+    expect(result).toHaveLength(0);
+  });
+
+  it("setzt accountName auf null, wenn kein Konto zugeordnet ist", () => {
+    const result = computeUpcoming([sub({ accountId: null })], [], 30, NOW);
+    expect(result[0]?.accountName).toBeNull();
+  });
+
+  it("uebernimmt die Sub-Waehrung pro Item (kein heimliches Mappen)", () => {
+    const subs = [
+      sub({ id: 1, currency: "EUR", amountCents: 1000, anchorDate: "2026-01-10" }),
+      sub({ id: 2, currency: "USD", amountCents: 999, anchorDate: "2026-01-20" }),
+    ];
+    const result = computeUpcoming(subs, [acc(1, "Giro")], 30, NOW);
+    expect(result.map((i) => i.currency)).toEqual(["EUR", "USD"]);
+  });
+
+  it("uebertraegt notify, damit der Caller stumme Subs markieren kann", () => {
+    const result = computeUpcoming([sub({ notify: false })], [acc(1, "Giro")], 30, NOW);
+    expect(result[0]?.notify).toBe(false);
   });
 });

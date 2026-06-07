@@ -1,4 +1,4 @@
-import { addMonths, startOfDay } from "date-fns";
+import { addDays, addMonths, startOfDay } from "date-fns";
 import type { Account, Subscription } from "../types";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
@@ -175,4 +175,52 @@ export function computeMonthlyBaseline(
   return [...buckets.values()]
     .map((b) => ({ ...b, monthlyCents: Math.round(b.monthlyCents) }))
     .sort((a, b) => b.monthlyCents - a.monthlyCents);
+}
+
+export interface UpcomingItem {
+  subscriptionId: number;
+  subscription: string;
+  /** ISO YYYY-MM-DD */
+  date: string;
+  cents: number;
+  currency: string;
+  accountName: string | null;
+  notify: boolean;
+}
+
+/**
+ * Alle Faelligkeiten der naechsten `days` Tage ueber alle uebergebenen Subscriptions,
+ * chronologisch sortiert. Reine Funktion. Aufrufer soll nur aktive Subs uebergeben —
+ * archivierte landen sonst trotzdem in der Liste, was den primaeren Arbeitsmodus
+ * mit Phantom-Buchungen verschmutzen wuerde.
+ */
+export function computeUpcoming(
+  subscriptions: Subscription[],
+  accounts: Account[],
+  days = 30,
+  now: Date = new Date(),
+): UpcomingItem[] {
+  const from = startOfDay(now);
+  const until = addDays(from, days);
+  const accName = new Map(accounts.map((a) => [a.id, a.name]));
+  const items: UpcomingItem[] = [];
+
+  for (const sub of subscriptions) {
+    const accountName =
+      sub.accountId != null ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)") : null;
+    for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
+      items.push({
+        subscriptionId: sub.id,
+        subscription: sub.name,
+        date: d.toISOString().slice(0, 10),
+        cents: sub.amountCents,
+        currency: sub.currency,
+        accountName,
+        notify: sub.notify,
+      });
+    }
+  }
+
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  return items;
 }

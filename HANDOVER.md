@@ -9,6 +9,62 @@
 
 ---
 
+## 2026-06-07 — Claude: Nächste-Fälligkeiten-Ansicht als primärer Arbeitsmodus
+
+Quick-Win 2 nach Validierung + Archiv: SubTracked hat jetzt eine kompakte „Demnächst (30 Tage)"-Liste direkt über der Abo-Liste. Der tägliche Nutzen — „was geht in den nächsten Wochen ab?" — ist damit der erste Blick auf der Hauptseite, vor der Detail-Abo-Liste und vor dem Konto-Forecast.
+
+### Geändert
+
+- `src/lib/coverage.ts` — neue reine Funktion `computeUpcoming(subs, accounts, days = 30, now = new Date())`. Iteriert über alle Subs, sammelt `dueDatesWithin(anchor, interval, from, until)` und produziert eine flach chronologisch sortierte Liste mit `{ subscriptionId, subscription, date, cents, currency, accountName, notify }`. Account-Lookup über `Map(accounts.map((a) => [a.id, a.name]))`. Doc-Comment macht explizit, dass nur aktive Subs übergeben werden sollen — sonst landen archivierte Abos als Phantom-Buchungen im „primären Arbeitsmodus". `addDays` aus `date-fns` neu importiert.
+- `src/components/UpcomingSection.tsx` (neu) — eigene Komponente, ruft `computeUpcoming` und rendert entweder Empty-State („Keine Fälligkeiten in den nächsten N Tagen.") oder eine `<ul>` mit Grid-Rows. Tooltip auf `· stumm` erklärt den Status für Screen-Reader und Mouse-Hover.
+- `src/App.tsx` — `UpcomingSection` direkt nach dem Empty-State der Abo-Liste eingehängt, **vor** dem Archiv-Toggle und der Abo-Liste. Bedingung: `!loading && activeSubs.length > 0` — keine leere Section bei frischer Installation oder wenn alle Abos archiviert sind. Bekommt `activeSubs` (siehe vorheriger Quick-Win) und `accounts`.
+- `src/App.css` — neue Klassen für `.upcoming` (Container mit dezentem Hintergrund + Border), `.upcoming-list`, `.upcoming-row` (4-Spalten-Grid: `3.5rem 1fr auto auto`), `.upcoming-date`, `.upcoming-name`, `.upcoming-muted`, `.upcoming-account`, `.upcoming-amount`. Trennlinien via `.upcoming-row + .upcoming-row { border-top }`.
+
+### Tests
+
+- `src/lib/coverage.test.ts` — neue `describe("computeUpcoming")` mit 5 Tests: chronologische Sortierung, leeres Fenster, `accountName = null` ohne Konto, currency-Übernahme pro Item ohne heimliches Mappen, `notify` wird durchgereicht.
+- `src/components/UpcomingSection.test.tsx` (neu, 5 Tests) — Empty-State, Datum/Name/Konto/Betrag pro Zeile, `· stumm`-Markierung, `(kein Konto)`-Fallback, `days`-Parameter wird respektiert.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` ✓.
+- `pnpm test:run` ✓ — **108 Tests in 11 Files grün** (vorher 98, +10 in dieser Session).
+- `pnpm lint` ✓ (Auto-Format-Fixes in beiden neuen Tests: `render(<X />)` einzeilig statt mehrzeilig — Biome-Default für kurze JSX-Calls).
+- `cargo fmt --check` ✓ / `cargo clippy --all-targets -- -D warnings` ✓.
+- `pnpm tauri dev` gestartet; User hat „passt" bestätigt: Section taucht über der Abo-Liste auf, chronologisch sortiert, stumme Abos markiert, ohne Konto wird als `(kein Konto)` ausgewiesen, archivierte Abos erscheinen nicht.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`computeUpcoming` lebt in `coverage.ts`** statt einer neuen `upcoming.ts`. Begründung: thematisch verwandt (beides nutzt `dueDatesWithin`), und coverage.ts ist mit ~210 Zeilen noch weit unter einer Schwelle, ab der ich splitten würde. Eigene Datei wäre Über-Abstraktion.
+- **Aufrufer entscheidet, welche Subs übergeben werden** (Pure-Function-Prinzip), die Funktion filtert nicht selbst nach `active`. Begründung: damit ist sie auch für eine künftige „Archiv-Demnächst-Ansicht" oder „alle Subs egal Status" wiederverwendbar. Doc-Comment macht die Erwartung explizit. App.tsx übergibt `activeSubs` — Konsistenz zur OverviewSection.
+- **Position: über der Abo-Liste**, nicht als Tab-Umschaltung. Backlog sagt „primärer Arbeitsmodus", und Tab-Umschaltung würde einen Klick zwischen Demnächst und Abo-Liste verlangen. Always-on direkt oben ist der direkte Pfad. Abo-Liste darunter bleibt für „Bestand verwalten", Konto-Forecast ganz unten für „Liquidität langfristig".
+- **Bedingte Anzeige `activeSubs.length > 0`**: keine leere Section in der frischen Installation. Erst wenn der User Abos hat, taucht die Sektion auf. Empty-State-Text in der Section selbst greift nur, wenn Subs existieren, aber keine Fälligkeit im 30-Tage-Fenster — selten, aber möglich (z.B. nur jährliche Abos mit Anker außerhalb).
+- **Keine Klick-Aktion auf der Zeile**: bewusst Scope eng halten. Die Sub-Liste darunter hat alle Aktionen (Bearbeiten, Archivieren, Löschen). Wenn beim Live-Smoke der User „ich will direkt von hier editieren" gesagt hätte, wäre ein Klick→Edit-Dialog die nächste Erweiterung. Er hat nicht — also bleibt's so. Falls später nötig: `onClick` an `.upcoming-row` ist trivial.
+- **Pro-Zeile `currency` aus dem **Sub**, nicht aus dem Konto**: in der Demnächst-Liste geht's um die Buchung selbst, nicht um Konto-Deckung. KRW-Sub auf EUR-Konto wird in der Demnächst-Sektion ehrlich als KRW angezeigt. Coverage filtert solche Subs raus (Konto-Sicht), Demnächst zeigt sie (Buchungs-Sicht) — zwei verschiedene Linsen aufs gleiche Datenmodell.
+- **Datumsformat `dd.MM.` ohne Jahr** in der Demnächst-Liste: Fenster ist 30 Tage, da reicht Tag.Monat. Spart Spalten-Breite, lässt das Auge schneller scannen. Coverage zeigt `dd.MM.yyyy`, weil dort 6 Monate möglich sind und Jahres-Übergänge auftreten können.
+
+### Gotchas
+
+- **Fenster-Grenzen bei `dueDatesWithin`**: das Fenster ist `[from, until]` exklusive End-Tag (siehe `recurrence.ts`-Verhalten). 30 Tage ab 15.06. → bis 15.07. — der 15.07. selbst ist drin oder draußen? Schauen wenn jemand den Edge-Case findet; aktuell ist die Test-Coverage nur mit Mitten-Daten. Nicht jetzt fixen, höchstens wenn ein User „die nächste Fälligkeit am 30-Tage-Endtag erscheint nicht" meldet.
+- **`computeUpcoming` setzt `notify` aus der Subscription**, nicht aus dem `accounts.notify` (gibt's nicht). Der Markierungs-Sinn ist „dieses Abo schickt keine Notification" → `sub.notify === false`. Test-Coverage prüft das.
+- **Position der Section** verschiebt visuell auch die Headline-Hierarchie nach unten — Abo-Liste hat kein `<h2>` mehr direkt unter dem Header, sondern jetzt zuerst die Demnächst-Section. Wenn beim UI-Redesign jemand Layout-Strukturen ändert: die Demnächst-Section ist das neue erste inhaltliche Element nach Header + Banner.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: 4 modifizierte + 2 neue Dateien (`coverage.ts`, `coverage.test.ts`, `App.tsx`, `App.css` + neu `UpcomingSection.tsx`, `UpcomingSection.test.tsx`) + `BACKLOG.md` + `HANDOVER.md`. Noch nicht committet.
+- Tests grün: 108 Vitest, 8 Cargo.
+- Live-Smoke vom User bestätigt.
+
+### Nächster Schritt
+
+Die drei Quick-Wins der heutigen Session sind durch. Mögliche Richtungen (User-Wahl):
+- **Filter + Sortierung für Abo-Liste** (Backlog Z. ~42) — kleine Erweiterung, ROI steigt ab vielen Abos.
+- **Test-Notification + Reminder-Status in Settings** (Backlog Z. ~51-52) — kleines UX-Plus für Background-Reminder-Vertrauen.
+- **Release-Reife** (Matrix-Build mit `tauri-action`, v0.1.0-Tag, Windows/macOS-Smoke) — größerer Block, eigene Session.
+- **UI-Redesign Richtung arsnova** — jetzt wo die Feature-Flächen ungefähr final sind, lohnt der Block langsam.
+
+---
+
 ## 2026-06-07 — Claude: Abo archivieren / reaktivieren
 
 Quick-Win 1b nach der Formular-Validierung: das `active`-Feld im Subscription-Schema (existierte seit `0001_init.sql`) wird endlich als Nutzerkonzept angeboten. Statt nur Löschen kann der User Abos archivieren (z.B. gekündigte Mobilfunk-Verträge, pausierte Streaming-Dienste) und später reaktivieren. Coverage-Forecast bleibt sauber, weil archivierte Abos nicht eingerechnet werden.
