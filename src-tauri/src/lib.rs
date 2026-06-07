@@ -6,7 +6,7 @@ mod reminders;
 use std::str::FromStr;
 use std::time::Duration as StdDuration;
 
-use crate::db::AppState;
+use crate::db::{AppState, ReminderState};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::SqlitePool;
 use tauri::{
@@ -17,7 +17,7 @@ use tauri::{
 use tracing_appender::rolling::Rotation;
 use tracing_subscriber::prelude::*;
 
-const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
+pub const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 const TRAY_FOCUS_RETRY_DELAY: StdDuration = StdDuration::from_millis(80);
 const TRAY_FOCUS_RAISE_DELAY: StdDuration = StdDuration::from_millis(40);
 
@@ -46,6 +46,8 @@ pub fn run() {
             commands::update_subscription,
             commands::set_subscription_active,
             commands::insert_reminder_if_new,
+            commands::get_reminder_status,
+            commands::send_test_notification,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei
@@ -98,6 +100,7 @@ pub fn run() {
                 Ok::<SqlitePool, Box<dyn std::error::Error>>(pool)
             })?;
             app.manage(AppState { db: pool.clone() });
+            app.manage(ReminderState::default());
 
             // Reminder-Scheduler im Rust-Hauptprozess: initial Check + stuendlich.
             // Loest die Webview-Pause-Probleme der frueheren useReminderLoop-Variante.
@@ -108,6 +111,13 @@ pub fn run() {
                     if let Err(e) = reminders::run_reminder_check(&pool_for_loop, &app_handle).await
                     {
                         tracing::error!(error = %e, "Reminder-Check fehlgeschlagen");
+                    }
+                    // Last-Check-Zeitstempel immer aktualisieren, auch bei Error —
+                    // semantisch "Loop ist gelaufen", egal ob er was geschickt hat.
+                    if let Some(state) = app_handle.try_state::<ReminderState>() {
+                        if let Ok(mut last) = state.last_check_at.lock() {
+                            *last = Some(chrono::Utc::now());
+                        }
                     }
                     tokio::time::sleep(REMINDER_INTERVAL).await;
                 }

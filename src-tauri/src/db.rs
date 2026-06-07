@@ -1,8 +1,19 @@
+use std::sync::Mutex;
+
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 
 pub struct AppState {
     pub db: SqlitePool,
+}
+
+/// Diagnose-State des Reminder-Loops: wann lief der letzte Check?
+/// Bewusst in-memory (geht beim App-Restart verloren) — fuer "laeuft der Loop ueberhaupt?"-
+/// Diagnose reicht das, Persistenz waere Overhead.
+#[derive(Default)]
+pub struct ReminderState {
+    pub last_check_at: Mutex<Option<DateTime<Utc>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

@@ -740,8 +740,59 @@ select:focus-visible {
   padding-left: 1.7em;
 }
 
+.setting-subheading {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.setting-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-left: 1.7em;
+}
+
+.setting-confirm {
+  font-size: 0.85rem;
+  color: #16a34a;
+}
+
+.reminder-status {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  padding-left: 1.7em;
+  font-size: 0.9rem;
+}
+
+.reminder-status dt {
+  color: #666;
+  font-weight: 400;
+}
+
+.reminder-status dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-color-scheme: dark) {
   .setting-hint {
+    color: #aaa;
+  }
+
+  .setting-subheading {
+    color: #ddd;
+  }
+
+  .setting-confirm {
+    color: #4ade80;
+  }
+
+  .reminder-status dt {
     color: #aaa;
   }
 }

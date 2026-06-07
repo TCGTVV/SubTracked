@@ -2,6 +2,7 @@ import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getReminderStatus, sendTestNotification } from "../lib/db";
 import { SettingsDialog } from "./SettingsDialog";
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
@@ -10,9 +11,22 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
   disable: vi.fn(),
 }));
 
+vi.mock("../lib/db", () => ({
+  getReminderStatus: vi.fn(),
+  sendTestNotification: vi.fn(),
+}));
+
 const mockIsEnabled = vi.mocked(isEnabled);
 const mockEnable = vi.mocked(enable);
 const mockDisable = vi.mocked(disable);
+const mockGetReminderStatus = vi.mocked(getReminderStatus);
+const mockSendTestNotification = vi.mocked(sendTestNotification);
+
+const defaultStatus = {
+  lastCheckAt: null,
+  intervalSecs: 3600,
+  lastSent: null,
+};
 
 function renderDialog() {
   const ref = createRef<HTMLDialogElement>();
@@ -26,10 +40,12 @@ describe("SettingsDialog", () => {
     mockIsEnabled.mockReset();
     mockEnable.mockReset();
     mockDisable.mockReset();
+    mockGetReminderStatus.mockReset();
+    mockSendTestNotification.mockReset();
+    mockGetReminderStatus.mockResolvedValue(defaultStatus);
   });
 
   it("zeigt die Checkbox initial deaktiviert, bis isEnabled aufgelöst hat", async () => {
-    // never-resolving Promise → autostart bleibt null
     mockIsEnabled.mockReturnValue(new Promise(() => {}));
     renderDialog();
     const checkbox = screen.getByLabelText("Beim Login starten");
@@ -116,5 +132,70 @@ describe("SettingsDialog", () => {
       expect(screen.getByRole("alert")).toHaveTextContent(/Permission denied/);
     });
     expect(checkbox).not.toBeChecked();
+  });
+
+  it("ruft sendTestNotification beim Klick auf 'Test-Erinnerung senden'", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockSendTestNotification.mockResolvedValue(undefined);
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Test-Erinnerung senden" }));
+
+    await waitFor(() => {
+      expect(mockSendTestNotification).toHaveBeenCalledOnce();
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(/Gesendet/);
+  });
+
+  it("zeigt einen Fehler, wenn Test-Notification fehlschlägt", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockSendTestNotification.mockRejectedValue(new Error("Notification denied"));
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Test-Erinnerung senden" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Notification denied/);
+    });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("rendert 'noch keine' wenn der Loop noch keinen Check abgeschlossen hat", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+    await waitFor(() => {
+      expect(screen.getByText(/Letzte Prüfung/).nextSibling?.textContent).toMatch(/noch keine/);
+    });
+  });
+
+  it("rendert letzte Prüfung + Intervall + letzte gesendete Erinnerung, wenn Status vorhanden", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockGetReminderStatus.mockResolvedValue({
+      lastCheckAt: "2026-06-07T10:00:00Z",
+      intervalSecs: 3600,
+      lastSent: {
+        dueDate: "2026-06-15",
+        subscriptionName: "Netflix",
+        sentAt: "2026-06-07T09:00:00Z",
+      },
+    });
+    renderDialog();
+
+    await waitFor(() => {
+      expect(screen.getByText(/alle 1 Stunde/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Netflix/)).toBeInTheDocument();
+    expect(screen.getByText(/fällig 15\.06\.2026/)).toBeInTheDocument();
+  });
+
+  it("lädt den Reminder-Status erneut beim Klick auf 'Aktualisieren'", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+    await waitFor(() => {
+      expect(mockGetReminderStatus).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+    await waitFor(() => {
+      expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
+    });
   });
 });

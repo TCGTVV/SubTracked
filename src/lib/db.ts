@@ -90,3 +90,24 @@ export async function insertReminderIfNew(
 ): Promise<boolean> {
   return invoke<boolean>("insert_reminder_if_new", { subscriptionId, dueDate });
 }
+
+export interface LastSentReminder {
+  dueDate: string;
+  subscriptionName: string;
+  sentAt: string;
+}
+
+export interface ReminderStatus {
+  /** ISO 8601 UTC, null wenn der Loop noch keinen Check abgeschlossen hat. */
+  lastCheckAt: string | null;
+  intervalSecs: number;
+  lastSent: LastSentReminder | null;
+}
+
+export async function getReminderStatus(): Promise<ReminderStatus> {
+  return invoke<ReminderStatus>("get_reminder_status");
+}
+
+export async function sendTestNotification(): Promise<void> {
+  await invoke("send_test_notification");
+}
