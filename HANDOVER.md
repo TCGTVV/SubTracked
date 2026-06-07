@@ -9,6 +9,93 @@
 
 ---
 
+## 2026-06-07 — Codex: Review-Liste ins BACKLOG einsortiert
+
+Codex hat die zuvor erstellte Projekt-Review-Arbeitsliste in `BACKLOG.md` an die jeweils passende Stelle einsortiert. Keine App-Code-Änderungen.
+
+### Geändert
+
+- `🐛 Bugs`: Reminder-Sent-Semantik bei fehlgeschlagener/fehlender Notification und KRW/Zero-Decimal-Formatierung in Rust-Notifications ergänzt.
+- `🔨 Jetzt (Oberfläche)`: sichtbare Formularvalidierung, Archivieren/Pausieren, nächste Fälligkeiten und Filter/Sortierung ergänzt.
+- Neue Rubrik `📈 Produktnutzen / Prognose`: Kontostände, Deckungswarnungen, Mindestpuffer, Mehrwährungs-Prognose und Preis-Historie ergänzt.
+- `⏭️ Hintergrund-Betrieb`: Test-Notification und Reminder-Status ergänzt.
+- `🚀 Distribution & Setup`: Matrix-Build und Windows/macOS-Smoke-Test eingeordnet.
+- `📐 Tests & Qualität`: Serena-Memories aktualisieren und E2E-Test-Idee eingeordnet.
+- `🏛️ Architektur`: serverseitige Command-Validierung und TS/Rust-Recurrence-Duplikation ergänzt.
+- `🌱 Später`: Settings-Ausbau, UI/Empty-State-Ideen, Backup-Export, variable Intervalle, Kündigungsfrist und Kategorien ergänzt.
+- Veraltetes offenes Logging-Item als erledigt markiert, weil `tracing`/Datei-Logging bereits umgesetzt ist.
+
+### Verifikation
+
+- Keine Tests ausgeführt; reine Markdown-/Backlog-Änderung.
+
+### Status
+
+- User hat anschließend ausdrücklich "alles committen und pushen" angefordert.
+- Working tree enthält `BACKLOG.md`, `HANDOVER.md` sowie die bislang untracked `assets/logo2.png` und `assets/logo3.png`; alle vier Dateien werden auf User-Wunsch in den Commit aufgenommen.
+
+---
+
+## 2026-06-07 — Codex: Projekt-Review und Arbeitsliste
+
+Codex hat das Projekt einmal quer gelesen, um Sinn, Logik und Verbesserungshebel zu verstehen. Keine Code-Änderungen an App-Logik; nur Review/Analyse und diese HANDOVER-Dokumentation.
+
+### Gelesen / geprüft
+
+- Frontend: `App.tsx`, Dialoge, `OverviewSection`, Hooks, `DateField`, CSS.
+- TS-Logik: `recurrence.ts`, `coverage.ts`, `format.ts`, `db.ts`.
+- Rust: `lib.rs`, `commands.rs`, `db.rs`, `reminders.rs`, `recurrence.rs`, Migrationen, Capabilities, `tauri.conf.json`.
+- Projekt-Doku: `README.md`, `BACKLOG.md`, `.serena/memories/*`.
+
+### Verifikation
+
+- `pnpm test:run` grün: 87 Tests in 10 Files.
+- `pnpm build` grün.
+- `cargo test` grün: 5 Rust-Tests.
+- `cargo clippy --all-targets -- -D warnings` grün.
+- `cargo fmt --check` grün.
+
+### Wichtigste Review-Befunde
+
+- SubTracked ist fachlich eher ein lokaler Zahlungsradar/Kontodeckungs-Assistent als nur eine Abo-Liste. Größte Produkthebel: Kontostände/Prognose, Reminder-Zuverlässigkeit, Release-Reife, dann UI-Overhaul.
+- Multi-Currency ist nur teilweise umgesetzt: Eingabe/Anzeige einzelner Beträge kann KRW, aber `OverviewSection` formatiert Baseline/Coverage pauschal als EUR und `reminders.rs` teilt Beträge pauschal durch 100. Das sollte vor ernsthafter Mehrwährungsnutzung korrigiert werden.
+- Reminder-Idempotenz greift auch dann, wenn Notification-Permission fehlt: `reminders.rs` schreibt den Reminder-Row vor dem Notification-Versand bzw. auch ohne Versand. Dadurch kann eine Fälligkeit als erledigt gelten, obwohl der User nie eine Notification bekam. Produktentscheidung nötig: "einmalige App-interne Erinnerung" vs. "nur nach erfolgreichem Versand als sent markieren".
+- Tray-Aufpopp-Bug bleibt ein v0.1-Reife-Thema. Vermutlich braucht `show_main_window` zusätzliche Fokus-/Visibility-Behandlung und echte Reproduktion unter KDE Wayland.
+- Serena-Memories sind teilweise veraltet (`core.md`, `conventions.md`, `task_completion.md` erwähnen altes `tauri-plugin-sql`, alte Testlage, alte Completion-Regeln). Nicht kritisch für die App, aber kritisch für Agenten-Kontext.
+
+### Empfohlene nächste Arbeit
+
+1. Kleine Korrekturen: Backlog-Logging-Item abhaken/aktualisieren, Serena-Memories bereinigen, KRW/Mehrwährungs-Anzeige in Overview und Reminder fixen.
+2. v0.1-Reife: Tray-Aufpopp-Bug reproduzieren/fixen, Release-Matrix mit `tauri-action`, README-Screenshot/GIF, optional Update-Mechanismus erst nach signierter Pipeline.
+3. Produktnutzen: Kontostände/Polster pro Konto, Warnlogik "Konto voraussichtlich nicht gedeckt", bessere Fälligkeitsliste/Filter, Archiv/Stummschaltung sichtbarer machen.
+
+---
+
+## 2026-06-07 — Codex: Onboarding / Kontext eingelesen
+
+Kurze Orientierungssitzung von **Codex** ohne Code-Änderungen. User fragte zunächst nach Repo-/MCP-Zugriff und wies darauf hin, Serena als MCP für alle Aufgaben zu nutzen. In dieser Umgebung sind aktuell keine Serena-Tools über `tool_search` sichtbar; falls sie später exponiert werden, bevorzugt für Symbol-/Code-Orientierung verwenden.
+
+### Gelesen
+
+- Oberster HANDOVER-Eintrag vollständig gelesen.
+- `AGENTS.md`, `README.md` und `BACKLOG.md` gelesen.
+- Geprüft: Es gibt nur `HANDOVER.md`, kein separates `HANDOVER-archive.md`.
+
+### Status
+
+- Keine Code- oder Konfigurationsänderungen.
+- Working tree vor diesem Eintrag nur mit den bekannten untracked Dateien `assets/logo2.png` und `assets/logo3.png`.
+- Aktuelle sinnvolle nächste Aufgaben bleiben: Tray-Aufpopp-Bug, UI-Redesign Richtung arsnova, Matrix-Build-Pipeline.
+
+### Gotchas
+
+- Projektregel bleibt: Vor jeder Arbeit zuerst den obersten HANDOVER-Eintrag lesen.
+- Neue HANDOVER-Einträge von Codex sollen ausdrücklich als Codex-Einträge markiert werden, damit später keine Agent-Verwechslung entsteht.
+- Wenn Nutzer-sichtbare UI geändert wird: Texte Deutsch halten.
+- Bei Betragsfeldern künftig an den WebKitGTK-Komma-Fall denken: `type=text` + `inputMode=decimal` + `parseAmountInput`.
+
+---
+
 ## 2026-06-07 — Lokalisierung der Betrags-Eingabe (Komma + Tausender) + Crash-Recovery-Folge-Session
 
 Folge-Session nach OS-Crash (siehe nächster Eintrag) am selben Tag. Erst Aufräum-Arbeit (App-Log-Forensik, HANDOVER-Nachtrag, Sanity-Check Tests+Clippy), dann ein Backlog-Item: **Lokalisierung der Eingaben**. Ein Commit (`9e05c51`), 13 neue Tests (10 Helper + 3 Dialog), live im laufenden Build mit `pnpm tauri dev` smoke-getestet, dann durch den User selbst durchgeklickt-verifiziert.
