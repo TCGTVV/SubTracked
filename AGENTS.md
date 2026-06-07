@@ -16,7 +16,7 @@ Anweisungen für KI-Agents, die an diesem Projekt arbeiten. Kurz halten, Konvent
 
 - **Tauri v2** (Rust-Kern, System-WebView) — Windows / Linux / macOS
 - **Frontend:** React + TypeScript (Vite)
-- **DB:** SQLite via `tauri-plugin-sql` (eingebettet, kein Server)
+- **DB:** SQLite via eigenem `sqlx`-Pool im Rust-Hauptprozess (eingebettet, kein Server)
 - **Benachrichtigung:** `tauri-plugin-notification` (nativ pro OS)
 - **Autostart:** `tauri-plugin-autostart`
 - **Paketmanager:** `pnpm`
@@ -29,10 +29,16 @@ src/                      React-Frontend
   lib/                    framework-unabhängige Logik (testbar, UI-neutral)
     recurrence.ts         Fälligkeitsberechnung (GETESTET — siehe Konventionen)
     coverage.ts           Kontodeckungs-Prognose (reine Funktion)
-    db.ts                 typisierter SQLite-Zugriff (einziger DB-Layer)
-    reminders.ts          Erinnerungs-Check + native Notification
+    db.ts                 typisierte Tauri-Command-Bridge (einziger Frontend-DB-Zugriff)
+    format.ts             Geld-/Datumsformatierung + Betrags-Parsing
+  hooks/                  App-Orchestrierung (Subscriptions, Notification-Permission)
+  components/             UI-Komponenten + RTL-Smoke-Tests
 src-tauri/                Rust
-  src/lib.rs              Plugin-Registrierung + Migrationen
+  src/lib.rs              Plugin-Registrierung, sqlx-Pool, Logging, Tray, Reminder-Scheduler
+  src/commands.rs         Tauri-Commands + SQL-Zugriff
+  src/db.rs               AppState + serde/sqlx-Structs
+  src/reminders.rs        Erinnerungs-Check + native Notification
+  src/recurrence.rs       Rust-Fälligkeitsberechnung (GETESTET)
   migrations/             SQL-Migrationen (0001_init.sql, ...)
   Cargo.toml              Rust-Abhängigkeiten
 ```
@@ -49,18 +55,19 @@ pnpm tauri build
 
 ## Konventionen (verbindlich)
 
-- **Geld** wird als ganzzahlige **Cent** gespeichert (`amount_cents`), niemals als Float. Erst bei der Anzeige durch 100 teilen.
+- **Geld** wird als ganzzahlige **kleinste Währungseinheit** gespeichert (`amount_cents`, historischer Name), niemals als Float. EUR = Cent, KRW = Won. Erst bei Anzeige/Notification mit Currency-Subdivisor formatieren.
 - **Datumswerte** als ISO-String `YYYY-MM-DD`.
-- **`recurrence.ts` ist getestet und darf nicht naiv umgeschrieben werden.** Folgetermine werden immer auf das Original-Ankerdatum addiert (`anchor + k*step`), nie iterativ — sonst driften Monatsende-Abos (31.) auf den 28. weg.
-- **DB-Zugriff ausschließlich über `src/lib/db.ts`.** Das snake_case-↔-camelCase-Mapping bleibt dort gekapselt.
-- **Idempotente Erinnerungen:** `UNIQUE(subscription_id, due_date)` + `INSERT OR IGNORE`. Pro Fälligkeit höchstens eine Benachrichtigung.
-- **Migrationen:** neue `.sql`-Datei in `src-tauri/migrations/` anlegen und in `lib.rs` mit hochgezählter `version` registrieren. Bereits angewandte Migrationen nie nachträglich ändern.
-- `tauri-plugin-sql` benötigt `features = ["sqlite"]` in `Cargo.toml`.
+- **`recurrence.ts` und `src-tauri/src/recurrence.rs` sind getestet und dürfen nicht naiv umgeschrieben werden.** Folgetermine werden immer auf das Original-Ankerdatum addiert (`anchor + k*step`), nie iterativ — sonst driften Monatsende-Abos (31.) auf den 28. weg.
+- **Frontend-DB-Zugriff ausschließlich über `src/lib/db.ts`.** Komponenten rufen keine DB-Tauri-Commands direkt auf.
+- **SQL-Zugriff ausschließlich im Rust-Backend** (`src-tauri/src/commands.rs` über den managed `SqlitePool`). Kein zweiter Pool, kein Webview-SQL.
+- **Idempotente Erinnerungen:** `UNIQUE(subscription_id, due_date)` + `INSERT OR IGNORE`. Ein Reminder-Row bedeutet: Notification wurde erfolgreich angestoßen. Bei fehlender Permission wird nicht als gesendet markiert.
+- **Migrationen:** neue `.sql`-Datei in `src-tauri/migrations/` anlegen. Migrationen laufen via `sqlx::migrate!("./migrations")`; bereits angewandte Migrationen nie nachträglich ändern.
 - **Geschäftslogik bleibt in `src/lib/`** (framework-unabhängig), damit sie testbar bleibt und die UI austauschbar ist.
 - **Nutzer-sichtbare Texte: Deutsch.**
 
 ## Prüfen vor Abschluss
 
 - `pnpm tauri dev` startet und das Fenster öffnet sich ohne Rust-Fehler.
-- TypeScript kompiliert (keine Typfehler).
+- `pnpm build` kompiliert TypeScript und baut das Frontend.
+- Relevante Tests/Checks laufen (`pnpm test:run`, `pnpm lint`, bei Rust-Änderungen `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`).
 - Keine Secrets committen.

@@ -9,6 +9,49 @@
 
 ---
 
+## 2026-06-07 — Codex: Reminder-Korrektheit + Serena-Memories aktualisiert
+
+Codex hat den empfohlenen kleinen Stabilitätsblock umgesetzt: Reminder werden nur noch als gesendet markiert, wenn wirklich eine Notification angestossen wurde, KRW/Zero-Decimal-Währungen werden in Rust-Notifications korrekt formatiert, und die veralteten Serena-Memories wurden aktualisiert. Serena-MCP-Tools waren weiterhin nicht via `tool_search` sichtbar; die lokalen `.serena/memories/*` wurden direkt im Repo editiert.
+
+### Geändert
+
+- `src-tauri/src/reminders.rs`
+  - Reminder-Row bedeutet jetzt semantisch: "Notification wurde erfolgreich angestossen".
+  - Vor dem Versand wird nur noch geprüft, ob bereits ein Reminder-Row existiert.
+  - Bei fehlender Notification-Permission wird kein Row geschrieben; stattdessen `tracing::info!` mit `subscription_id` und `due_date`.
+  - Nach erfolgreichem `show()` wird per `INSERT OR IGNORE` idempotent markiert.
+  - Neuer Rust-Helper fuer Notification-Betragsformatierung: EUR/USD/etc. als `17,99 EUR`, KRW als `1.500 KRW` ohne `/100`.
+  - 3 neue Rust-Tests fuer Regular Currency, KRW und defensive negative Werte.
+- `.serena/memories/core.md`
+  - Source-Map auf aktuellen sqlx/Tauri-Commands-/Rust-Reminder-Stand gebracht.
+- `.serena/memories/conventions.md`
+  - DB-Grenzen, Minor-Unit-Geld, Rust/TS-Recurrence-Duplikation und neue Reminder-Sent-Semantik aktualisiert.
+- `.serena/memories/task_completion.md`
+  - Veraltete Aussagen "keine Tests / kein Formatter" entfernt; aktuelle Biome/Vitest/Rust/Lefthook-Checks dokumentiert.
+- `BACKLOG.md`
+  - Reminder-Sent-Bug, KRW-Notification-Bug und Serena-Memory-Item abgehakt.
+- `AGENTS.md`
+  - Nach User-Freigabe ebenfalls auf aktuellen sqlx/Tauri-Commands-/Rust-Reminder-Stand synchronisiert: kein `tauri-plugin-sql`, keine `reminders.ts`, neue Migration-Regel via `sqlx::migrate!`, aktuelle Completion-Checks.
+
+### Verifikation
+
+- `cd src-tauri && cargo test` grün: 8 Tests.
+- `cd src-tauri && cargo fmt --check` grün.
+- `cd src-tauri && cargo clippy --all-targets -- -D warnings` grün.
+- `pnpm lint` grün.
+- `pnpm test:run` grün: 87 Tests in 10 Files.
+- `pnpm build` grün.
+- Nach AGENTS-Update erneut `pnpm lint` grün.
+- `pnpm tauri dev` nicht gestartet; Änderung betrifft keinen neuen UI-Pfad, sondern Reminder-Backend + Doku.
+
+### Gotchas / nächste Hinweise
+
+- Durch die neue Semantik kann bei fehlender Notification-Permission stündlich ein Info-Log fuer faellige Erinnerungen entstehen. Das ist absichtlich: kein stilles "sent", solange der User nichts sehen konnte.
+- Wenn neue Währungen ohne Subdivision hinzukommen (z.B. JPY), müssen Frontend-`getCurrencySubdivisor()` und Rust-`currency_subdivisor()` gemeinsam erweitert werden.
+- AGENTS.md und Serena-Memories sind jetzt wieder auf demselben aktuellen Architekturstand.
+
+---
+
 ## 2026-06-07 — Codex: Review-Liste ins BACKLOG einsortiert
 
 Codex hat die zuvor erstellte Projekt-Review-Arbeitsliste in `BACKLOG.md` an die jeweils passende Stelle einsortiert. Keine App-Code-Änderungen.
