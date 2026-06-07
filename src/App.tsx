@@ -4,11 +4,17 @@ import { NotificationPermissionBanner } from "./components/NotificationPermissio
 import { OverviewSection } from "./components/OverviewSection";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
+import { SubscriptionFilterBar } from "./components/SubscriptionFilterBar";
 import { UpcomingSection } from "./components/UpcomingSection";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { deleteSubscription, setSubscriptionActive } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
+import {
+  applyFilterAndSort,
+  DEFAULT_SUB_LIST_OPTIONS,
+  type SubListOptions,
+} from "./lib/subscription-list";
 import type { Subscription } from "./types";
 import "./App.css";
 
@@ -20,6 +26,7 @@ function App() {
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
+  const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
   const subDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
@@ -30,7 +37,11 @@ function App() {
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
   const archivedCount = subs.length - activeSubs.length;
-  const visibleSubs = showArchived ? subs : activeSubs;
+  const preFilteredSubs = showArchived ? subs : activeSubs;
+  const visibleSubs = useMemo(
+    () => applyFilterAndSort(preFilteredSubs, filterOptions),
+    [preFilteredSubs, filterOptions],
+  );
 
   function startNew() {
     setEditingSub(null);
@@ -125,6 +136,19 @@ function App() {
             {archivedCount === 1 ? " Abo" : " Abos"})
           </span>
         </label>
+      )}
+
+      {preFilteredSubs.length >= 2 && (
+        <SubscriptionFilterBar
+          subs={preFilteredSubs}
+          accounts={accounts}
+          options={filterOptions}
+          onChange={setFilterOptions}
+        />
+      )}
+
+      {preFilteredSubs.length > 0 && visibleSubs.length === 0 && (
+        <p className="empty">Kein Abo passt zu den aktuellen Filtern.</p>
       )}
 
       {visibleSubs.length > 0 && (
