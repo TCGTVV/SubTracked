@@ -14,6 +14,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+use tracing_appender::rolling::Rotation;
+use tracing_subscriber::prelude::*;
 
 const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 
@@ -42,6 +44,38 @@ pub fn run() {
             commands::insert_reminder_if_new,
         ])
         .setup(|app| {
+            // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei
+            // im app_log_dir (~/.local/share/com.tcgtvv.subtracked/logs auf Linux),
+            // damit sich Fehler aus dem installierten Binary nachvollziehen lassen.
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .expect("failed to resolve app log dir");
+            std::fs::create_dir_all(&log_dir)?;
+            let file_appender = tracing_appender::rolling::Builder::new()
+                .rotation(Rotation::DAILY)
+                .filename_prefix("subtracked")
+                .filename_suffix("log")
+                .max_log_files(7)
+                .build(&log_dir)?;
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+            // WorkerGuard muss leben, solange die App laeuft, sonst koennen Logs
+            // verloren gehen. app.manage haelt den Wert bis zum Programmende.
+            app.manage(guard);
+            tracing_subscriber::registry()
+                .with(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                )
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_writer(non_blocking)
+                        .with_ansi(false),
+                )
+                .init();
+            tracing::info!(log_dir = %log_dir.display(), "SubTracked startet");
+
             let config_dir = app
                 .path()
                 .app_config_dir()
@@ -69,7 +103,7 @@ pub fn run() {
                 loop {
                     if let Err(e) = reminders::run_reminder_check(&pool_for_loop, &app_handle).await
                     {
-                        eprintln!("Reminder-Check fehlgeschlagen: {e}");
+                        tracing::error!(error = %e, "Reminder-Check fehlgeschlagen");
                     }
                     tokio::time::sleep(REMINDER_INTERVAL).await;
                 }
