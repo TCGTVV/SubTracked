@@ -20,7 +20,10 @@ export function useSubscriptions(): UseSubscriptionsResult {
 
   const reloadAll = useCallback(async () => {
     try {
-      const [subRows, accountRows] = await Promise.all([listSubscriptions(), listAccounts()]);
+      // Bewusst alle Subs (inkl. archiviert) — App.tsx filtert per Toggle.
+      // OverviewSection bekommt nur die aktiven, damit Coverage keine archivierten
+      // Abos in den Forecast einrechnet.
+      const [subRows, accountRows] = await Promise.all([listSubscriptions(false), listAccounts()]);
       setSubs(subRows);
       setAccounts(accountRows);
       setError(null);

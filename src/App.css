@@ -85,6 +85,22 @@ h2 {
   background-color: rgba(255, 255, 255, 0.4);
 }
 
+.sub-archived {
+  opacity: 0.6;
+  background-color: rgba(127, 127, 127, 0.06);
+}
+
+.archive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
 .sub-info {
   display: flex;
   flex-direction: column;

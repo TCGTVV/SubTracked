@@ -9,6 +9,59 @@
 
 ---
 
+## 2026-06-07 — Claude: Abo archivieren / reaktivieren
+
+Quick-Win 1b nach der Formular-Validierung: das `active`-Feld im Subscription-Schema (existierte seit `0001_init.sql`) wird endlich als Nutzerkonzept angeboten. Statt nur Löschen kann der User Abos archivieren (z.B. gekündigte Mobilfunk-Verträge, pausierte Streaming-Dienste) und später reaktivieren. Coverage-Forecast bleibt sauber, weil archivierte Abos nicht eingerechnet werden.
+
+### Geändert
+
+- `src-tauri/src/commands.rs` — neuer `set_subscription_active(id, active)`-Command. Schlank gehalten (kein Full-Update wie bei `update_subscription`), weil der Toggle aus der Liste keine anderen Felder berührt.
+- `src-tauri/src/lib.rs` — Command registriert.
+- `src/lib/db.ts` — neuer `setSubscriptionActive(id, active)`-Wrapper.
+- `src/hooks/useSubscriptions.ts` — lädt jetzt **alle** Subs via `listSubscriptions(false)` statt nur aktiver. Kommentar erklärt: App.tsx splittet selbst, OverviewSection bekommt nur aktive (damit Coverage keine Phantom-Abflüsse prognostiziert).
+- `src/App.tsx` — neuer State `showArchived: boolean`, `useMemo`-abgeleitetes `activeSubs`, `archivedCount`, `visibleSubs`. Neuer Handler `handleToggleActive` ruft `setSubscriptionActive(!sub.active)` und `reloadAll`. Archiv-Toggle-Checkbox wird **nur eingeblendet, wenn `archivedCount > 0`** (sonst visueller Lärm ohne Nutzen). Pro Sub neuer Knopf "Archivieren"/"Reaktivieren" zwischen Bearbeiten und Löschen. OverviewSection bekommt `activeSubs` statt `subs`. Archivierte Items zeigen "archiviert" statt nächste Fälligkeit, Stumm-Hinweis wird unterdrückt (irrelevant bei archiviert).
+- `src/App.css` — `.sub-archived` (opacity 0.6 + grauer Hintergrund) für ausgegrauten Look; `.archive-toggle` für das Checkbox-Label.
+
+### Tests
+
+- Keine neuen Tests in dieser Session. `useSubscriptions.test.tsx` blieb grün, weil der Mock den `onlyActive`-Parameter ignoriert. Es gibt keinen `App.test.tsx` (App ist hauptsächlich Komposition), neuer Code in App.tsx ist trivial: Filter via `useMemo`, Toggle-Checkbox, ein neuer Handler. Sinnvoller wäre ein App-Integrationstest, aber das wäre eine eigene Test-Strategie-Entscheidung. Pragmatisch erstmal verzichtet — funktionale Verifikation lief über `pnpm tauri dev`-Smoke vom User.
+
+### Verifikation
+
+- `pnpm test:run` ✓ — 98 Tests grün (unverändert).
+- `pnpm lint` ✓ (zwei Auto-Fixes nötig: ternary-parens in App.tsx + descending-specificity in `.sub-archived .sub-name` — letzteres durch Entfernen der überflüssigen Italic-Regel gelöst, der ausgegraute Look reicht).
+- `pnpm exec tsc --noEmit` ✓.
+- `cd src-tauri && cargo fmt --check` ✓ / `cargo clippy --all-targets -- -D warnings` ✓ / `cargo test` ✓ (8/8).
+- `pnpm tauri dev` gestartet; User hat archivieren/reaktivieren/Toggle/Coverage-Wirkung durchgeklickt und „passt alles" bestätigt.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Archivieren ersetzt Löschen nicht, sondern ist zusätzlich.** Backlog-Wording war „statt nur löschen", aber pragmatisch braucht der User beides: Archivieren als schonende Default-Aktion, Löschen für echten Müll (Tippfehler beim Anlegen). Drei Buttons pro Item (Bearbeiten/Archivieren/Löschen) sind noch übersichtlich, eine spätere Row-Action-Konsolidierung im UI-Redesign kann das straffen.
+- **`useSubscriptions` lädt alle, App.tsx splittet.** Alternative wäre ein zweiter Hook-Aufruf für archivierte Subs oder ein `onlyActive`-Param am Hook. Beide würden mehr Code und mehr DB-Roundtrips kosten. Bei realen Datenmengen (paar Dutzend Subs) ist ein einziger Load alle Subs billig genug.
+- **OverviewSection bekommt nur `activeSubs`**, nicht alle Subs mit Filter im Forecast. Begründung: Forecast soll die Realität abbilden, nicht „was wäre wenn alle Abos reaktiviert würden". Archivierte Abos werden auch nicht in der Baseline gezählt. Konsequent zur Bedeutung von „archiviert" = „kostet aktuell kein Geld".
+- **Reminder-Loop in Rust filtert bereits per `WHERE active = 1`** — kein zusätzlicher Code nötig, das Verhalten ist out of the box korrekt: archivierte Abos generieren keine Notifications mehr. Der `notify`-Toggle wird in archiviertem Zustand in der UI nicht mehr angezeigt, weil er irrelevant ist.
+- **Toggle-Checkbox nur sichtbar, wenn `archivedCount > 0`**: kein UI-Element ohne Funktion. Solange der User nie etwas archiviert hat, bleibt die Oberfläche unverändert. Sobald das erste Abo archiviert ist, taucht der Toggle direkt darüber auf.
+- **Schlanker `set_subscription_active`-Command** statt Wiederverwendung von `update_subscription`: vermeidet Race-Condition-Anfälligkeit (Edit-Dialog könnte noch offen sein, ein paralleler Toggle würde ungewollte Werte überschreiben) und ist ein einziger UPDATE statt zehn Felder bind+rebind.
+- **`.sub-archived .sub-name { font-style: italic }` entfernt**: Biome warnte über Descending Specificity (`.sub-name` allein hat (0,1,0), die geschachtelte (0,2,0)). Pragmatisch gelöst: der `opacity: 0.6`-Look ist schon klar genug, Italic als zusätzliche Markierung war Doppelung. Zwei Lint-Verstöße durch Streichen einer überflüssigen Regel weg — guter Trade.
+
+### Gotchas
+
+- **`pnpm biome format --write src/App.tsx` ignorierte die Datei** mit „These paths were provided but ignored" trotz erkanntem Format-Fehler. Workaround: das ternary mit Parens (`{x ? (<>a</>) : (<>b</>)}`) auf single-line ohne Parens (`{x ? <>a</> : <>b</>}`) per Edit manuell zurechtgerückt. Vermutung: VCS-Integration (`useIgnoreFile`) hat irgendeinen Cache-Effekt; tiefer nicht untersucht.
+- **`useSubscriptions.ts` Default-Param-Asymmetrie**: `listSubscriptions(onlyActive = true)` hat als TS-Wrapper weiter den Default `true`, der Hook übergibt nun explizit `false`. Tests die direkt `listSubscriptions()` rufen kriegen weiterhin nur aktive — Verhalten ist konsistent, aber leicht zu übersehen wenn man sich auf den Hook-Behavior verlässt.
+- **Archivierte Subs verschwinden aus `OverviewSection`** sofort beim Archivieren, weil App.tsx `activeSubs` reaktiv neu berechnet. Wenn das jemals als Bug wirkt („das archivierte Abo war doch eben noch in der Übersicht!") ist's Absicht, nicht Bug — siehe Entscheidung oben.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: 6 modifizierte Dateien (`commands.rs`, `lib.rs`, `db.ts`, `useSubscriptions.ts`, `App.tsx`, `App.css`) + `BACKLOG.md` + `HANDOVER.md`. Noch nicht committet.
+- Tests grün: 98 Vitest, 8 Cargo.
+- Live-Smoke vom User bestätigt.
+
+### Nächster Schritt
+
+In derselben Session: **Nächste-Fälligkeiten-Ansicht als primärer Arbeitsmodus** (Backlog Z. ~41) — kompakte "Demnächst 30 Tage"-Liste über alle aktiven Subs hinweg, sortiert nach Datum.
+
+---
+
 ## 2026-06-07 — Claude: Feldnahe Formular-Validierung in Abo- und Konten-Dialog
 
 Quick-Win direkt nach dem Kontostände-Feature: der Codex-Review-Befund „bei ungültigem Input macht `SubscriptionDialog` still `return`" ist behoben. Beide Dialoge (Abo + Konto) haben jetzt feldnahe Fehlermeldungen, `aria-invalid`, `aria-describedby` und Fokus-Sprung auf das erste fehlerhafte Feld. Tippen räumt den Fehler weg. Konsistente Behandlung in beiden Dialogen, geteilte CSS.
