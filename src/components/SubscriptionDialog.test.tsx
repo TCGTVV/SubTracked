@@ -62,7 +62,7 @@ describe("SubscriptionDialog", () => {
     renderDialog(existingSub);
     expect(screen.getByRole("heading", { name: "Abo bearbeiten" })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Netflix");
-    expect(screen.getByLabelText("Betrag")).toHaveValue(17.99);
+    expect(screen.getByLabelText("Betrag")).toHaveValue("17,99");
     expect(screen.getByLabelText("Währung")).toHaveValue("EUR");
     expect(screen.getByLabelText("Konto")).toHaveValue("1");
     expect(screen.getByLabelText("Vorlauf (Tage)")).toHaveValue(7);
@@ -138,15 +138,44 @@ describe("SubscriptionDialog", () => {
     expect(mockAddSubscription).not.toHaveBeenCalled();
   });
 
-  it("setzt step und min auf '1' wenn Währung auf KRW gewechselt wird (Subdivisor 1)", () => {
+  it("akzeptiert Komma als Dezimaltrenner und rundet auf Cent", async () => {
+    mockAddSubscription.mockResolvedValue(99);
     renderDialog(null);
-    const amountInput = screen.getByLabelText("Betrag");
-    expect(amountInput).toHaveAttribute("step", "0.01");
-    expect(amountInput).toHaveAttribute("min", "0.01");
 
-    fireEvent.change(screen.getByLabelText("Währung"), { target: { value: "KRW" } });
-    expect(amountInput).toHaveAttribute("step", "1");
-    expect(amountInput).toHaveAttribute("min", "1");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Spotify" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "9,99" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await waitFor(() => {
+      expect(mockAddSubscription).toHaveBeenCalledTimes(1);
+    });
+    expect(mockAddSubscription).toHaveBeenCalledWith(expect.objectContaining({ amountCents: 999 }));
+  });
+
+  it("akzeptiert deutsche Tausender-Schreibweise (1.234,56)", async () => {
+    mockAddSubscription.mockResolvedValue(99);
+    renderDialog(null);
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Versicherung" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "1.234,56" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await waitFor(() => {
+      expect(mockAddSubscription).toHaveBeenCalledTimes(1);
+    });
+    expect(mockAddSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ amountCents: 123456 }),
+    );
+  });
+
+  it("blockiert Submit bei ungueltiger Eingabe (Buchstaben)", async () => {
+    renderDialog(null);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await Promise.resolve();
+    expect(mockAddSubscription).not.toHaveBeenCalled();
   });
 
   it("zeigt eine Fehler-Meldung an, wenn die DB-Operation fehlschlägt", async () => {

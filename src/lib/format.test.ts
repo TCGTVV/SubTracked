@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Subscription } from "../types";
-import { formatAmount, formatNextDue, todayISO } from "./format";
+import { formatAmount, formatNextDue, parseAmountInput, todayISO } from "./format";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   id: 1,
@@ -57,5 +57,72 @@ describe("formatNextDue", () => {
 describe("todayISO", () => {
   it("liefert das heutige Datum im yyyy-MM-dd-Format", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("parseAmountInput", () => {
+  it("akzeptiert reine Ziffern", () => {
+    expect(parseAmountInput("12")).toBe(12);
+    expect(parseAmountInput("1234")).toBe(1234);
+    expect(parseAmountInput("0")).toBe(0);
+  });
+
+  it("akzeptiert einzelnes Komma als deutschen Dezimaltrenner", () => {
+    expect(parseAmountInput("12,99")).toBeCloseTo(12.99);
+    expect(parseAmountInput("0,5")).toBeCloseTo(0.5);
+    expect(parseAmountInput("1234,56")).toBeCloseTo(1234.56);
+  });
+
+  it("akzeptiert einzelnen Punkt als englischen Dezimaltrenner", () => {
+    expect(parseAmountInput("12.99")).toBeCloseTo(12.99);
+    expect(parseAmountInput("0.5")).toBeCloseTo(0.5);
+  });
+
+  it("interpretiert einzelnes Trennzeichen mit 3 Stellen danach als Tausender", () => {
+    // Klassischer Konflikt: '1,234' ist meistens engl. Tausender, nicht 1.234 EUR
+    expect(parseAmountInput("1,234")).toBe(1234);
+    expect(parseAmountInput("1.234")).toBe(1234);
+    expect(parseAmountInput("12,345")).toBe(12345);
+  });
+
+  it("akzeptiert deutsche Tausender + Komma-Dezimal", () => {
+    expect(parseAmountInput("1.234,56")).toBeCloseTo(1234.56);
+    expect(parseAmountInput("1.234.567,89")).toBeCloseTo(1234567.89);
+  });
+
+  it("akzeptiert englische Tausender + Punkt-Dezimal", () => {
+    expect(parseAmountInput("1,234.56")).toBeCloseTo(1234.56);
+    expect(parseAmountInput("1,234,567.89")).toBeCloseTo(1234567.89);
+  });
+
+  it("ignoriert Whitespace am Rand", () => {
+    expect(parseAmountInput("  12,99  ")).toBeCloseTo(12.99);
+    expect(parseAmountInput("\t1234\n")).toBe(1234);
+  });
+
+  it("gibt null bei leerem Input zurueck", () => {
+    expect(parseAmountInput("")).toBeNull();
+    expect(parseAmountInput("   ")).toBeNull();
+  });
+
+  it("gibt null bei ungueltigen Zeichen zurueck", () => {
+    expect(parseAmountInput("abc")).toBeNull();
+    expect(parseAmountInput("12abc")).toBeNull();
+    expect(parseAmountInput("12 34")).toBeNull(); // Leerzeichen mittendrin
+    expect(parseAmountInput("-12")).toBeNull(); // Minus blockiert
+    expect(parseAmountInput("+12")).toBeNull(); // Plus blockiert
+    expect(parseAmountInput("12€")).toBeNull();
+  });
+
+  it("behandelt mehrere Trenner derselben Sorte als Tausender", () => {
+    expect(parseAmountInput("1.234.567")).toBe(1234567);
+    expect(parseAmountInput("1,234,567")).toBe(1234567);
+  });
+
+  it("akzeptiert Punkt/Komma am Anfang oder Ende als Dezimaltrenner", () => {
+    expect(parseAmountInput(",5")).toBeCloseTo(0.5);
+    expect(parseAmountInput(".5")).toBeCloseTo(0.5);
+    expect(parseAmountInput("5,")).toBe(5);
+    expect(parseAmountInput("5.")).toBe(5);
   });
 });

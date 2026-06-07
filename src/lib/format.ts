@@ -17,6 +17,49 @@ export function getCurrencySubdivisor(currency: string): number {
   return CURRENCY_SUBDIVISIONS[currency] ?? 100;
 }
 
+/**
+ * Parst Betrags-Eingaben tolerant: akzeptiert "12,99", "12.99", "1.234,56", "1,234.56".
+ * Heuristik fuer Trennzeichen:
+ *  - bei beiden vorhanden ist das spaeter stehende der Dezimaltrenner, das andere Tausender;
+ *  - bei nur einem mit genau 3 Stellen danach (z.B. "1,234") wird er als Tausender gedeutet;
+ *  - sonst ist der einzelne Trenner der Dezimaltrenner.
+ * Gibt null zurueck bei leerem oder strukturell ungueltigem Input (inkl. negativ via Praefix).
+ */
+export function parseAmountInput(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (!/^[\d.,]+$/.test(trimmed)) return null;
+
+  const lastComma = trimmed.lastIndexOf(",");
+  const lastDot = trimmed.lastIndexOf(".");
+
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      normalized = trimmed.replace(/\./g, "").replace(",", ".");
+    } else {
+      normalized = trimmed.replace(/,/g, "");
+    }
+  } else if (lastComma >= 0 || lastDot >= 0) {
+    const sepIsComma = lastComma >= 0;
+    const sepRe = sepIsComma ? /,/g : /\./g;
+    const count = (trimmed.match(sepRe) || []).length;
+    const lastIdx = sepIsComma ? lastComma : lastDot;
+    const tail = trimmed.length - 1 - lastIdx;
+    const isThousands = count >= 2 || (count === 1 && tail === 3);
+    if (isThousands) {
+      normalized = trimmed.replace(sepRe, "");
+    } else {
+      normalized = sepIsComma ? trimmed.replace(",", ".") : trimmed;
+    }
+  } else {
+    normalized = trimmed;
+  }
+
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function formatAmount(cents: number, currency: string): string {
   const divisor = getCurrencySubdivisor(currency);
   return new Intl.NumberFormat("de-DE", {

@@ -1,6 +1,6 @@
 import { type FormEvent, type Ref, useId, useState } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
-import { getCurrencySubdivisor, todayISO } from "../lib/format";
+import { getCurrencySubdivisor, parseAmountInput, todayISO } from "../lib/format";
 import type { Account, Interval, Subscription } from "../types";
 import { DateField } from "./DateField";
 
@@ -22,7 +22,7 @@ interface Props {
 function centsToInput(cents: number, currency: string): string {
   const divisor = getCurrencySubdivisor(currency);
   if (divisor === 1) return cents.toString();
-  return (cents / divisor).toFixed(2);
+  return (cents / divisor).toFixed(2).replace(".", ",");
 }
 
 export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Props) {
@@ -52,8 +52,8 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmedName = name.trim();
-    const amountNumber = Number(amount);
-    if (!trimmedName || !Number.isFinite(amountNumber) || amountNumber <= 0) {
+    const amountNumber = parseAmountInput(amount);
+    if (!trimmedName || amountNumber === null || amountNumber <= 0) {
       return;
     }
 
@@ -108,10 +108,9 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
             <label htmlFor={amountId}>Betrag</label>
             <input
               id={amountId}
-              type="number"
-              step={getCurrencySubdivisor(currency) === 1 ? "1" : "0.01"}
-              min={getCurrencySubdivisor(currency) === 1 ? "1" : "0.01"}
+              type="text"
               inputMode="decimal"
+              autoComplete="off"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               required
