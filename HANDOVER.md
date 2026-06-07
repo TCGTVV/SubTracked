@@ -9,6 +9,69 @@
 
 ---
 
+## 2026-06-07 — Lokalisierung der Betrags-Eingabe (Komma + Tausender) + Crash-Recovery-Folge-Session
+
+Folge-Session nach OS-Crash (siehe nächster Eintrag) am selben Tag. Erst Aufräum-Arbeit (App-Log-Forensik, HANDOVER-Nachtrag, Sanity-Check Tests+Clippy), dann ein Backlog-Item: **Lokalisierung der Eingaben**. Ein Commit (`9e05c51`), 13 neue Tests (10 Helper + 3 Dialog), live im laufenden Build mit `pnpm tauri dev` smoke-getestet, dann durch den User selbst durchgeklickt-verifiziert.
+
+### Was passierte (chronologisch)
+
+| Thema | Commits | Hinweise |
+|---|---|---|
+| Crash-Forensik | – | App-Log `~/.local/share/com.tcgtvv.subtracked/logs/subtracked.2026-06-07.log` zeigte zwei `INFO SubTracked startet`-Zeilen um 12:23:33Z und 12:28:19Z UTC (= 14:23 / 14:28 lokal). Letzter Commit war 14:21:59 — die ~5 min Lücke + Doppel-Startup ist konsistent mit „App lief, OS-Crash mit, Reboot + Neustart". **Kein App-internes Crash-Indiz**, das tracing-System loggt aktuell nur Startup + Reminder-Errors. |
+| HANDOVER-Nachtrag | `8dd7af0` | Vollständige Sitzungs-Dokumentation der durch den Crash beendeten Vor-Crash-Sitzung. Pre-commit-Hook lief sauber durch (biome + vitest grün). |
+| Sanity-Check nach Crash | – | `pnpm test:run` 74/74 grün, `cargo clippy --all-targets -- -D warnings` clean. Keine FS-Inkonsistenzen durch den unsauberen Shutdown. |
+| Architektur ➑ Doku-Strategie geprüft | – | War bereits im Vor-Crash-Commit `be686f0` als „Status Quo halten" entschieden — ich hatte das in der Empfehlungs-Tabelle aus Versehen als noch offen geführt. Korrigiert, Architektur-Sektion ist damit *de facto* abgeschlossen (zwei verbleibende Items „Concerns-Mix" und „Reload-Pattern" sind explizit als niedrig/optional markiert). |
+| Lokalisierung Betrags-Eingabe | `9e05c51` | Neuer `parseAmountInput(input: string): number \| null` in `src/lib/format.ts`. Heuristik: bei beiden Trennzeichen ist das spaeter stehende der Dezimaltrenner, das andere Tausender; bei genau einem Trenner mit 3 Stellen danach (z.B. `1,234`) wird er als Tausender gedeutet; sonst Dezimal. Null bei leer / strukturell ungültig / Vorzeichen. `SubscriptionDialog` von `<input type="number">` auf `<input type="text" inputMode="decimal">` umgestellt — `type=number` blockierte in WebKitGTK je nach Locale die Komma-Eingabe **stumm**, das war der eigentliche Auslöser. `centsToInput` formatiert die Edit-Vorbefüllung jetzt mit Komma (konsistent zur Liste-Anzeige via `formatAmount`). 10 neue parseAmountInput-Tests in `format.test.ts` decken alle Heuristik-Pfade + Edge-Cases (`,5`, `5.`, Whitespace, Buchstaben, Vorzeichen). 3 neue Dialog-Tests via RTL: Komma, deutsche Tausender, ungültige Eingabe. Alter Test „step und min bei KRW" entfernt (Attribute gibt es nicht mehr). Vorhandener Edit-Mode-Test auf `"17,99"`-String statt `17.99`-Number korrigiert (`type=text` gibt String). |
+| Live-Smoke + Verifikation | – | `pnpm tauri dev` hochgefahren, App startet sauber (neuer Startup-Log um 12:51:03Z UTC), Hauptview rendert, keine Errors. Klick-Through nicht durch den Agent möglich (kein `ydotool`/`wtype`/Playwright im System), **User hat selbst durchgeklickt und „sieht gut aus" bestätigt**. |
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, HEAD `9e05c51` |
+| Push-Stand | wird am Sitzungsende gepusht — vor der Sitzung war origin auf `2e1cf6b` (App-Logs vom Vortags-Marathon) |
+| Working tree | clean bis auf untracked `assets/logo2.png`/`logo3.png` (unverändert, siehe vorherige Einträge) |
+| Test-Stand | **87 Tests grün** in 10 Files (74 vorher + 13 in dieser Session) |
+| Build/Tests lokal | `pnpm test:run` ✓, `cargo clippy --all-targets -- -D warnings` ✓ (vor Lokalisierungs-Commit), Lefthook hat den Lokalisierungs-Commit nach Auto-Biome-Format sauber durchgelassen |
+| Live-Verifikation | User hat den Komma-Eingabe-Pfad in `pnpm tauri dev` durchgeklickt — bestätigt funktional |
+
+### Nächster Schritt
+
+Backlog-Items, die jetzt sinnvoll sind (Reihenfolge nach Wertschätzung):
+
+- **🐛 Tray-Aufpopp-Bug** (Backlog Z. 26) — **User-Beobachtung 2026-06-07: vor dem OS-Crash hat es einmal funktioniert**, d.h. der Bug ist **nicht 100 % deterministisch**. Das ist ein wichtiger neuer Datenpunkt — könnte auf einen Race / State-abhängigen Pfad hindeuten (z.B. ob das Fenster vorher schon hidden vs. minimized war, ob ein anderer Tray-Klick kürzlich war, KDE-Session-Zustand). Beim nächsten Reproduktions-Versuch: explizit verschiedene Vor-Zustände durchprobieren (frisch gestartet vs. eine Weile hidden vs. nach Notification-Toast).
+- **🎨 UI-Redesign Richtung arsnova** (Backlog Z. 88) — vor v0.1.0 sinnvoll, eigene Session-Reihe.
+- **🚀 Matrix-Build-Pipeline** (Backlog Z. 89) — `tauri-action`-Workflow für signierten v0.1.0 + In-App-Updater.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`<input type="number">` → `<input type="text" inputMode="decimal">`**: Der Witz an `type=number` ist genau die Validierung — und genau die hat in WebKitGTK das stumme Komma-Blocking verursacht. Mit `type=text` haben wir volle Kontrolle, behalten via `inputMode="decimal"` das mobile Numeric-Keypad und parsen selbst. Das gibt zusätzlich die Möglichkeit, deutsche Tausender (`1.234,56`) anzunehmen, was `type=number` nie konnte. Trade-off: keine Step-Buttons mehr — bei Geld-Eingabe nutzt die ehrlich gesagt niemand, vernachlässigbar.
+- **Heuristik „3 Stellen nach einzelnem Trenner = Tausender"**: realer Fall ist `1,234` (englischer User, meint 1234) oder `1.234` (deutscher User, meint 1234). Mit der Regel wird beides als Tausender gedeutet. Trade-off: wenn ein deutscher User wirklich „1,234 EUR" (= 1.234 EUR mit 3 Nachkommastellen) tippen will, kriegt er 1234 EUR. Bei Geld sind 3 Nachkommastellen aber unüblich; 99,9 %-Lösung ist gut genug.
+- **`centsToInput` mit Komma statt Punkt**: konsistent zur deutschen Listen-Anzeige (`formatAmount` nutzt `Intl.NumberFormat("de-DE")`). Beim Edit eines bestehenden Abos sieht der User dieselbe Schreibweise wie in der Liste, nicht eine englische Variante.
+- **Helper-Funktion `parseAmountInput` in `format.ts`** statt inline im Dialog: dieselbe Logik wird absehbar bei Konto-Eingabe / CSV-Import auch gebraucht. Single source of truth.
+- **Verifikation: User klickt selbst durch** statt WebDriver-Setup: Echtes WebKitGTK-Verhalten war der Risikopunkt, das kann nur durch Klicken im echten Build verifiziert werden. WebDriver-Setup (Tauri-WebDriver) ist im Backlog als „großer Setup-Aufwand, ROI erst wenn echte User-Flows stabil bleiben müssen" markiert — heute drüber stehen wäre Über-Investment.
+
+### Gotchas / Stolperfallen
+
+- **`<input type="number">` blockiert Komma in WebKitGTK stumm** — der User merkt nicht, dass seine Tastatureingabe verworfen wird. Das war der eigentliche Bug-Auslöser. Wenn künftig weitere Number-Inputs auftauchen (`leadDays` zum Beispiel), auf dasselbe Symptom achten. **Lehre**: für deutsche User-Eingaben in Tauri/WebKitGTK lieber `type=text + inputMode=decimal + eigener Parser` als `type=number`.
+- **Biome kann Format-Fixes auch nach Edit fordern**: zwei Format-Issues im ersten Commit-Versuch (Doppel-Leerzeile in `format.ts`, ein 3-Zeilen-Call der auf eine Zeile passt im Test). Auto-Fix via `pnpm biome check --write src/lib/format.ts src/components/SubscriptionDialog.test.tsx` hat beide aufgeräumt, danach Pre-commit-Hook clean. Pattern für nächste Sitzung: nach Edits auf `format.ts`/`*.test.tsx` einmal `pnpm biome check --write <file>` lokal laufen lassen, bevor Commit.
+- **Tray-Aufpopp-Bug ist nicht-deterministisch**: User-Beobachtung „vor dem Crash funktionierte es". Bei künftiger Reproduktion ist Vor-Zustand zu variieren (siehe „Nächster Schritt").
+- **Test-Coverage von Komma-Parsing in der UI**: die RTL-Tests fahren über jsdom — das ist nicht WebKitGTK. Falls WebKitGTK den `inputMode="decimal"`-Hint künftig anders interpretiert (mobile Tastatur), müsste das via echtem Build verifiziert werden. jsdom kennt `inputMode` nicht in der vollen Tiefe.
+
+### Geänderte/neue Memories
+
+- Keine direkten Memory-Änderungen in dieser Session. Die Sitzung hat etablierte Workflows fortgesetzt (Backlog-Item picken, Tests parallel ausbauen, kommittieren), keine neuen Vorlieben oder Constraints überraschend bekannt geworden.
+- **Implizit aktualisiert**: `feedback_serena` wirkt jetzt deutlich verlässlicher — diese Sitzung ist komplett ohne explizite Erinnerung mit Serena gestartet (`get_symbols_overview` + `find_symbol` als Default) — das ist ein **Erfolgs-Datenpunkt**, kein neuer Memory-Eintrag nötig.
+
+### Offen / nicht geklärt
+
+- **Tray-Aufpopp-Bug** (Backlog Z. 26) — neuer Beobachtungs-Datenpunkt, weiter offen.
+- **Architektur-„Concerns-Mix in reminders.rs"** und **„Reload-Pattern grobgranular"** — beide bewusst auf niedrig / optional.
+- **i18n + Sprache** — Status Quo, kein Trigger.
+- **AGENTS.md ggf. um Komma-Konvention erweitern** — derzeit nicht erwähnt, aber relevant für künftige Number-Input-Felder. Bewusst noch nicht eingebaut, weil das einen sehr spezifischen Code-Pfad betrifft und im HANDOVER-Verlauf gut auffindbar bleibt. Wenn das öfter zum Stolperdraht wird, in AGENTS.md ziehen.
+
+---
+
 ## 2026-06-07 — Architektur ➍: RTL-Komponenten-Coverage + App-Logging (Sitzung durch OS-Crash beendet)
 
 10 Commits zwischen 13:40 und 14:21, davon einer Architektur-Etappe (➍ RTL-Setup), fünf Test-Coverage-Commits und ein neues App-Logging-System. Sitzung **nicht regulär beendet** — der Linux-Host (CachyOS) ist um ca. 14:23–14:28 abgestürzt; dieser HANDOVER-Eintrag wird in der Folge-Session am selben Tag nachgetragen. **Kein Arbeitsverlust** (working tree war committed), kein App-internes Crash-Indiz (App-Log zeigt nur zwei `INFO SubTracked startet`-Zeilen um 14:23:33Z und 14:28:19Z UTC — konsistent mit „App lief beim OS-Crash, danach Reboot + Neustart").
