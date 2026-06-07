@@ -150,6 +150,36 @@ h2 {
   font-weight: 500;
 }
 
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-end;
+  margin: 0.5rem 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  border-radius: 6px;
+  background-color: rgba(127, 127, 127, 0.03);
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.filter-field span {
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filter-field {
+    color: #aaa;
+  }
+}
+
 .archive-toggle {
   display: inline-flex;
   align-items: center;

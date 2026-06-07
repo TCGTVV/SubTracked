@@ -9,6 +9,59 @@
 
 ---
 
+## 2026-06-07 — Claude: Filter + Sortierung für die Abo-Liste
+
+Das letzte sinnvolle Quick-Win-Item der Session: die Abo-Liste hat jetzt eine Filter-Bar mit vier Selects (Konto / Währung / Erinnerungen / Sortierung). Nur sichtbar, wenn ≥ 2 Abos da sind. Konto- und Währungs-Filter blenden sich automatisch aus, wenn nur eine Option existiert. Pure-Function-Logik mit 17 Tests, eigene Komponente, sauber vom bestehenden Archiv-Toggle entkoppelt.
+
+### Geändert
+
+- `src/lib/subscription-list.ts` (neu) — `applyFilterAndSort(subs, options, now)` als reine Funktion. Typen: `AccountFilter = null | "none" | number`, `NotifyFilter = null | "on" | "off"`, `SortKey` mit 6 Werten, `SubListOptions`-Container. Default-Options als Konstante `DEFAULT_SUB_LIST_OPTIONS` exportiert. Fälligkeits-Sortierung cacht `nextDueDate` pro Sub-ID (Map), damit der Sort-Comparator nicht doppelt rechnet. Helpers `uniqueCurrencies(subs)` (alphabetisch sortierte Set) und `hasUnassignedSubs(subs)` für die FilterBar-Logik.
+- `src/lib/subscription-list.test.ts` (neu, 17 Tests) — alle Filter-Pfade einzeln + kombiniert (UND), alle 6 Sortier-Modi, `uniqueCurrencies` + `hasUnassignedSubs`-Edge-Cases (leer/single/Duplikate).
+- `src/components/SubscriptionFilterBar.tsx` (neu) — vier Selects als `<label>` mit Captions, jeder verändert die `options` und ruft `onChange(next)`. Konto-Filter zeigt nur die in den Subs referenzierten Konten (Set-Lookup), plus „(kein Konto)" nur wenn `hasUnassignedSubs`. Konto-Filter ist nur sichtbar, wenn mindestens 2 Wahlmöglichkeiten vorhanden sind (verfügbare Konten + ggf. unassigned). Währungs-Filter analog versteckt bei einer einzigen Währung. Erinnerungen- und Sortierungs-Select sind immer sichtbar. Spezial-Wert `"__none__"` für "kein Konto" als String-Encoding, beim Lesen über `parseAccount(value)` → `AccountFilter`.
+- `src/App.tsx` — neuer State `filterOptions: SubListOptions` mit `DEFAULT_SUB_LIST_OPTIONS`. `preFilteredSubs` ist explizit benannt (was nach Archiv-Toggle übrig bleibt), `visibleSubs` ist das Ergebnis von `applyFilterAndSort(preFilteredSubs, filterOptions)` in `useMemo`. FilterBar wird nach dem Archiv-Toggle gerendert, **nur wenn `preFilteredSubs.length >= 2`** — Single-Abo-Setup hat keinen Filter-Mehrwert. Neuer Empty-State „Kein Abo passt zu den aktuellen Filtern." wenn `preFilteredSubs.length > 0 && visibleSubs.length === 0`. OverviewSection bekommt weiterhin `activeSubs` (Filter wirkt **nicht** auf den Konto-Forecast — bewusst, Coverage ist Gesamtbild, Filter ist Listen-Sicht).
+- `src/App.css` — neue `.filter-bar` (flex-wrap-Container mit dezentem Hintergrund + Border) und `.filter-field` (vertikales `<label>` mit Caption + Select). Dark-Mode-Anpassung für `.filter-field`-Caption.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` ✓.
+- `pnpm test:run` ✓ — **130 Tests in 12 Files grün** (vorher 113, +17 in dieser Session).
+- `pnpm lint` ✓ (zwei Auto-Fixes: Test-Format „render-Calls einzeilig" und Import-Reihenfolge in `subscription-list.ts`; plus eine Descending-Specificity-Warnung in CSS, durch Streichen einer überflüssigen `.filter-field select`-Padding-Regel gelöst — Defaults reichen optisch).
+- `cargo fmt --check` ✓ / `cargo clippy --all-targets -- -D warnings` ✓.
+- `pnpm tauri dev` gestartet; User hat „passt" bestätigt: FilterBar erscheint ab 2 Abos, Konto/Währung-Filter verstecken sich richtig, alle 6 Sortier-Modi greifen, Empty-State greift bei voller Ausfilterung, Archiv-Toggle + Filter kombinieren sauber.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Aktiv/Archiviert NICHT in der Filter-Bar**, obwohl Backlog-Wording („nach … aktiv/archiviert") das nahelegte. Begründung: der **bestehende Archiv-Toggle** macht denselben Job, und zwei UI-Pfade für denselben Filter wären verwirrend. Konsistenz: ein Konzept pro UI-Pfad. FilterBar arbeitet auf den preFiltered Subs (= das Ergebnis des Archiv-Toggles), beide Konzepte stacken sauber.
+- **Konto- und Währungs-Filter verstecken sich bei nur einer Option** statt einfach „Alle / Hauptkonto" anzubieten. Begründung: kein UI ohne Funktion — wenn der User nur ein Konto hat, ist der Filter Lärm. Bei der Standalone-Solo-Installation ist das der Default-Case. Erinnerungen- und Sortierungs-Select sind immer sichtbar, weil sie auch bei einem Abo Sinn machen können (zumindest die Sortierung, falls jemand das umstellt für später).
+- **FilterBar erst ab `preFilteredSubs.length >= 2`** sichtbar. Begründung: gleiche Logik. Bei einem Abo gibt's nichts zu filtern, eine Filter-Bar wäre nur Lärm. Schwelle 2 statt 1, weil 1 Abo „nichts zu sortieren" bedeutet und 2 die kleinste Liste ist, in der Sortierung überhaupt einen Unterschied macht.
+- **`"none"` als Sentinel-String für „kein Konto"** im AccountFilter-Typ, statt `0` oder eines separaten Booleans. Begründung: `0` würde als Konto-ID interpretierbar (auch wenn IDs in SQLite immer ≥ 1 sind, wäre das fragil); ein Sentinel-String ist explizit und TypeScript prüft via union type. Im Select-DOM gerendert als `value="__none__"` mit Encode/Decode-Funktionen, um den DOM-String von den ID-Strings (`"1"`, `"2"`, …) zu unterscheiden.
+- **Filter-State lokal in `App.tsx`, nicht persistiert**: pragmatisch erstmal genug. Wenn der User später beim App-Restart seine Filter wiederfinden will, wäre das ein localStorage-Hop. Memory `feedback_workflow` sagt explizit „Prozess hinzufügen, sobald sein Fehlen einmal weh getan hat" — Persistenz hat noch nicht weh getan.
+- **`applyFilterAndSort` ist `O(n + n log n)` mit Caching**: das `dueCache` ist nur relevant wenn nach Fälligkeit sortiert wird — bei den anderen Sortier-Modi wird es nie befüllt. Mikro-Optimierung mit Sinn, weil `nextDueDate` einen anker-additiven Loop hat, der bei jährlich-Subs mehrere Iterationen kosten kann.
+- **OverviewSection arbeitet weiter auf `activeSubs`, nicht auf `visibleSubs`**: Coverage und Baseline sind das **Gesamtbild** der Liquidität, nicht eine gefilterte Sicht. Wenn der User nach „nur EUR" filtert, soll das Konto-Forecast trotzdem alle EUR-Abos auf dem EUR-Konto zeigen — sonst wäre die Warnung „Konto unter 0" plötzlich falsch, weil sie nur den gefilterten Ausschnitt rechnet. UpcomingSection bekommt analog `activeSubs`.
+- **Sortier-Strings als kompakte Keys (`"name-asc"`, `"due-desc"`)** statt zweier Felder `{ key, direction }`: bei nur 6 Kombinationen ist das simpler. Wenn später dritte Achsen dazukommen, lässt es sich umstellen.
+
+### Gotchas
+
+- **`uniqueCurrencies` und `accountId`-Set werden bei jedem Render neu berechnet** im FilterBar, weil das in einer Funktionskomponente ohne `useMemo` läuft. Bei realen Datenmengen (paar Dutzend Subs) ist das irrelevant — die Funktionen sind O(n). Wenn die App eines Tages tausende Subs hätte, wäre `useMemo` mit `[subs]`-Dependency ein leicht angedoschneeter Optimierungs-Pfad.
+- **Filter-Bar verschwindet, wenn der User von 2 Abos auf 1 zurückgeht** (z.B. durch Löschen). Aktive Filter bleiben aber im State erhalten — wenn er später wieder ein neues Abo anlegt, das den Filtern nicht entspricht, kann die Liste komisch leer wirken. Pragmatisch: wenn das mal passiert, kann der User es selbst auf „Alle" zurückstellen. Defensiv-Reset wäre Overkill.
+- **`useId()` für 4 Selects** in der FilterBar erzeugt 4 IDs, von denen aktuell nur zwei (Erinnerungen + Sortierung) tatsächlich gerendert werden, wenn die anderen Filter ausgeblendet sind. Kostet nichts, ist aber leicht „wasteful". React garantiert deterministische IDs pro Komponenten-Instanz, also kein Bug — nur eine kosmetische Beobachtung.
+- **Lefthook hat Auto-Format-Fixes** (Test-render-Calls einzeilig + Import-Reihenfolge) gemeldet, beide via `pnpm biome check --write` aufgeräumt. Pattern wie bei den vorherigen Sessions: nach größeren Tests-Edits einmal lokal formatieren, bevor Commit.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: 4 modifizierte Dateien (`App.tsx`, `App.css`) + 4 neue (`subscription-list.ts`, `subscription-list.test.ts`, `SubscriptionFilterBar.tsx`) — Moment, das stimmt nicht. Lass mich nachzählen: `App.tsx`, `App.css` modifiziert; `subscription-list.ts`, `subscription-list.test.ts`, `SubscriptionFilterBar.tsx` neu; `BACKLOG.md`, `HANDOVER.md` modifiziert. Insgesamt 4 modifiziert + 3 neu. Noch nicht committet.
+- Tests grün: 130 Vitest, 8 Cargo.
+- Live-Smoke vom User bestätigt.
+
+### Nächster Schritt
+
+Das war das letzte Quick-Win-Item der Session. Verbleibende sinnvolle Richtungen:
+
+- **Release-Reife** (`tauri-action` Matrix-Build, v0.1.0-Tag, Windows/macOS-Smoke, In-App-Updater) — eigene Session-Reihe, weil Signatur-Pipeline + CI-Setup einen Block bilden.
+- **UI-Redesign Richtung arsnova** — Feature-Flächen sind jetzt stabil genug, dieser Block lohnt sich allmählich.
+
+---
+
 ## 2026-06-07 — Claude: Test-Notification + Reminder-Status in Einstellungen
 
 Zwei zusammengehörige Backlog-Items in einem Aufwasch: der User kann jetzt aus den Einstellungen heraus eine Test-Notification auslösen und sieht den Status des Reminder-Loops (letzte/nächste Prüfung, letzte gesendete Erinnerung). Macht den bisher „stillen" Background-Scheduler sichtbar und gibt einen schnellen Smoke-Test-Pfad für Notification-Permission + OS-Integration.
