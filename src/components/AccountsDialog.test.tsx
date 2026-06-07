@@ -106,6 +106,20 @@ describe("AccountsDialog", () => {
     });
   });
 
+  it("akzeptiert negativen Saldo als Konto-im-Minus", async () => {
+    mockAddAccount.mockResolvedValue(99);
+    renderDialog([]);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Giro" } });
+    fireEvent.change(screen.getByLabelText("Aktueller Saldo"), { target: { value: "-125,50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => {
+      expect(mockAddAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ balanceCents: -12550 }),
+      );
+    });
+  });
+
   it("zeigt eine Validierungs-Meldung bei ungültigem Saldo", async () => {
     renderDialog([]);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
@@ -114,6 +128,20 @@ describe("AccountsDialog", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/Saldo ungültig/);
+    });
+    expect(mockAddAccount).not.toHaveBeenCalled();
+  });
+
+  it("blockiert negativen Mindestpuffer", async () => {
+    renderDialog([]);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText("Mindestpuffer (optional)"), {
+      target: { value: "-100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Mindestpuffer darf nicht negativ/);
     });
     expect(mockAddAccount).not.toHaveBeenCalled();
   });
@@ -141,6 +169,31 @@ describe("AccountsDialog", () => {
       );
     });
     expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("kann einen bestehenden negativen Saldo unverändert speichern", async () => {
+    mockUpdateAccount.mockResolvedValue(undefined);
+    const overdraft: Account[] = [
+      {
+        id: 3,
+        name: "Giro im Minus",
+        note: null,
+        currency: "EUR",
+        balanceCents: -1500,
+        minBufferCents: 0,
+      },
+    ];
+    renderDialog(overdraft);
+    fireEvent.click(screen.getByRole("button", { name: "Konto Giro im Minus bearbeiten" }));
+    const balanceInput = screen.getByLabelText("Aktueller Saldo") as HTMLInputElement;
+    expect(balanceInput.value).toMatch(/-15/);
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(mockUpdateAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 3, balanceCents: -1500 }),
+      );
+    });
   });
 
   it("blockiert Add bei leerem Namen (Submit-Button disabled, keine DB-Operation)", async () => {

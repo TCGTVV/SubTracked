@@ -45,7 +45,6 @@ pub fn run() {
             commands::count_subs_for_account,
             commands::update_subscription,
             commands::set_subscription_active,
-            commands::insert_reminder_if_new,
             commands::get_reminder_status,
             commands::send_test_notification,
         ])

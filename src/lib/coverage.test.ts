@@ -59,6 +59,19 @@ describe("computeCoverage", () => {
     expect(result[0]?.accountId).toBeNull();
   });
 
+  it("trennt Subs ohne Konto pro Währung statt Beträge zu mischen", () => {
+    const subs = [
+      sub({ id: 1, accountId: null, currency: "EUR", amountCents: 1000 }),
+      sub({ id: 2, accountId: null, currency: "USD", amountCents: 2500 }),
+    ];
+    const result = computeCoverage(subs, [], 1, NOW);
+    expect(result).toHaveLength(2);
+    expect(result.map((b) => [b.account, b.currency, b.totalOutflowCents]).sort()).toEqual([
+      ["(kein Konto zugeordnet)", "EUR", 1000],
+      ["(kein Konto zugeordnet)", "USD", 2500],
+    ]);
+  });
+
   it("sortiert items innerhalb eines Buckets nach Datum (aufsteigend)", () => {
     const subs = [
       sub({ id: 1, name: "B", anchorDate: "2026-01-20" }),

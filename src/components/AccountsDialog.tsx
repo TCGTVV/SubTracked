@@ -4,7 +4,7 @@ import {
   CURRENCY_OPTIONS,
   formatAmount,
   getCurrencySubdivisor,
-  parseAmountInput,
+  parseSignedAmountInput,
 } from "../lib/format";
 import type { Account } from "../types";
 
@@ -49,7 +49,7 @@ function centsToInput(cents: number, currency: string): string {
 function parseToCents(input: string, currency: string): number | null {
   const trimmed = input.trim();
   if (trimmed === "") return 0;
-  const num = parseAmountInput(trimmed);
+  const num = parseSignedAmountInput(trimmed);
   if (num === null) return null;
   return Math.round(num * getCurrencySubdivisor(currency));
 }

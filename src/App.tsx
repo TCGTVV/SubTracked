@@ -25,6 +25,7 @@ function App() {
 
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
+  const [settingsOpenSeq, setSettingsOpenSeq] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
   const subDialogRef = useRef<HTMLDialogElement>(null);
@@ -58,6 +59,7 @@ function App() {
   }
 
   function openSettings() {
+    setSettingsOpenSeq((s) => s + 1);
     settingsDialogRef.current?.showModal();
   }
 
@@ -208,7 +210,7 @@ function App() {
         onSaved={handleSubSaved}
       />
       <AccountsDialog ref={accountsDialogRef} accounts={accounts} onChanged={reloadAccounts} />
-      <SettingsDialog ref={settingsDialogRef} />
+      <SettingsDialog ref={settingsDialogRef} openSeq={settingsOpenSeq} />
     </main>
   );
 }

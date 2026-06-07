@@ -38,7 +38,7 @@ const UNASSIGNED_LABEL = "(kein Konto zugeordnet)";
  *
  * Multi-Currency-Schnitt: jedes Konto rechnet nur in seiner eigenen Währung; Subs in
  * fremder Währung werden ignoriert und nur als Zähler ausgewiesen. Subs ohne Konto
- * landen in einem Sammel-Bucket ohne Saldo/Warnungen.
+ * landen in Sammel-Buckets pro Währung, damit Beträge nie gemischt werden.
  */
 export function computeCoverage(
   subscriptions: Subscription[],
@@ -77,7 +77,7 @@ export function computeCoverage(
 
   for (const sub of subscriptions) {
     const account = sub.accountId != null ? accById.get(sub.accountId) : undefined;
-    const key = account ? String(account.id) : UNASSIGNED_KEY;
+    const key = account ? String(account.id) : `${UNASSIGNED_KEY}:${sub.currency}`;
 
     let bucket = buckets.get(key);
     if (!bucket) {

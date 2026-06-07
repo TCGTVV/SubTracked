@@ -78,19 +78,6 @@ export async function deleteSubscription(id: number): Promise<void> {
   await invoke("delete_subscription", { id });
 }
 
-// --- Reminders -------------------------------------------------------------
-
-/**
- * Idempotenter Insert. Dank UNIQUE(subscription_id, due_date) + INSERT OR IGNORE
- * liefert rowsAffected nur dann 1, wenn die Erinnerung neu ist.
- */
-export async function insertReminderIfNew(
-  subscriptionId: number,
-  dueDate: string,
-): Promise<boolean> {
-  return invoke<boolean>("insert_reminder_if_new", { subscriptionId, dueDate });
-}
-
 export interface LastSentReminder {
   dueDate: string;
   subscriptionName: string;
