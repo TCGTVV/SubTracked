@@ -2,16 +2,25 @@
 
 Vor "fertig":
 
-1. **TypeScript-Check:** `pnpm build` (führt `tsc && vite build` aus). Build muss durchlaufen — `strict` + `noUnused*` aktiv.
-2. **App startet:** `WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm tauri dev` (Linux) bzw. `pnpm tauri dev` (sonst). Fenster öffnet sich ohne Rust-Panic.
-3. **Manuelle Smoke-Tests:** geänderten Pfad in der UI tatsächlich ausführen (Tauri-Plugins wie SQL/Notification/Autostart sind nicht headless testbar).
-4. **Keine Secrets committen** (`.env`, Credentials).
-5. **BACKLOG.md updaten:** erledigte Punkte abhaken (nicht entfernen — Verlauf bleibt sichtbar).
+1. **Passende automatisierte Checks laufen lassen**:
+   - Frontend/TS/UI: `pnpm build` und/oder `pnpm test:run`.
+   - Rust: `cd src-tauri && cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`.
+   - Format/Lint allgemein: `pnpm lint` bzw. bei gewollten Auto-Fixes `pnpm lint:fix`.
+2. **Bei App-/Tauri-/Plugin-Aenderungen:** `pnpm tauri dev` starten. Auf Linux ist der Wayland-DMABUF-Fix im `pnpm tauri`-Script bereits gesetzt. Fenster muss ohne Rust-Panic starten.
+3. **Manuelle Smoke-Tests:** geaenderten UI-/Plugin-Pfad tatsaechlich ausfuehren, soweit lokal moeglich. Tauri-Plugins wie Notification/Autostart sind nur begrenzt headless testbar.
+4. **BACKLOG.md updaten:** erledigte Punkte abhaken, nicht entfernen.
+5. **HANDOVER.md oben ergaenzen:** neuer Eintrag direkt unter der Anleitung, bei Codex-Eintraegen explizit "Codex" in Titel/Text nennen.
+6. **Keine Secrets committen** (`.env`, Credentials, private Signier-Keys).
 
 ## Linter/Formatter
 
-Aktuell **nicht eingerichtet** (kein ESLint, Prettier, rustfmt-CI). Nicht erfinden — wenn der Nutzer einen Lint-Lauf erwartet, vorher klären.
+- **Biome** ist eingerichtet (`pnpm lint`, `pnpm lint:fix`).
+- **rustfmt/clippy** sind Standard fuer Rust (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`).
+- **Lefthook** laeuft beim Commit und fuehrt Biome, Vitest, cargo fmt und cargo clippy aus; Rust-Jobs koennen bei Non-Rust-Commits geskippt werden.
 
 ## Automatisierte Tests
 
-Aktuell **nicht im Repo** (siehe Backlog "Tests für `recurrence.ts` und `coverage.ts` ins Repo aufnehmen"). Keine `pnpm test`-Pipeline behaupten — bei Änderungen an `recurrence.ts`/`coverage.ts` besonders sorgfältig manuell verifizieren.
+- **Vitest/RTL**: `pnpm test:run` fuer Frontend-Unit- und Komponenten-Smoke-Tests.
+- **Rust-Tests**: `cd src-tauri && cargo test`, aktuell vor allem Recurrence und Reminder-Format-Helfer.
+- **CI**: GitHub Actions faehrt Lint, Vitest, cargo fmt und cargo clippy.
+- Wenn Checks aus Zeit-/Umgebungsgruenden nicht liefen, im finalen Bericht ausdruecklich sagen.
