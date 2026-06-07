@@ -28,9 +28,9 @@ const defaultStatus = {
   lastSent: null,
 };
 
-function renderDialog() {
+function renderDialog(openSeq = 0) {
   const ref = createRef<HTMLDialogElement>();
-  const result = render(<SettingsDialog ref={ref} />);
+  const result = render(<SettingsDialog ref={ref} openSeq={openSeq} />);
   ref.current?.setAttribute("open", "");
   return { ...result, ref };
 }
@@ -194,6 +194,19 @@ describe("SettingsDialog", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Aktualisieren" }));
+    await waitFor(() => {
+      expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("lädt den Reminder-Status erneut, wenn der Dialog geöffnet wird", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    const { ref, rerender } = renderDialog();
+    await waitFor(() => {
+      expect(mockGetReminderStatus).toHaveBeenCalledTimes(1);
+    });
+
+    rerender(<SettingsDialog ref={ref} openSeq={1} />);
     await waitFor(() => {
       expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
     });

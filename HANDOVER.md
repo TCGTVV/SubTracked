@@ -9,6 +9,149 @@
 
 ---
 
+## 2026-06-08 — Codex: Review-Befunde 3/4 ebenfalls gefixt
+
+Direkt im Anschluss an die Fix-Session fuer Befunde 1/2 bat der User darum, die zuvor geparkten Befunde 3/4 doch direkt mitzunehmen. Ergebnis: beide erledigt, Backlog entsprechend auf erledigt gesetzt.
+
+### Geaendert
+
+- `src-tauri/src/commands.rs`
+  - Oeffentlichen Tauri-Command `insert_reminder_if_new` entfernt.
+- `src-tauri/src/lib.rs`
+  - `commands::insert_reminder_if_new` aus `generate_handler!` entfernt.
+- `src/lib/db.ts`
+  - TS-Wrapper `insertReminderIfNew` entfernt.
+  - Ergebnis: Reminder-Rows koennen nicht mehr vom Frontend als "gesendet" markiert werden; nur der Rust-Scheduler schreibt sie nach erfolgreichem Notification-Start. Der interne Helper `insert_reminder_if_new` in `src-tauri/src/reminders.rs` bleibt bewusst erhalten.
+- `src/App.tsx`
+  - Neuer `settingsOpenSeq`-State. `openSettings()` inkrementiert ihn vor `showModal()`.
+- `src/components/SettingsDialog.tsx`
+  - Neues optionales Prop `openSeq`.
+  - Reminder-Status laedt weiterhin beim Mount und zusaetzlich bei jedem `openSeq > 0`-Wechsel, also bei jedem Oeffnen des dauerhaft gemounteten Dialogs.
+- `src/components/SettingsDialog.test.tsx`
+  - Neuer Test fuer erneuten `getReminderStatus()`-Call bei `openSeq`-Aenderung.
+- `BACKLOG.md`
+  - Die beiden Review-ToDos 3/4 auf erledigt gesetzt.
+  - Architektur-Text zu Tauri-Commands korrigiert: der fruehere oeffentliche `insert_reminder_if_new`-Command ist nicht mehr aktueller Bestand.
+
+### Verifikation
+
+- `pnpm exec vitest run src/components/SettingsDialog.test.tsx` ✓ — 13 Tests.
+- `pnpm exec tsc --noEmit` ✓.
+- `cargo fmt --check` ✓.
+- `cargo test` ✓ — 8 Tests.
+- `pnpm test:run` ✓ — 12 Files / 138 Tests.
+- `pnpm lint` ✓.
+- `pnpm build` ✓.
+- `cargo clippy --all-targets -- -D warnings` ✓.
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` nicht gestartet. Fuer den Command-Removal-Pfad wurden Rust-Compile/Test/Clippy ausgefuehrt; der Settings-Refresh ist per RTL-Test abgedeckt.
+
+### Status
+
+- Working tree bleibt dirty mit allen vier Review-Fixes plus BACKLOG/HANDOVER.
+- Alle Review-Befunde aus dem Codex-Review sind jetzt entweder direkt behoben oder im selben Stand dokumentiert; es bleiben keine Review-ToDos 3/4 mehr offen.
+
+---
+
+## 2026-06-08 — Codex: Review-Befunde 1/2 gefixt, 3/4 ins Backlog
+
+User wollte nach der Review-Einschaetzung die Befunde 3 und 4 als ToDos im Backlog parken und die fachlichen Befunde 1 und 2 direkt beheben. Ergebnis: erledigt.
+
+### Geaendert
+
+- `BACKLOG.md`
+  - Zwei offene Bug-ToDos ergaenzt:
+    - alten `insert_reminder_if_new`-Command entfernen/entschaerfen.
+    - Reminder-Status im Settings-Dialog beim Oeffnen frisch laden.
+- `src/lib/coverage.ts`
+  - Unzugewiesene Abos werden in `computeCoverage` nicht mehr in einem einzigen `UNASSIGNED_KEY`-Bucket gesammelt, sondern pro Waehrung (`__unassigned__:<currency>`) getrennt. Damit werden EUR/USD/KRW ohne Konto nicht mehr heimlich summiert.
+  - Kommentar zum Multi-Currency-Schnitt aktualisiert.
+- `src/components/OverviewSection.tsx`
+  - React-Key fuer unzugewiesene Coverage-Buckets enthaelt jetzt die Waehrung, damit mehrere `(kein Konto zugeordnet)`-Buckets kollisionsfrei rendern.
+- `src/lib/format.ts`
+  - Neuer `parseSignedAmountInput(input)`-Helper: gleiche locale-tolerante Zahl-Logik wie `parseAmountInput`, aber mit fuehrendem Minus fuer Kontosalden.
+  - `parseAmountInput` bleibt unsigned; Abo-Betraege bleiben dadurch unveraendert geschuetzt.
+- `src/components/AccountsDialog.tsx`
+  - Kontosaldo nutzt jetzt `parseSignedAmountInput`; negative Salden sind erlaubt.
+  - Mindestpuffer laeuft ueber denselben Parser, wird danach aber weiter mit `minBufferCents < 0` blockiert, sodass die spezifische Meldung "Mindestpuffer darf nicht negativ sein." greift.
+
+### Tests
+
+- `src/lib/coverage.test.ts`
+  - Neuer Test: unzugewiesene Subs in EUR/USD ergeben getrennte Coverage-Buckets.
+- `src/lib/format.test.ts`
+  - Neue Tests fuer `parseSignedAmountInput` (negative deutsche Eingaben, positive Eingaben, ungueltige Sign-Faelle).
+- `src/components/AccountsDialog.test.tsx`
+  - Neue Tests fuer negativen Saldo beim Anlegen, negativen Mindestpuffer als Validierungsfehler und Speichern eines bereits negativen Saldos im Edit-Mode.
+
+### Verifikation
+
+- `pnpm exec vitest run src/lib/coverage.test.ts` ✓ — 21 Tests.
+- `pnpm exec vitest run src/lib/format.test.ts` ✓ — 21 Tests.
+- `pnpm exec vitest run src/components/AccountsDialog.test.tsx` ✓ — 14 Tests.
+- `pnpm exec vitest run src/components/SubscriptionDialog.test.tsx` ✓ — 13 Tests, zur Absicherung dass Abo-Betraege unsigned bleiben.
+- `pnpm exec tsc --noEmit` ✓.
+- `pnpm test:run` ✓ — 12 Files / 137 Tests.
+- `pnpm lint` ✓.
+- `pnpm build` ✓.
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` nicht gestartet, weil nur Frontend-/Pure-Logic-Code und Backlog/HANDOVER geaendert wurden.
+- Rust-Checks nicht wiederholt, weil kein Rust-Code in dieser Fix-Session geaendert wurde.
+
+### Status
+
+- Working tree ist absichtlich dirty mit den Fixes plus dem vorherigen Review-HANDOVER-Eintrag.
+- Naechste sinnvolle Richtung: entweder committen oder die geparkten Backlog-ToDos 3/4 in einer kleinen Folgesession angehen.
+
+---
+
+## 2026-06-08 — Codex: Code-Review der 2026-06-07-Programmierarbeiten
+
+User bat um einen Code-Review fuer alles, was "heute" programmiert wurde. Wegen Commit-Historie/Handovers wurde der Scope als die Code-Commits vom 2026-06-07 interpretiert (RTL/Test-Setup, Logging, Reminder/Tray-Fixes, Kontodeckung, Validierung, Archiv, Demnaechst, Test-Notification, Filter/Sortierung). Reine Doku-Commits wurden nur als Kontext betrachtet.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` gruen.
+- `pnpm test:run` gruen: 12 Files / 130 Tests.
+- `cargo test` gruen: 8 Tests.
+- `pnpm lint` gruen.
+- `cargo fmt --check` gruen.
+- `cargo clippy --all-targets -- -D warnings` gruen.
+- `pnpm build` gruen.
+
+### Review-Befunde
+
+- `src/lib/coverage.ts`: unzugewiesene Abos werden in `computeCoverage` alle ueber denselben `UNASSIGNED_KEY` gebucketet. Bei mehreren unzugewiesenen Waehrungen werden Betrage zusammenaddiert und mit der Waehrung des ersten Subs angezeigt. Das widerspricht der Mehrwaehrungs-Ehrlichkeit.
+- `src/lib/format.ts` + `src/components/AccountsDialog.tsx`: `parseAmountInput` blockiert `-`, wird aber auch fuer den aktuellen Kontosaldo verwendet. Negative Kontostaende koennen dadurch weder neu eingegeben noch beim Bearbeiten unveraendert gespeichert werden.
+- `src-tauri/src/commands.rs` + `src/lib/db.ts`: der alte `insert_reminder_if_new`-Command/Wrapper ist weiterhin oeffentlich exponiert, obwohl Reminder-Rows jetzt "Notification wurde erfolgreich angestossen" bedeuten. Aktuell nicht aus React genutzt, aber ein spaeterer/falscher Aufruf koennte Reminder als gesendet markieren, ohne Notification.
+- `src/components/SettingsDialog.tsx` + `src/App.tsx`: Reminder-Status wird beim Mount geladen, nicht beim Oeffnen des dauerhaft gemounteten Dialogs. Status kann bei spaeterem Oeffnen alt sein; manuelles "Aktualisieren" behebt es.
+
+### Naechster Schritt
+
+Bei Fix-Session zuerst die zwei fachlichen Befunde angehen: unassigned Coverage pro Waehrung trennen und negative Saldi im AccountsDialog erlauben (nicht fuer Abo-Betraege/Mindestpuffer).
+
+---
+
+## 2026-06-08 — Codex: Serena-Zugriff bestaetigt
+
+Kurzer Verifikations-Check auf User-Wunsch. Ergebnis: Serena ist in dieser Codex-Session verfuegbar.
+
+### Verifikation
+
+- `mcp__serena.initial_instructions` erfolgreich aufgerufen.
+- Serena meldet das Projekt `SubTracked` unter `/home/legr/SubTracked` als aktiviert.
+- Sichtbare Memories laut Serena: `conventions`, `core`, `memory_maintenance`, `suggested_commands`, `task_completion`, `tech_stack`, `ui_vision`.
+
+### Naechster Schritt
+
+Bei der naechsten Facharbeit kann Codex Serena fuer Symbol-Uebersichten, Referenzen, Diagnostik und gezielte Code-Edits verwenden.
+
+---
+
 ## 2026-06-08 — Codex: Serena-MCP fuer Codex eingerichtet
 
 Kurze Setup-Session vor der naechsten Facharbeit: User fragte, ob Codex nicht selbst auf denselben Serena-MCP-Server zugreifen kann wie Claude Code in VS Code. Ergebnis: ja, Codex ist jetzt global mit Serena verdrahtet; die aktuell laufende Codex-Session sieht die Tools aber erst nach Neustart/neuem Thread.

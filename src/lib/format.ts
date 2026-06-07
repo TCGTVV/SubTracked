@@ -26,9 +26,9 @@ export function getCurrencySubdivisor(currency: string): number {
  *  - bei beiden vorhanden ist das spaeter stehende der Dezimaltrenner, das andere Tausender;
  *  - bei nur einem mit genau 3 Stellen danach (z.B. "1,234") wird er als Tausender gedeutet;
  *  - sonst ist der einzelne Trenner der Dezimaltrenner.
- * Gibt null zurueck bei leerem oder strukturell ungueltigem Input (inkl. negativ via Praefix).
+ * Gibt null zurueck bei leerem oder strukturell ungueltigem Input.
  */
-export function parseAmountInput(input: string): number | null {
+function parseLocalizedAmountInput(input: string): number | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
   if (!/^[\d.,]+$/.test(trimmed)) return null;
@@ -61,6 +61,20 @@ export function parseAmountInput(input: string): number | null {
 
   const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
+}
+
+export function parseAmountInput(input: string): number | null {
+  return parseLocalizedAmountInput(input);
+}
+
+/** Wie parseAmountInput, aber erlaubt ein fuehrendes Minus fuer Kontosalden. */
+export function parseSignedAmountInput(input: string): number | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  if (!trimmed.startsWith("-")) return parseLocalizedAmountInput(trimmed);
+
+  const n = parseLocalizedAmountInput(trimmed.slice(1));
+  return n === null ? null : -n;
 }
 
 export function formatAmount(cents: number, currency: string): string {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Subscription } from "../types";
-import { formatAmount, formatNextDue, parseAmountInput, todayISO } from "./format";
+import {
+  formatAmount,
+  formatNextDue,
+  parseAmountInput,
+  parseSignedAmountInput,
+  todayISO,
+} from "./format";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   id: 1,
@@ -124,5 +130,24 @@ describe("parseAmountInput", () => {
     expect(parseAmountInput(".5")).toBeCloseTo(0.5);
     expect(parseAmountInput("5,")).toBe(5);
     expect(parseAmountInput("5.")).toBe(5);
+  });
+});
+
+describe("parseSignedAmountInput", () => {
+  it("akzeptiert negative lokalisierte Zahlen", () => {
+    expect(parseSignedAmountInput("-12")).toBe(-12);
+    expect(parseSignedAmountInput("-12,99")).toBeCloseTo(-12.99);
+    expect(parseSignedAmountInput("-1.234,56")).toBeCloseTo(-1234.56);
+  });
+
+  it("akzeptiert positive Zahlen ohne Vorzeichen wie parseAmountInput", () => {
+    expect(parseSignedAmountInput("12,99")).toBeCloseTo(12.99);
+    expect(parseSignedAmountInput("1,234.56")).toBeCloseTo(1234.56);
+  });
+
+  it("blockiert Plus und strukturell ungueltige negative Eingaben", () => {
+    expect(parseSignedAmountInput("+12")).toBeNull();
+    expect(parseSignedAmountInput("-")).toBeNull();
+    expect(parseSignedAmountInput("-abc")).toBeNull();
   });
 });

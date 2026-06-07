@@ -187,22 +187,6 @@ pub async fn set_subscription_active(
     Ok(())
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn insert_reminder_if_new(
-    state: State<'_, AppState>,
-    subscription_id: i64,
-    due_date: String,
-) -> Result<bool, String> {
-    let res =
-        sqlx::query("INSERT OR IGNORE INTO reminders (subscription_id, due_date) VALUES (?, ?)")
-            .bind(subscription_id)
-            .bind(&due_date)
-            .execute(&state.db)
-            .await
-            .map_err(|e| e.to_string())?;
-    Ok(res.rows_affected() > 0)
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastSentReminder {

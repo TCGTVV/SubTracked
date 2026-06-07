@@ -6,6 +6,7 @@ import { getReminderStatus, type ReminderStatus, sendTestNotification } from "..
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
+  openSeq?: number;
 }
 
 function formatDateTime(iso: string): string {
@@ -25,7 +26,7 @@ function formatInterval(secs: number): string {
   return `${minutes} Minuten`;
 }
 
-export function SettingsDialog({ ref }: Props) {
+export function SettingsDialog({ ref, openSeq = 0 }: Props) {
   const autostartId = useId();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
@@ -63,6 +64,10 @@ export function SettingsDialog({ ref }: Props) {
       cancelled = true;
     };
   }, [loadReminderStatus]);
+
+  useEffect(() => {
+    if (openSeq > 0) void loadReminderStatus();
+  }, [loadReminderStatus, openSeq]);
 
   async function handleToggle(next: boolean) {
     setPending(true);

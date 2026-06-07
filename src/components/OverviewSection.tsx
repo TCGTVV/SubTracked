@@ -71,7 +71,7 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
             const badge = statusBadge(account);
             return (
               <details
-                key={account.accountId ?? account.account}
+                key={account.accountId ?? `${account.account}-${account.currency}`}
                 className={`coverage-account${badge ? ` coverage-${badge.tone}` : ""}`}
               >
                 <summary>
