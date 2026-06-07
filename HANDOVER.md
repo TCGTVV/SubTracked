@@ -9,6 +9,67 @@
 
 ---
 
+## 2026-06-07 — Claude: Test-Notification + Reminder-Status in Einstellungen
+
+Zwei zusammengehörige Backlog-Items in einem Aufwasch: der User kann jetzt aus den Einstellungen heraus eine Test-Notification auslösen und sieht den Status des Reminder-Loops (letzte/nächste Prüfung, letzte gesendete Erinnerung). Macht den bisher „stillen" Background-Scheduler sichtbar und gibt einen schnellen Smoke-Test-Pfad für Notification-Permission + OS-Integration.
+
+### Geändert
+
+- `src-tauri/src/db.rs` — neuer `ReminderState`-Struct mit `last_check_at: Mutex<Option<DateTime<Utc>>>`. Default-Impl via `#[derive(Default)]`. Doc-Comment macht Persistenz-Entscheidung explizit: bewusst in-memory, geht beim App-Restart verloren, reicht für „läuft der Loop überhaupt?"-Diagnose. `chrono::{DateTime, Utc}` neu importiert.
+- `src-tauri/src/lib.rs` — `REMINDER_INTERVAL` von `const` auf `pub const` umgestellt, damit Commands die Sekunden lesen können. `ReminderState::default()` über `app.manage()` registriert. Reminder-Loop aktualisiert nach jedem `run_reminder_check` (auch bei Error) den Zeitstempel via `app_handle.try_state::<ReminderState>()` → semantisch „Loop ist gelaufen", egal ob was gesendet wurde. Zwei neue Commands registriert.
+- `src-tauri/src/commands.rs` — neue Structs `LastSentReminder { dueDate, subscriptionName, sentAt }` und `ReminderStatus { lastCheckAt, intervalSecs, lastSent }` als Serialize-Outputs. Neuer Command `get_reminder_status` liest den Mutex (`map_err` für Lock-Poisoning), ruft SQL-JOIN `SELECT r.due_date, s.name, r.sent_at FROM reminders r JOIN subscriptions s ON r.subscription_id = s.id ORDER BY r.sent_at DESC LIMIT 1`. Neuer Command `send_test_notification` ruft direkt `app.notification().builder().title("SubTracked Test").body(...).show()`. `serde::Serialize` und `tauri_plugin_notification::NotificationExt` neu importiert.
+- `src/lib/db.ts` — `LastSentReminder`/`ReminderStatus`-Interfaces (camelCase, Rust mappt automatisch via `#[serde(rename_all)]`), `getReminderStatus()` und `sendTestNotification()`-Wrapper.
+- `src/components/SettingsDialog.tsx` — zwei neue `.setting-row`-Blöcke unterhalb des Autostart-Toggles: „Erinnerungen testen" mit Button + status-`role`-Bestätigung; „Erinnerungs-Status" mit `<dl>` für Intervall/letzte Prüfung/nächste Prüfung/letzte Erinnerung + „Aktualisieren"-Knopf. Status wird beim Mount via `useEffect` + `loadReminderStatus()` (mit `useCallback`) geladen, kann manuell neu geladen werden. `nextCheck` clientseitig berechnet via `new Date(lastCheckAt).getTime() + intervalSecs * 1000`. Format-Helper: `formatDateTime`, `formatDate` (beide `date-fns` + `locale: de`), `formatInterval` rundet auf volle Stunden wenn möglich, sonst Minuten.
+- `src/App.css` — `.setting-subheading`, `.setting-action-row`, `.setting-confirm` (grün), `.reminder-status` (`<dl>` als 2-Spalten-Grid), `.reminder-status dt/dd`. Dark-Mode-Anpassungen für die vier neuen Klassen.
+
+### Tests
+
+- `src/components/SettingsDialog.test.tsx` — Mock `../lib/db` ergänzt (`getReminderStatus`, `sendTestNotification`), Default-Status `{ lastCheckAt: null, intervalSecs: 3600, lastSent: null }` als `beforeEach`-Default. **5 neue Tests**: Klick auf Test-Notification ruft `sendTestNotification` + zeigt Bestätigung, Fehler beim Test wird als alert angezeigt + keine status-Bestätigung, „noch keine"-Anzeige wenn `lastCheckAt === null`, voll gefüllter Status rendert „alle 1 Stunde" + Sub-Name + Fälligkeits-Datum, „Aktualisieren"-Klick triggert zweiten `getReminderStatus`-Call. Stand: 13 Tests in `SettingsDialog.test.tsx` grün.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` ✓.
+- `pnpm test:run` ✓ — **113 Tests in 11 Files grün** (vorher 108, +5 in dieser Session).
+- `pnpm lint` ✓ ohne Auto-Fix-Bedarf.
+- `cd src-tauri && cargo fmt --check` ✓ / `cargo clippy --all-targets -- -D warnings` ✓ / `cargo test` ✓ (8/8).
+- `pnpm tauri dev` gestartet; User hat „passt" bestätigt: Test-Notification triggert Toast und zeigt Bestätigung, Reminder-Status zeigt Intervall/letzte/nächste Prüfung, Aktualisieren-Knopf lädt neu.
+
+### Wichtige Entscheidungen + Begründung
+
+- **In-memory `ReminderState` statt SQLite-Persistenz**: „letzte Prüfung" ist Diagnose-Information für „läuft der Loop?", keine Geschäftsdaten. Persistierung wäre ein neues Table + Migration + DB-Writes pro Loop-Tick, für ein Feature, das beim App-Restart eh sofort wieder mit dem ersten Tick (~Sekunden später) gefüllt ist. Pragmatische Asymmetrie zur „letzten gesendeten Erinnerung", die persistent ist (steckt in der `reminders`-Tabelle).
+- **`last_check_at` wird auch bei Loop-Error aktualisiert**: semantisch „Loop ist gelaufen", egal ob er was geschickt hat oder gescheitert ist. Falls der User in Settings „Letzte Prüfung: 14:30" sieht und es ist jetzt 17:00, weiß er: der Loop läuft nicht (sollte stündlich sein) und ein App-Restart oder Log-Check ist fällig.
+- **`Mutex<Option<DateTime<Utc>>>` statt `RwLock` oder `tokio::sync::Mutex`**: stdlib `Mutex` reicht — der lock-Bereich ist mikroskopisch (1 Read oder 1 Write), kein Async-await innerhalb, keine Performance-Bedenken. `tokio::sync::Mutex` wäre Overkill für ein Diagnostik-Field. Lock-Poisoning wird im Command als String-Error zurückgegeben.
+- **`app_handle.try_state` statt `state.try_state`** im Loop: der Loop kennt nur den `AppHandle`, nicht den `&App`. `try_state` gibt `Option<&State>` zurück; wenn die Registrierung gescheitert sein sollte (unrealistisch, weil wir's in `setup` machen), tut der Loop einfach nichts statt zu paniken. Defensiv, nicht defensiv-übertrieben.
+- **`get_reminder_status` macht den Lookup `lastSent` via SQL-JOIN, nicht via zwei separate Queries**: Vorteil: ein einziger Roundtrip, atomare Sicht. JOIN ist trivial, weil `reminders.subscription_id` FK auf `subscriptions.id` ist.
+- **Nächste Prüfung im Client berechnet** statt Server liefert: keine zusätzliche Rust-Logik, der Client kennt schon `lastCheckAt` und `intervalSecs`. JavaScript-Datumsmathe ist hier robust genug.
+- **`formatInterval`-Helper rundet auf volle Stunden, sonst Minuten**: aktuelles Intervall ist 1h, Anzeige „alle 1 Stunde" liest sich natürlich. Bei späteren konfigurierbaren Intervallen (z.B. 30min) wäre die Sekundenanzahl ungeeignet — Helper deckt beide Fälle ab. Singular/Plural via Branch.
+- **„Test-Erinnerung senden" hat eigene Bestätigung statt globaler Error/Success-Banner**: drei verschiedene Bedeutungen brauchen drei separate Statussignale. Status-`<span>` mit `role="status"` ist die A11y-konforme „dies ist eine non-disruptive Bestätigung", `role="alert"` bleibt für Fehler reserviert (wie sonst auch).
+- **`useCallback` für `loadReminderStatus`**: weil `useEffect`-Dependencies auf die Funktion zeigen. Klassisches React-Hook-Pattern, sonst Re-Triggering-Loop.
+- **Keine eigene `reminders.ts`-Lib-Datei** für die zwei neuen Wrapper: passt thematisch zu `db.ts` (zwei zusätzliche Tauri-Commands, klein). Eigene Datei wäre Über-Abstraktion bei 14 Zeilen Code.
+
+### Gotchas
+
+- **Reminder-Loop läuft alle 60 Minuten — initialer Check passiert sofort beim App-Start**: das heißt, beim ersten Öffnen der Settings nach App-Start ist `lastCheckAt` schon gefüllt (initial-Check ist innerhalb Sekunden durch). Falls jemand das Feature testen will, ohne 1h zu warten, würde er sehen: letzte Prüfung „vor 5 Sekunden", nächste Prüfung „in 59 Min 55 Sek". Die 1h-Konstante zu ändern hätte echten Performance-Impact (häufigere DB-Reads), deshalb nicht jetzt verstellbar — wenn der User das ändern will, ist das ein eigenes Backlog-Item.
+- **`role="status"` vs. `role="alert"`**: `status` ist polite (Screen-Reader wartet auf Pause), `alert` ist assertive (sofortige Ankündigung). Test-Notification-Bestätigung ist `status` (kein dringender Fehler), Fehler ist `alert`. Wenn man die Bestätigung manchmal nicht sieht weil sie zu schnell wegfliegt: keine Auto-Hide eingebaut, der Text bleibt bis zum nächsten Klick oder Dialog-Close.
+- **`Aktualisieren` lädt nur den Status neu, nicht den Loop**: der Loop läuft autonom alle 60 Min im Rust-Hintergrund. „Aktualisieren" zeigt nur den letzten bekannten State frischer an, triggert keinen extra Check. Falls jemand „Check JETZT laufen lassen" will, wäre das ein zusätzlicher Command (z.B. `run_reminder_check_now`) — bewusst nicht jetzt eingebaut.
+- **`SettingsDialog`-Test mockt jetzt `../lib/db`** zusätzlich zu `@tauri-apps/plugin-autostart`. Wenn beim Hinzufügen weiterer DB-Calls vergessen wird, im Mock-Objekt zu ergänzen, wirft die Komponente einen `is not a function`-Error im Test. Pattern: Mock-Liste muss alle in Komponente importierten Symbole auflisten.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: 5 modifizierte Dateien (`db.rs`, `lib.rs`, `commands.rs`, `db.ts`, `App.css`) + 2 Dialog-Dateien (`SettingsDialog.tsx`, `SettingsDialog.test.tsx`) + `BACKLOG.md` + `HANDOVER.md`. Noch nicht committet.
+- Tests grün: 113 Vitest, 8 Cargo.
+- Live-Smoke vom User bestätigt.
+
+### Nächster Schritt
+
+Die zwei Backlog-Items „Test-Notification in den Einstellungen" und „Reminder-Status sichtbarer machen" sind durch. Mögliche Richtungen aus dem Backlog:
+
+- **Filter + Sortierung für Abo-Liste** — klein, ROI ab vielen Abos.
+- **Release-Reife** (Matrix-Build mit `tauri-action`, v0.1.0-Tag, Windows/macOS-Smoke, In-App-Updater) — größerer Block, eigene Session.
+- **UI-Redesign Richtung arsnova** — feature-Flächen sind jetzt stabil genug, lohnt langsam.
+
+---
+
 ## 2026-06-07 — Claude: Nächste-Fälligkeiten-Ansicht als primärer Arbeitsmodus
 
 Quick-Win 2 nach Validierung + Archiv: SubTracked hat jetzt eine kompakte „Demnächst (30 Tage)"-Liste direkt über der Abo-Liste. Der tägliche Nutzen — „was geht in den nächsten Wochen ab?" — ist damit der erste Blick auf der Hauptseite, vor der Detail-Abo-Liste und vor dem Konto-Forecast.

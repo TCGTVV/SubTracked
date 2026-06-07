@@ -48,8 +48,8 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [x] Notification-Berechtigung sauber abfragen und Status anzeigen
 - [x] Vorlaufzeit (`lead_days`) pro Abo in der UI editierbar
 - [x] **Notifications pro Abo stummschaltbar** — bei bekannten regelmäßigen Abos (z.B. Netflix monatlich) will man keinen Spam. Neue Spalte `notify INTEGER DEFAULT 1` via Migration, UI-Toggle pro Abo, `runReminderCheck` überspringt stumme Abos. Sie bleiben aber sichtbar in Liste/Fixkosten-Übersicht
-- [ ] **Test-Notification in den Einstellungen.** Button "Test-Erinnerung senden", damit Notification-Permission, OS-Integration und sichtbarer Toast ohne Warten auf eine echte Fälligkeit geprüft werden können. Hilft auch bei Support/Debugging.
-- [ ] **Reminder-Status sichtbarer machen.** Optional pro Abo oder in Settings anzeigen: letzte Reminder-Prüfung, nächster geplanter Check, letzte gesendete Erinnerung. Besonders nützlich, weil der Scheduler im Rust-Hintergrundprozess läuft und sonst "still" wirkt.
+- [x] **Test-Notification in den Einstellungen** (2026-06-07, Claude) — Neuer Rust-Command `send_test_notification` ruft direkt `app.notification().builder().show()` mit fester Test-Nachricht. Button "Test-Erinnerung senden" im SettingsDialog, danach „✓ Gesendet — siehst du den Toast?"-Bestätigung mit `role="status"`. Existierende `notification:default`-Permission deckt das ab.
+- [x] **Reminder-Status sichtbarer machen** (2026-06-07, Claude) — Neuer `ReminderState { last_check_at: Mutex<Option<DateTime<Utc>>> }` als in-memory App-Singleton (bewusst keine Persistenz — Diagnose-State reicht). Reminder-Loop in `lib.rs` aktualisiert nach jedem Durchlauf (auch bei Error). Neuer Command `get_reminder_status` liefert `{ lastCheckAt, intervalSecs, lastSent }` — `lastSent` per SQL-JOIN `reminders × subscriptions` und `ORDER BY sent_at DESC LIMIT 1`. SettingsDialog rendert `<dl>` mit „Intervall / Letzte Prüfung / Nächste Prüfung (= last + intervalSecs) / Letzte Erinnerung", plus „Aktualisieren"-Knopf für Refresh.
 
 ## 📈 Produktnutzen / Prognose
 

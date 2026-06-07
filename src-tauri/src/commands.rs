@@ -1,6 +1,8 @@
+use serde::Serialize;
 use tauri::State;
+use tauri_plugin_notification::NotificationExt;
 
-use crate::db::{Account, AppState, NewSubscription, Subscription};
+use crate::db::{Account, AppState, NewSubscription, ReminderState, Subscription};
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_subscriptions(
@@ -199,4 +201,62 @@ pub async fn insert_reminder_if_new(
             .await
             .map_err(|e| e.to_string())?;
     Ok(res.rows_affected() > 0)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastSentReminder {
+    pub due_date: String,
+    pub subscription_name: String,
+    pub sent_at: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderStatus {
+    /// ISO 8601 UTC, null wenn Loop noch keinen Check abgeschlossen hat.
+    pub last_check_at: Option<String>,
+    pub interval_secs: u64,
+    pub last_sent: Option<LastSentReminder>,
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_reminder_status(
+    state: State<'_, AppState>,
+    reminder_state: State<'_, ReminderState>,
+) -> Result<ReminderStatus, String> {
+    let last_check_at = reminder_state
+        .last_check_at
+        .lock()
+        .map_err(|e| format!("reminder state lock: {e}"))?
+        .map(|dt| dt.to_rfc3339());
+
+    let last_sent: Option<(String, String, String)> = sqlx::query_as(
+        "SELECT r.due_date, s.name, r.sent_at FROM reminders r \
+         JOIN subscriptions s ON r.subscription_id = s.id \
+         ORDER BY r.sent_at DESC LIMIT 1",
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(ReminderStatus {
+        last_check_at,
+        interval_secs: crate::REMINDER_INTERVAL.as_secs(),
+        last_sent: last_sent.map(|(due_date, subscription_name, sent_at)| LastSentReminder {
+            due_date,
+            subscription_name,
+            sent_at,
+        }),
+    })
+}
+
+#[tauri::command]
+pub async fn send_test_notification(app: tauri::AppHandle) -> Result<(), String> {
+    app.notification()
+        .builder()
+        .title("SubTracked Test")
+        .body("Erinnerungen funktionieren — diese Test-Nachricht kam direkt aus den Einstellungen.")
+        .show()
+        .map_err(|e| e.to_string())
 }
