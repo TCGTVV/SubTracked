@@ -9,6 +9,36 @@
 
 ---
 
+## 2026-06-07 — Codex: Tray-Aufpopp-Bug auf KDE Plasma gefixt
+
+Codex hat den Tray-Aufpopp-Bug als eigene Debug-Session bearbeitet, fokussiert auf User-System **CachyOS + KDE Plasma** (Windows/macOS erstmal egal). Der Fix wurde im Dev-Build vom User manuell getestet und bestaetigt; App danach vom User manuell beendet. User bat danach, alles zu committen/pushen und die Arbeit fuer heute zu beenden.
+
+### Geändert
+
+- `src-tauri/src/lib.rs`
+  - `show_main_window` loggt jetzt `was_visible` und `was_minimized`, wenn eine Tray-Aktion das Fenster zeigen soll.
+  - Reihenfolge/Mechanik angepasst: `show()` + `unminimize()` synchron, danach verzögerter Fokus über `focus_main_window_after_show`.
+  - Grund: In Tauri/Tao unter Linux sendet `set_focus()` nur einen Focus-Request, wenn das native GTK-Fenster zu diesem Zeitpunkt bereits sichtbar und nicht minimiert ist. Direkt nach `show()` ist das bei einem zuvor per X versteckten Fenster noch nicht zuverlässig verarbeitet.
+  - Linux/KDE-spezifischer Raise-Impuls: nach kurzer Verzögerung `set_always_on_top(true)`, 40ms später wieder `false`, danach zweiter `set_focus()`. Ziel: KWin/Plasma soll das Fenster wirklich nach vorne heben statt nur den Taskleisten-Eintrag zu highlighten.
+- `BACKLOG.md`
+  - Tray-Bug abgehakt mit Hinweis auf bestaetigten Live-Test auf CachyOS/KDE Plasma.
+
+### Verifikation
+
+- `cd src-tauri && cargo check` grün.
+- `cd src-tauri && cargo test` grün: 8 Tests.
+- `cd src-tauri && cargo fmt --check` grün.
+- `cd src-tauri && cargo clippy --all-targets -- -D warnings` grün.
+- `pnpm lint` grün.
+- `pnpm tauri dev` gestartet; User hat den Dev-Build auf CachyOS/KDE Plasma manuell getestet und bestaetigt, dass das Fenster aus dem Tray wieder hochkommt. App anschließend manuell beendet.
+
+### Gotchas / nächste Hinweise
+
+- Fix ist auf CachyOS/KDE Plasma verifiziert. Windows/macOS waren bewusst nicht Ziel dieser Debug-Session.
+- Der Linux-Pfad nutzt ein kurzes `always_on_top`-Toggle als KWin/Plasma-Raise-Impuls. Falls spaeter auf anderen Linux-Desktops Nebenwirkungen auftauchen, gezielt dort re-evaluieren.
+
+---
+
 ## 2026-06-07 — Codex: Reminder-Korrektheit + Serena-Memories aktualisiert
 
 Codex hat den empfohlenen kleinen Stabilitätsblock umgesetzt: Reminder werden nur noch als gesendet markiert, wenn wirklich eine Notification angestossen wurde, KRW/Zero-Decimal-Währungen werden in Rust-Notifications korrekt formatiert, und die veralteten Serena-Memories wurden aktualisiert. Serena-MCP-Tools waren weiterhin nicht via `tool_search` sichtbar; die lokalen `.serena/memories/*` wurden direkt im Repo editiert.

@@ -18,6 +18,8 @@ use tracing_appender::rolling::Rotation;
 use tracing_subscriber::prelude::*;
 
 const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
+const TRAY_FOCUS_RETRY_DELAY: StdDuration = StdDuration::from_millis(80);
+const TRAY_FOCUS_RAISE_DELAY: StdDuration = StdDuration::from_millis(40);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -148,8 +150,52 @@ pub fn run() {
 
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
+        let was_visible = window.is_visible().unwrap_or(false);
+        let was_minimized = window.is_minimized().unwrap_or(false);
+        tracing::info!(
+            was_visible,
+            was_minimized,
+            "Fenster aus Tray-Aktion anzeigen"
+        );
+
+        if let Err(e) = window.show() {
+            tracing::error!(error = %e, "Fenster konnte nicht angezeigt werden");
+        }
+        if let Err(e) = window.unminimize() {
+            tracing::error!(error = %e, "Fenster konnte nicht entminimiert werden");
+        }
+
+        focus_main_window_after_show(window);
+    } else {
+        tracing::warn!("Tray-Aktion konnte kein main-Fenster finden");
     }
+}
+
+fn focus_main_window_after_show(window: tauri::WebviewWindow) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(TRAY_FOCUS_RETRY_DELAY).await;
+
+        if let Err(e) = window.set_focus() {
+            tracing::error!(error = %e, "Fenster-Fokus nach Tray-Aktion fehlgeschlagen");
+        }
+
+        // KDE Plasma/Wayland kann ein gerade aus dem Tray wieder eingeblendetes
+        // Fenster zwar in der Taskleiste hervorheben, aber nicht zuverlaessig
+        // nach vorne heben. Ein kurzes Keep-Above-Toggle nach dem Show-Request
+        // gibt KWin einen expliziten Raise-Impuls, danach wird der Normalzustand
+        // sofort wiederhergestellt.
+        #[cfg(target_os = "linux")]
+        {
+            if let Err(e) = window.set_always_on_top(true) {
+                tracing::error!(error = %e, "Fenster konnte nicht kurz angehoben werden");
+            }
+            tokio::time::sleep(TRAY_FOCUS_RAISE_DELAY).await;
+            if let Err(e) = window.set_always_on_top(false) {
+                tracing::error!(error = %e, "Fenster-Anheben konnte nicht zurueckgesetzt werden");
+            }
+            if let Err(e) = window.set_focus() {
+                tracing::error!(error = %e, "Zweiter Fenster-Fokus nach Tray-Aktion fehlgeschlagen");
+            }
+        }
+    });
 }
