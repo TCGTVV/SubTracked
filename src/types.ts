@@ -4,6 +4,9 @@ export interface Account {
   id: number;
   name: string;
   note: string | null;
+  currency: string;
+  balanceCents: number;
+  minBufferCents: number;
 }
 
 export interface Subscription {

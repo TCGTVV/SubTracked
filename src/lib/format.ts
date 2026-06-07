@@ -5,6 +5,9 @@ import { nextDueDate } from "./recurrence";
 // Smallest currency unit pro ISO-4217-Code. Bei Waehrungen ohne Subdivision
 // (z.B. KRW, JPY) ist der Wert in der DB direkt die ganze Einheit, nicht ein
 // Subunit. Default 100 deckt EUR/USD/GBP/CHF und die meisten anderen ab.
+export const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF", "KRW"] as const;
+export type CurrencyOption = (typeof CURRENCY_OPTIONS)[number];
+
 const CURRENCY_SUBDIVISIONS: Record<string, number> = {
   EUR: 100,
   USD: 100,

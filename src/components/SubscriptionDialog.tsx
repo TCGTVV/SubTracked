@@ -1,6 +1,6 @@
 import { type FormEvent, type Ref, useId, useState } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
-import { getCurrencySubdivisor, parseAmountInput, todayISO } from "../lib/format";
+import { CURRENCY_OPTIONS, getCurrencySubdivisor, parseAmountInput, todayISO } from "../lib/format";
 import type { Account, Interval, Subscription } from "../types";
 import { DateField } from "./DateField";
 
@@ -9,8 +9,6 @@ const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
   { value: "quarterly", label: "Quartalsweise" },
   { value: "yearly", label: "Jährlich" },
 ];
-
-const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF", "KRW"] as const;
 
 interface Props {
   ref: Ref<HTMLDialogElement>;

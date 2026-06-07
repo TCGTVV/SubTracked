@@ -22,8 +22,24 @@ export async function listAccounts(): Promise<Account[]> {
   return invoke<Account[]>("list_accounts");
 }
 
-export async function addAccount(name: string, note?: string): Promise<number> {
-  return invoke<number>("add_account", { name, note: note ?? null });
+export async function addAccount(input: {
+  name: string;
+  note?: string;
+  currency?: string;
+  balanceCents?: number;
+  minBufferCents?: number;
+}): Promise<number> {
+  return invoke<number>("add_account", {
+    name: input.name,
+    note: input.note ?? null,
+    currency: input.currency ?? null,
+    balanceCents: input.balanceCents ?? null,
+    minBufferCents: input.minBufferCents ?? null,
+  });
+}
+
+export async function updateAccount(account: Account): Promise<void> {
+  await invoke("update_account", { account });
 }
 
 export async function deleteAccount(id: number): Promise<void> {
