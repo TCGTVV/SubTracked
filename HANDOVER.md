@@ -9,6 +9,39 @@
 
 ---
 
+## 2026-06-07 — Claude: README an den neuen Produktstand angepasst (Tagesabschluss)
+
+Letzter Schritt der Session: die README untervernkaufte das Projekt nach den heutigen Erweiterungen deutlich („Persönlicher Abo-Tracker … kündigt Fälligkeiten an … zeigt Konten 6 Monate in die Zukunft"). Heute haben wir aus der App einen Liquiditäts-Radar gemacht — das gehört in die Tagline. User mochte den Satz aus der Sitzungs-Bilanz „SubTracked ist heute eine andere App als heute morgen" und wollte das in der README spiegeln.
+
+### Geändert
+
+- `README.md`
+  - **Tagline neu** (User-Wahl aus drei Vorschlägen — Variante A „Liquiditäts-Radar zuerst, Abo-Tracker als Werkzeug"): „Liquiditäts-Radar für wiederkehrende Zahlungen. Pflegt deine Abos, schreibt deine Konten in die Zukunft fort und warnt früh, wenn das Geld eng wird. Native Desktop-App, im Tray leise im Hintergrund." Anti-SaaS-Linie unverändert darunter.
+  - **Funktionen-Block** von vier Bullets auf vier thematische Sub-Sektionen ausgebaut: Konten + Deckung, Abos, Erinnerungen, Hintergrund-Betrieb. Erwähnt namentlich Mindestpuffer, Deckungswarnung (Puffer-/Null-Unterschreitung), Mehrwährungs-Schnitt mit ehrlichem Hinweis, toleranter Betrags-Parser, Demnächst-30-Tage-Sektion, Filter + Sortierung, Archivieren/Reaktivieren, Test-Notification + sichtbaren Reminder-Status, idempotente Reminder-Sendung, stündlicher Rust-Loop unabhängig vom Webview-Lifecycle.
+  - **Status-Datum** von 2026-06-06 auf 2026-06-07 hochgezogen. Inhalt sonst gleich (Linux-fokussiert, Win/macOS untested, kein Tag, kein Installer).
+- Tech-Sektion + Bauen/Entwicklung/Lizenz unverändert — die waren schon aktuell.
+
+### Verifikation
+
+- `pnpm lint` ✓ (Biome scannt 46 Files clean — README ist im Scope, keine Format-Verstöße).
+- Optisch geprüft im File-Viewer, keine ASCII-Sonderzeichen-Probleme, keine kaputten Markdown-Sektionen.
+
+### Entscheidung
+
+- **Tagline-Variante A** (Liquiditäts-Radar zuerst) gewählt nach `AskUserQuestion` mit drei Optionen. B war „Abo-Tracker, der echte Kontodeckung kann" (näher am Status quo), C war „Zahlungsradar für den Alltag" (alltagsnah, ohne Fachbegriff). A trifft das Identitäts-Update am genauesten und gibt der Anti-SaaS-Linie den Raum dahinter zurück.
+
+### Status am Tagesende
+
+- Branch `main`, Working tree: `README.md` + `HANDOVER.md` modifiziert. Wird gemeinsam in einem Tagesabschluss-Commit gepusht.
+- Tests: 130 Vitest + 8 Cargo grün (unverändert seit Filter-Commit).
+- Heutige Session-Commits auf `main`: `5b9e27e` (Kontostände) → `014b919` (Validierung) → `9e1a06f` (Archiv) → `a45a791` (Demnächst) → `40f60de` (Test-Notification + Reminder-Status) → `3a26e64` (Filter + Sortierung) → dieser Tagesabschluss-Commit. Sechs Feature-Commits + ein README-Update.
+
+### Nächster Schritt
+
+Pause. Beim nächsten Session-Start: HANDOVER von oben lesen, dann Backlog-Kandidaten (Release-Reife mit `tauri-action`/Updater, UI-Redesign Richtung arsnova, oder ein anderes Backlog-Item nach User-Wahl).
+
+---
+
 ## 2026-06-07 — Claude: Filter + Sortierung für die Abo-Liste
 
 Das letzte sinnvolle Quick-Win-Item der Session: die Abo-Liste hat jetzt eine Filter-Bar mit vier Selects (Konto / Währung / Erinnerungen / Sortierung). Nur sichtbar, wenn ≥ 2 Abos da sind. Konto- und Währungs-Filter blenden sich automatisch aus, wenn nur eine Option existiert. Pure-Function-Logik mit 17 Tests, eigene Komponente, sauber vom bestehenden Archiv-Toggle entkoppelt.
