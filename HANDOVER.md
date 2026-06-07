@@ -9,6 +9,70 @@
 
 ---
 
+## 2026-06-07 — Architektur ➍: RTL-Komponenten-Coverage + App-Logging (Sitzung durch OS-Crash beendet)
+
+10 Commits zwischen 13:40 und 14:21, davon einer Architektur-Etappe (➍ RTL-Setup), fünf Test-Coverage-Commits und ein neues App-Logging-System. Sitzung **nicht regulär beendet** — der Linux-Host (CachyOS) ist um ca. 14:23–14:28 abgestürzt; dieser HANDOVER-Eintrag wird in der Folge-Session am selben Tag nachgetragen. **Kein Arbeitsverlust** (working tree war committed), kein App-internes Crash-Indiz (App-Log zeigt nur zwei `INFO SubTracked startet`-Zeilen um 14:23:33Z und 14:28:19Z UTC — konsistent mit „App lief beim OS-Crash, danach Reboot + Neustart").
+
+### Was passierte (chronologisch)
+
+| Thema | Commits | Hinweise |
+|---|---|---|
+| BACKLOG-Sweep vorab | `be686f0` | Drei kleine BACKLOG-Beschlüsse festgehalten: i18n=Status Quo (Deutsch, keine i18n-Library jetzt), Doku=Status Quo, dazu neues App-Logs-Item als Quick-Win formuliert — letzteres wurde noch dieselbe Sitzung umgesetzt. |
+| Architektur ➍ RTL-Setup | `8761c3d`, `8644999` | `jsdom` als Default-Env in `vitest.config.ts`, `@vitejs/plugin-react` für JSX-Transform in `.tsx`-Tests, `vitest.setup.ts` lädt `@testing-library/jest-dom`-Matcher und ruft `cleanup()` nach jedem Test (RTL 16 koppelt das an globales `afterEach`, das ohne `globals: true` nicht da ist). `tsconfig.json` um `vitest.setup.ts` erweitert, damit Type-Augmentation der jest-dom-Matcher für `tsc --noEmit` sichtbar wird. Erste Tests als Pattern-Vorlagen: `useNotificationPermission.test.tsx` (5 Tests, `renderHook` + `vi.mock("@tauri-apps/plugin-notification")`) und `NotificationPermissionBanner.test.tsx` (4 Tests, `render` + `screen` + `fireEvent.click`). Direkt danach BACKLOG ➍ + RTL-Item abgehakt. |
+| Tool-Recherche festgehalten | `9437c0f` | Drei „Code-Intelligence/Agent-Tools" aus dem Backlog evaluiert: **Fallow** (Rust-native Code-Intel) — sinnvoll, aber erst ab ~20k LOC oder spürbarer Architektur-Drift; bei SubTracked (~3000 LOC) decken Biome + `tsc` + Serena das schon ab. **Graphify** (tree-sitter Knowledge-Graph für Token-Reduktion) — redundant zu Serena (LSP-basiert, semantisch genauer). **Ruflo** (Multi-Agent-Orchestration) — Token-Spar-Versprechen unter konkreter Audit-Kritik („99% Theater, 1% Real"), für Solo-Projekt mit fokussierten Sessions nicht passend. Alle drei dokumentiert, Fallow als „später re-evaluieren"-Item, die anderen beiden als erledigt-mit-Begründung markiert. |
+| Test-Coverage-Sweep | `af76bba`, `c21d05c`, `6fa0b73`, `62bc8d4`, `69e3d31` | **38 neue Tests in 5 Files** — SubscriptionDialog (8), OverviewSection (6, mit `TZ=UTC` in `vitest.config.ts` für Date-Determinismus über CI-Zeitzonen hinweg), AccountsDialog (9), SettingsDialog (7), useSubscriptions-Hook (8). Bewusst **Smoke-Tests, keine Verhaltens-Vertiefung** — Stand jetzt: jede dialoglastige Komponente hat eine Regressions-Trip-Wire, die bricht, wenn jemand versehentlich State/Validation/Props umbaut. Vertiefte Edge-Case-Tests folgen, wenn echte Bugs gefunden werden. |
+| App-Logging | `2e1cf6b` | `tracing 0.1` + `tracing-subscriber 0.3` (env-filter) + `tracing-appender 0.2` als neue Cargo-Deps. Im `lib.rs`-Setup-Block ganz früh: `app_log_dir()` resolven + Dir anlegen, Rolling-File-Appender (`Rotation::DAILY`, prefix `subtracked`, suffix `log`, max 7 Files) → `~/.local/share/com.tcgtvv.subtracked/logs/` (Linux) bzw. OS-Äquivalent, `WorkerGuard` via `app.manage(guard)` am Leben halten (sonst gehen Logs verloren), `tracing_subscriber::registry` mit `env_filter` (default `info`, override via `RUST_LOG`) + zwei fmt-Layer (stdout mit ANSI, Datei ohne). Bestehender `eprintln!` im Reminder-Loop ersetzt durch `tracing::error!(error = %e, "Reminder-Check fehlgeschlagen")`. Damit ist der installierte Build endlich debuggebar (vorher gingen `eprintln!`-Fehler auf Wayland ohne Terminal verloren). |
+
+### Status am Sitzungsende
+
+| Bereich | Stand |
+|---|---|
+| Branch | `main`, auf origin/main, HEAD `2e1cf6b` |
+| Working tree | clean bis auf untracked `assets/logo2.png`/`logo3.png` (alte Nano-Banana-Backups vom 5./6.6., siehe vorherige HANDOVER-Einträge) |
+| Test-Stand | Frontend 47 RTL-Tests neu + altbestand → laut Memory-Update im App-Logs-Commit jetzt **74 Tests** insgesamt grün |
+| Build/Tests lokal | Vor dem Crash: `pnpm lint`, `pnpm test:run`, `cargo clippy`, `cargo fmt --check` zu allen Commits grün (Lefthook hat sauber durchgelassen, sonst gäbe es keine Commits). Nach Crash nicht re-verifiziert. |
+| App-Log | Zwei Startup-Einträge in `~/.local/share/com.tcgtvv.subtracked/logs/subtracked.2026-06-07.log` (14:23:33Z + 14:28:19Z UTC). Logging-System funktioniert. |
+
+### Nächster Schritt
+
+Kandidaten unverändert seit gestern (siehe vorheriger Eintrag), aber durch die heutige ➍-Etappe verschiebt sich die Architektur-Diskussion etwas:
+
+- **🐛 Tray-Aufpopp-Bug** (Backlog Z. 26) — KDE-Plasma-Wayland; weiterhin offen.
+- **🏛️ Architektur ➑** — Doku-Strategie (i18n ist auf Status Quo entschieden).
+- **🎨 UI-Redesign Richtung arsnova** (Backlog Z. 88) — vor v0.1.0 sinnvoll, eigene Session-Reihe.
+- **🚀 Matrix-Build-Pipeline** (Z. 89) — `tauri-action`-Workflow für signierten v0.1.0 + In-App-Updater.
+- **Vertiefte Komponenten-Tests** — die Smoke-Tests aus heute sind die Tripwire-Schicht; falls echte Validation/Edge-Case-Bugs auftauchen, kann jeweils der entsprechende `.test.tsx`-File ausgebaut werden.
+
+### Wichtige Entscheidungen + Begründung
+
+- **RTL-Smoke-Tests statt Verhaltens-Vertiefung**: bewusst breit statt tief. Jede dialoglastige Komponente bekommt eine Regressions-Tripwire, nicht eine Verhaltens-Spezifikation. Begründung: bei einem Solo-Projekt in Frühphase ist Refactor-Sicherheit wertvoller als formale Verhaltens-Doku via Tests. Tiefere Tests gibt's, wenn ein konkreter Bug das rechtfertigt.
+- **`TZ=UTC` in `vitest.config.ts`** statt in jedem Date-Test einzeln: globaler Hebel, ein Strang. OverviewSection war der erste Test, der mit lokaler Berlin-Zeit anders kalkuliert hätte als CI (Ubuntu-Runner laufen oft UTC). Repository-Convention statt Per-Test-Workaround.
+- **`tracing` Setup ganz früh in `run()`, vor allem anderen**: damit auch Setup-Fehler in die Logs landen. Wenn `app_log_dir()` selbst scheitert, läuft Logging nicht — aber der Initial-`eprintln!` als Fallback gibt einen Hinweis im Dev-Modus. Bewusst kein Fallback-Logger auf `/tmp` o.ä. — Komplexität ohne realen Nutzen.
+- **`WorkerGuard` via `app.manage(guard)`**: das `tracing-appender`-Crate-Doku ist explizit: WorkerGuard muss am Leben bleiben, sonst werden Buffers nicht geflusht beim Shutdown. `app.manage()` ist der Tauri-idiomatische Weg, etwas an die App-Lifetime zu binden.
+- **Drei Backlog-Tools (Fallow/Graphify/Ruflo) bewusst dokumentiert verworfen, nicht nur Item gelöscht**: damit die Recherche reproduzierbar ist und bei späterem Re-Evaluieren (z.B. Fallow ab 20k LOC) der Kontext da ist. Erspart, dieselbe Recherche in 6 Monaten zu wiederholen.
+
+### Gotchas / Stolperfallen
+
+- **OS-Crash beendet die Sitzung**: kein App-internes Indiz im Log (nur zwei Startup-Zeilen). Das tracing-System loggt aktuell nur Startup + Reminder-Errors — kein graceful-shutdown-Hook, also würden OS-Crashes generell unsichtbar bleiben. Wenn später ein App-Hang/Crash unterscheidbar werden soll, müsste man entweder einen `panic_hook` für Rust-Panics setzen oder beim regulären Shutdown ein `INFO SubTracked beendet` schreiben — beides nicht jetzt nötig.
+- **RTL 16 koppelt `cleanup()` an globales `afterEach`**: ohne `globals: true` in `vitest.config.ts` (haben wir nicht) muss `cleanup()` manuell in `vitest.setup.ts` nach jedem Test gerufen werden. Steht in der RTL-16-Release-Notes, ist beim ersten Setup einmal eine Stolperfalle. Verifiziert: ohne diesen Cleanup bleiben DOM-Knoten zwischen Tests übrig, was zu Mehrfach-Matches in `screen.getByRole(...)` führt.
+- **`@vitejs/plugin-react` ist Pflicht für `.tsx`-Tests**: Vitest nutzt esbuild, das macht TS-Transform aber nicht React-JSX-Pragma. Ohne Plugin schlagen JSX-Statements in Tests mit unverständlichem Parser-Error fehl.
+- **App-Log-Pfad ist OS-spezifisch und nicht im Repo**: Linux `~/.local/share/com.tcgtvv.subtracked/logs/`, macOS `~/Library/Logs/com.tcgtvv.subtracked/`, Windows `%LOCALAPPDATA%\com.tcgtvv.subtracked\logs\`. Steht im App-Logs-Commit, sollte aber für Doku/Issues geläufig sein — User-Reports der Form „die App tut nichts" können hier oft sofort entschärft werden.
+- **Rolling-File `max 7 Files`**: pragmatisch gewählt. Eine Woche tägliche Logs reicht für die meisten Debug-Szenarien, ohne dass `~/.local/share/` ungebremst wächst. Falls länger nötig: Konstante in `lib.rs` anheben.
+
+### Geänderte/neue Memories
+
+- **`.serena/memories/tech_stack.md`** im App-Logs-Commit aktualisiert: neuer Logging-Block (`tracing`/`tracing-subscriber`/`tracing-appender`), Test-Stand auf 74 hochgezogen.
+- **Keine Auto-Memory-Änderungen** — die heutige Session war im etablierten Workflow (oft committen, Quick-Wins, Backlog-driven), nichts überraschend Neues über User-Vorlieben oder Projekt-Rahmen.
+
+### Offen / nicht geklärt
+
+- **Tray-Aufpopp-Bug** (Backlog Z. 26) — KDE-Plasma-Wayland, unverändert seit gestern.
+- **Architektur ➑** — Doku-Strategie offen (i18n entschieden = Status Quo).
+- **`assets/logo2.png`/`logo3.png` untracked** — siehe vorherige Einträge; weiterhin reines Cleanup-Item ohne Dringlichkeit.
+- **`pnpm test:run` und `cargo clippy` nach Crash nicht re-verifiziert** — Folge-Session sollte das einmal kurz durchspielen, falls Caches/State im File-System inkonsistent geworden sind (vermutlich nicht, aber billig zu prüfen).
+
+---
+
 ## 2026-06-06 — Quick-Win-Marathon: README, Smoke-Test, ErrorBoundary, KRW
 
 11 Commits am Nachmittag, fünf Backlog-Items abgehakt, plus der erste lokale Production-Smoke-Test als psychologischer Release-Kandidat. Nach den Architektur-Etappen ➊/➋/➌ vormittags ging es jetzt um Sauberkeit, Distribution-Test und Polish.
