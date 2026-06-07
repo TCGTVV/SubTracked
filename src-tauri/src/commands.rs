@@ -171,6 +171,21 @@ pub async fn update_subscription(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub async fn set_subscription_active(
+    state: State<'_, AppState>,
+    id: i64,
+    active: bool,
+) -> Result<(), String> {
+    sqlx::query("UPDATE subscriptions SET active = ? WHERE id = ?")
+        .bind(active)
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn insert_reminder_if_new(
     state: State<'_, AppState>,
     subscription_id: i64,

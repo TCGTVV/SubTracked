@@ -70,6 +70,10 @@ export async function updateSubscription(s: Subscription): Promise<void> {
   await invoke("update_subscription", { sub: s });
 }
 
+export async function setSubscriptionActive(id: number, active: boolean): Promise<void> {
+  await invoke("set_subscription_active", { id, active });
+}
+
 export async function deleteSubscription(id: number): Promise<void> {
   await invoke("delete_subscription", { id });
 }

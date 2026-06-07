@@ -44,6 +44,7 @@ pub fn run() {
             commands::delete_account,
             commands::count_subs_for_account,
             commands::update_subscription,
+            commands::set_subscription_active,
             commands::insert_reminder_if_new,
         ])
         .setup(|app| {

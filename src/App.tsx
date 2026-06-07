@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
@@ -6,7 +6,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
-import { deleteSubscription } from "./lib/db";
+import { deleteSubscription, setSubscriptionActive } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
 import type { Subscription } from "./types";
 import "./App.css";
@@ -18,6 +18,7 @@ function App() {
 
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
+  const [showArchived, setShowArchived] = useState(false);
   const subDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
@@ -25,6 +26,10 @@ function App() {
   useEffect(() => {
     if (subOpenSeq > 0) subDialogRef.current?.showModal();
   }, [subOpenSeq]);
+
+  const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
+  const archivedCount = subs.length - activeSubs.length;
+  const visibleSubs = showArchived ? subs : activeSubs;
 
   function startNew() {
     setEditingSub(null);
@@ -53,6 +58,15 @@ function App() {
     if (!window.confirm(`„${sub.name}“ wirklich löschen?`)) return;
     try {
       await deleteSubscription(sub.id);
+      await reloadAll();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleToggleActive(sub: Subscription) {
+    try {
+      await setSubscriptionActive(sub.id, !sub.active);
       await reloadAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -93,18 +107,33 @@ function App() {
       {!loading && !error && subs.length === 0 && (
         <p className="empty">Noch keine Abos angelegt.</p>
       )}
-      {subs.length > 0 && (
+
+      {archivedCount > 0 && (
+        <label className="archive-toggle">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+          />
+          <span>
+            Archivierte anzeigen ({archivedCount}
+            {archivedCount === 1 ? " Abo" : " Abos"})
+          </span>
+        </label>
+      )}
+
+      {visibleSubs.length > 0 && (
         <ul className="sub-list">
-          {subs.map((sub) => {
+          {visibleSubs.map((sub) => {
             const account = accountName(sub.accountId);
             return (
-              <li key={sub.id} className="sub-item">
+              <li key={sub.id} className={`sub-item${sub.active ? "" : " sub-archived"}`}>
                 <div className="sub-info">
                   <span className="sub-name">{sub.name}</span>
                   <span className="sub-next">
-                    nächste Fälligkeit: {formatNextDue(sub)}
+                    {sub.active ? <>nächste Fälligkeit: {formatNextDue(sub)}</> : <>archiviert</>}
                     {account && <> · {account}</>}
-                    {!sub.notify && <> · stumm</>}
+                    {sub.active && !sub.notify && <> · stumm</>}
                   </span>
                 </div>
                 <div className="sub-meta">
@@ -116,6 +145,14 @@ function App() {
                     aria-label={`${sub.name} bearbeiten`}
                   >
                     Bearbeiten
+                  </button>
+                  <button
+                    type="button"
+                    className="sub-archive"
+                    onClick={() => void handleToggleActive(sub)}
+                    aria-label={`${sub.name} ${sub.active ? "archivieren" : "reaktivieren"}`}
+                  >
+                    {sub.active ? "Archivieren" : "Reaktivieren"}
                   </button>
                   <button
                     type="button"
@@ -132,7 +169,7 @@ function App() {
         </ul>
       )}
 
-      <OverviewSection subscriptions={subs} accounts={accounts} />
+      <OverviewSection subscriptions={activeSubs} accounts={accounts} />
 
       <SubscriptionDialog
         key={`${editingSub?.id ?? "new"}-${subOpenSeq}`}
