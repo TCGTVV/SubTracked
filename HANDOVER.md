@@ -9,6 +9,33 @@
 
 ---
 
+## 2026-06-08 — Codex: Serena-MCP fuer Codex eingerichtet
+
+Kurze Setup-Session vor der naechsten Facharbeit: User fragte, ob Codex nicht selbst auf denselben Serena-MCP-Server zugreifen kann wie Claude Code in VS Code. Ergebnis: ja, Codex ist jetzt global mit Serena verdrahtet; die aktuell laufende Codex-Session sieht die Tools aber erst nach Neustart/neuem Thread.
+
+### Geaendert
+
+- `~/.codex/config.toml` (ausserhalb des Repos) per `codex mcp add serena -- ...` erweitert:
+  - `command = "uvx"`
+  - `args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--context", "ide-assistant", "--project", "/home/legr/SubTracked"]`
+- Bewusst absoluter Projektpfad statt `--project "."`, weil Codex-MCP ohne `cwd`-Option sonst je nach Startkontext das falsche Verzeichnis aktivieren koennte.
+- `uvx --from git+https://github.com/oraios/serena serena --help` einmal erfolgreich ausgefuehrt, damit Serena im uv-Cache liegt. Dabei kam nur eine Python-3.14/Pydantic-V1-Warnung aus `anthropic/_compat.py`, der CLI-Help lief trotzdem sauber.
+
+### Verifikation
+
+- `codex mcp get serena` zeigt `enabled: true`, Transport `stdio`, Command `uvx`, Args mit `--project /home/legr/SubTracked`.
+- `codex mcp list` zeigt Serena als `enabled`.
+- `tool_search` findet in der laufenden Session weiterhin keine Serena-Tools. Erwartet: MCP-Server werden beim Session-Start geladen; neuer Codex-Thread/Restart noetig.
+- Repo-Stand vor HANDOVER-Update war clean (`main...origin/main`).
+
+### Gotchas
+
+- In VS Code lag zusaetzlich ein synchronisierter MCP-Eintrag unter `/home/legr/.config/Code/User/mcp.json`, der auf macOS-Pfade und ein anderes Projekt zeigte (`/Users/.../arsnova.eu`). Den nicht fuer Codex kopieren.
+- Die portable Repo-Datei `.mcp.json` bleibt weiterhin die Claude-Code-Seite fuer SubTracked (`uvx --from git+https://github.com/oraios/serena ... --project "."`).
+- Naechster Codex-Start sollte zuerst pruefen, ob Serena-Tools sichtbar sind, dann idealerweise `initial_instructions`/Projektaktivierung ueber Serena nutzen.
+
+---
+
 ## 2026-06-07 — Claude: README an den neuen Produktstand angepasst (Tagesabschluss)
 
 Letzter Schritt der Session: die README untervernkaufte das Projekt nach den heutigen Erweiterungen deutlich („Persönlicher Abo-Tracker … kündigt Fälligkeiten an … zeigt Konten 6 Monate in die Zukunft"). Heute haben wir aus der App einen Liquiditäts-Radar gemacht — das gehört in die Tagline. User mochte den Satz aus der Sitzungs-Bilanz „SubTracked ist heute eine andere App als heute morgen" und wollte das in der README spiegeln.
