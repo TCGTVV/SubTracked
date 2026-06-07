@@ -124,18 +124,32 @@ describe("SubscriptionDialog", () => {
     expect(mockAddSubscription).not.toHaveBeenCalled();
   });
 
-  it("blockiert Submit bei leerem Namen", async () => {
+  it("zeigt feldnahe Fehlermeldung bei leerem Namen + fokussiert das Feld", async () => {
     renderDialog(null);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "   " } });
     fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
 
-    // microtask drain, dann verifizieren dass nichts passiert ist
     await Promise.resolve();
     expect(mockAddSubscription).not.toHaveBeenCalled();
+    const nameInput = screen.getByLabelText("Name");
+    expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    expect(nameInput).toHaveFocus();
+    expect(screen.getByText("Bitte Namen eingeben.")).toBeInTheDocument();
   });
 
-  it("blockiert Submit bei Betrag <= 0", async () => {
+  it("zeigt feldnahe Fehlermeldung bei leerem Betrag", async () => {
+    renderDialog(null);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await Promise.resolve();
+    expect(mockAddSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText("Bitte Betrag eingeben.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Betrag")).toHaveFocus();
+  });
+
+  it("zeigt feldnahe Fehlermeldung bei Betrag <= 0", async () => {
     renderDialog(null);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
     fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "0" } });
@@ -143,6 +157,29 @@ describe("SubscriptionDialog", () => {
 
     await Promise.resolve();
     expect(mockAddSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText(/Betrag muss größer als 0/)).toBeInTheDocument();
+  });
+
+  it("räumt den Validierungs-Fehler weg, sobald der User wieder tippt", async () => {
+    renderDialog(null);
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+    await Promise.resolve();
+    expect(screen.getByText("Bitte Namen eingeben.")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "X" } });
+    expect(screen.queryByText("Bitte Namen eingeben.")).not.toBeInTheDocument();
+  });
+
+  it("zeigt Fehler bei Vorlauf außerhalb 0–365", async () => {
+    renderDialog(null);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Vorlauf (Tage)"), { target: { value: "999" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await Promise.resolve();
+    expect(mockAddSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText(/Vorlauf muss zwischen 0 und 365/)).toBeInTheDocument();
   });
 
   it("akzeptiert Komma als Dezimaltrenner und rundet auf Cent", async () => {
@@ -175,7 +212,7 @@ describe("SubscriptionDialog", () => {
     );
   });
 
-  it("blockiert Submit bei ungueltiger Eingabe (Buchstaben)", async () => {
+  it("zeigt feldnahe Fehlermeldung bei ungueltiger Eingabe (Buchstaben)", async () => {
     renderDialog(null);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
     fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "abc" } });
@@ -183,6 +220,7 @@ describe("SubscriptionDialog", () => {
 
     await Promise.resolve();
     expect(mockAddSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText(/Betrag ungültig/)).toBeInTheDocument();
   });
 
   it("zeigt eine Fehler-Meldung an, wenn die DB-Operation fehlschlägt", async () => {

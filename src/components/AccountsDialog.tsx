@@ -1,4 +1,4 @@
-import { type FormEvent, type Ref, useId, useState } from "react";
+import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
@@ -22,6 +22,12 @@ interface FormState {
   buffer: string;
 }
 
+interface FieldErrors {
+  name?: string;
+  balance?: string;
+  buffer?: string;
+}
+
 const EMPTY_FORM: FormState = {
   name: "",
   note: "",
@@ -40,23 +46,40 @@ function centsToInput(cents: number, currency: string): string {
   });
 }
 
+function parseToCents(input: string, currency: string): number | null {
+  const trimmed = input.trim();
+  if (trimmed === "") return 0;
+  const num = parseAmountInput(trimmed);
+  if (num === null) return null;
+  return Math.round(num * getCurrencySubdivisor(currency));
+}
+
 export function AccountsDialog({ ref, accounts, onChanged }: Props) {
   const nameId = useId();
   const noteId = useId();
   const currencyId = useId();
   const balanceId = useId();
   const bufferId = useId();
+  const nameErrorId = useId();
+  const balanceErrorId = useId();
+  const bufferErrorId = useId();
+
+  const nameRef = useRef<HTMLInputElement>(null);
+  const balanceRef = useRef<HTMLInputElement>(null);
+  const bufferRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
   function resetForm() {
     setForm(EMPTY_FORM);
     setEditingId(null);
     setSubmitting(false);
     setError(null);
+    setErrors({});
   }
 
   function startEdit(a: Account) {
@@ -69,36 +92,57 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
       buffer: centsToInput(a.minBufferCents, a.currency),
     });
     setError(null);
+    setErrors({});
   }
 
-  function parseToCents(input: string, currency: string): number | null {
-    const trimmed = input.trim();
-    if (trimmed === "") return 0;
-    const num = parseAmountInput(trimmed);
-    if (num === null) return null;
-    return Math.round(num * getCurrencySubdivisor(currency));
+  function updateField<K extends keyof FormState>(field: K, value: FormState[K]) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function clearFieldError(field: keyof FieldErrors) {
+    setErrors((prev) => {
+      if (prev[field] === undefined) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function validate(): {
+    errors: FieldErrors;
+    balanceCents: number;
+    minBufferCents: number;
+  } {
+    const next: FieldErrors = {};
+    if (form.name.trim() === "") next.name = "Bitte Namen eingeben.";
+
+    const balanceCents = parseToCents(form.balance, form.currency);
+    if (balanceCents === null) {
+      next.balance = "Saldo ungültig — bitte Zahl eingeben (z.B. 500 oder 500,00).";
+    }
+
+    const minBufferCents = parseToCents(form.buffer, form.currency);
+    if (minBufferCents === null) {
+      next.buffer = "Mindestpuffer ungültig — bitte Zahl eingeben.";
+    } else if (minBufferCents < 0) {
+      next.buffer = "Mindestpuffer darf nicht negativ sein.";
+    }
+
+    return { errors: next, balanceCents: balanceCents ?? 0, minBufferCents: minBufferCents ?? 0 };
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const trimmedName = form.name.trim();
-    if (!trimmedName) return;
-
-    const balanceCents = parseToCents(form.balance, form.currency);
-    if (balanceCents === null) {
-      setError("Saldo ungültig — bitte Zahl eingeben (z.B. 500 oder 500,00).");
-      return;
-    }
-    const minBufferCents = parseToCents(form.buffer, form.currency);
-    if (minBufferCents === null) {
-      setError("Mindestpuffer ungültig — bitte Zahl eingeben.");
-      return;
-    }
-    if (minBufferCents < 0) {
-      setError("Mindestpuffer darf nicht negativ sein.");
+    const { errors: validation, balanceCents, minBufferCents } = validate();
+    if (Object.keys(validation).length > 0) {
+      setErrors(validation);
+      if (validation.name) nameRef.current?.focus();
+      else if (validation.balance) balanceRef.current?.focus();
+      else if (validation.buffer) bufferRef.current?.focus();
       return;
     }
 
+    setErrors({});
     setSubmitting(true);
     setError(null);
     try {
@@ -106,7 +150,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
       if (editingId != null) {
         await updateAccount({
           id: editingId,
-          name: trimmedName,
+          name: form.name.trim(),
           note,
           currency: form.currency,
           balanceCents,
@@ -114,7 +158,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
         });
       } else {
         await addAccount({
-          name: trimmedName,
+          name: form.name.trim(),
           note: note ?? undefined,
           currency: form.currency,
           balanceCents,
@@ -202,11 +246,22 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
             <label htmlFor={nameId}>Name</label>
             <input
               id={nameId}
+              ref={nameRef}
               type="text"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={(e) => {
+                updateField("name", e.target.value);
+                clearFieldError("name");
+              }}
               required
+              aria-invalid={errors.name ? true : undefined}
+              aria-describedby={errors.name ? nameErrorId : undefined}
             />
+            {errors.name && (
+              <span id={nameErrorId} className="field-error" role="alert">
+                {errors.name}
+              </span>
+            )}
           </div>
 
           <div className="field">
@@ -214,7 +269,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
             <select
               id={currencyId}
               value={form.currency}
-              onChange={(e) => setForm({ ...form, currency: e.target.value })}
+              onChange={(e) => updateField("currency", e.target.value)}
             >
               {CURRENCY_OPTIONS.map((c) => (
                 <option key={c} value={c}>
@@ -228,27 +283,50 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
             <label htmlFor={balanceId}>Aktueller Saldo</label>
             <input
               id={balanceId}
+              ref={balanceRef}
               type="text"
               inputMode="decimal"
               value={form.balance}
-              onChange={(e) => setForm({ ...form, balance: e.target.value })}
+              onChange={(e) => {
+                updateField("balance", e.target.value);
+                clearFieldError("balance");
+              }}
               placeholder="z.B. 500 oder 500,00"
+              aria-invalid={errors.balance ? true : undefined}
+              aria-describedby={errors.balance ? balanceErrorId : undefined}
             />
+            {errors.balance && (
+              <span id={balanceErrorId} className="field-error" role="alert">
+                {errors.balance}
+              </span>
+            )}
           </div>
 
           <div className="field">
             <label htmlFor={bufferId}>Mindestpuffer (optional)</label>
             <input
               id={bufferId}
+              ref={bufferRef}
               type="text"
               inputMode="decimal"
               value={form.buffer}
-              onChange={(e) => setForm({ ...form, buffer: e.target.value })}
+              onChange={(e) => {
+                updateField("buffer", e.target.value);
+                clearFieldError("buffer");
+              }}
               placeholder="z.B. 100"
+              aria-invalid={errors.buffer ? true : undefined}
+              aria-describedby={errors.buffer ? bufferErrorId : undefined}
             />
-            <small className="field-hint">
-              Wird in der Übersicht gewarnt, wenn der Saldo darunter fallen würde.
-            </small>
+            {errors.buffer ? (
+              <span id={bufferErrorId} className="field-error" role="alert">
+                {errors.buffer}
+              </span>
+            ) : (
+              <small className="field-hint">
+                Wird in der Übersicht gewarnt, wenn der Saldo darunter fallen würde.
+              </small>
+            )}
           </div>
 
           <div className="field">
@@ -257,7 +335,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
               id={noteId}
               type="text"
               value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              onChange={(e) => updateField("note", e.target.value)}
               placeholder="z.B. IBAN-Endung oder Karte"
             />
           </div>

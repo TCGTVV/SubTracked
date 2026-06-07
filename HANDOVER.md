@@ -9,6 +9,54 @@
 
 ---
 
+## 2026-06-07 — Claude: Feldnahe Formular-Validierung in Abo- und Konten-Dialog
+
+Quick-Win direkt nach dem Kontostände-Feature: der Codex-Review-Befund „bei ungültigem Input macht `SubscriptionDialog` still `return`" ist behoben. Beide Dialoge (Abo + Konto) haben jetzt feldnahe Fehlermeldungen, `aria-invalid`, `aria-describedby` und Fokus-Sprung auf das erste fehlerhafte Feld. Tippen räumt den Fehler weg. Konsistente Behandlung in beiden Dialogen, geteilte CSS.
+
+### Geändert
+
+- `src/components/SubscriptionDialog.tsx` — neuer `FieldErrors`-Typ (name/amount/leadDays), `validate()`-Helper sammelt alle Fehler und liefert daneben das geparste `amountNumber`, damit Submit-Pfad nicht doppelt parst. `useRef` für die drei textuellen Inputs (DateField ist eigener Komponententyp, anchorDate ist über `todayISO()` immer gefüllt, daher kein Ref nötig). `clearFieldError(field)` läuft im `onChange` und entfernt den jeweiligen Eintrag aus dem State. `aria-invalid` + `aria-describedby` werden nur gesetzt, wenn ein Fehler existiert. Fokus-Logik: erstes Fehler-Feld in DOM-Reihenfolge (name → amount → leadDays).
+- `src/components/AccountsDialog.tsx` — analoge Umstellung. Bisher gab's nur einen globalen Error-Banner; jetzt feldnah für name/balance/buffer. `parseToCents` aus dem Component-Body in eine Modul-Funktion ausgezogen, damit sie auch von `validate()` außerhalb des Submit-Pfads nutzbar ist. Validierung nutzt `useRef` analog zum Abo-Dialog. Hint unter Mindestpuffer-Feld wird nur gezeigt, wenn kein Fehler aktiv ist (visuell sauber).
+- `src/App.css` — neue `.field-error`-Klasse (Schriftgröße 0.8rem, Rot, `display: block`); globaler `[aria-invalid="true"]`-Selector setzt roten Border + Outline für jedes als invalid markierte Input. Dark-Mode-Anpassung (`#fca5a5` statt `#c00`).
+
+### Tests
+
+- `src/components/SubscriptionDialog.test.tsx` — 4 neue Tests, 3 alte „blockiert Submit"-Tests aufgewertet: prüfen jetzt auch die feldnahe Meldung + `aria-invalid` + Fokus. Neuer Test "räumt den Validierungs-Fehler weg, sobald der User wieder tippt". Neuer Test für Vorlauf-Range (999 → Fehler). Stand: 12 Tests im File grün.
+- `AccountsDialog.test.tsx` — bestehender Test „zeigt eine Validierungs-Meldung bei ungültigem Saldo" greift weiterhin (sucht `role="alert"` mit `/Saldo ungültig/`, mein `<span role="alert">` triggert das). Keine Test-Änderung nötig.
+
+### Verifikation
+
+- `pnpm test:run` ✓ — **98 Tests grün** (vorher 95, +3 in dieser Session).
+- `pnpm lint` ✓ ohne Auto-Fix-Bedarf.
+- `cargo fmt --check` ✓ / `cargo clippy --all-targets -- -D warnings` ✓.
+- `pnpm tauri dev` gestartet; User hat manuell durchgeklickt und „passt alles" bestätigt: leerer Submit → feldnahe Meldungen + roter Rand + Fokus aufs erste Feld; Tippen räumt auf; ungültige Werte (`abc`, `999`, `-100`) → spezifische Meldung am richtigen Feld.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`role="alert"` auf der feldnahen Fehler-Span**, nicht auf einem globalen Container. Begründung: Screen-Reader liest den konkreten Fehler vor, sobald er erscheint, ohne den User aus dem Kontext zu reißen. Der globale Banner für DB-Fehler bleibt zusätzlich erhalten — das ist eine andere Klasse von Fehler (transient, system-seitig) und gehört nicht ans Eingabefeld.
+- **Fokus-Logik in DOM-Reihenfolge** (name → amount → leadDays), nicht in Validierungs-Reihenfolge. Begründung: passt zur visuellen Erwartung des Users — er liest top-down, das erste rote Feld bekommt den Fokus. Bei nur einem Fehler ist es identisch; bei mehreren ist DOM-Reihenfolge intuitiver.
+- **`clearFieldError` im `onChange` statt im `onBlur`**: sofortiges Feedback. Sobald der User korrigiert, verschwindet die Meldung. `onBlur` hätte den Fehler bis zum nächsten Tab-Wechsel hängen lassen — unnötig hart.
+- **Submit-Button bleibt im AccountsDialog bei leerem Namen disabled**, im SubscriptionDialog dagegen nicht. Begründung: AccountsDialog hatte das schon vor diesem Quick-Win als belt-and-suspenders; ich lasse es so. SubscriptionDialog disabled den Submit nur bei `submitting`-State, weil dort mehr Felder zu validieren sind und der User explizites Submit-Feedback bekommt — sonst wirkt's, als ob „Anlegen" einfach nichts tut.
+- **`parseToCents` aus dem AccountsDialog-Component-Body in eine Modul-Funktion ausgezogen**: hängt nicht vom Component-State ab und ist durch `validate()` auch außerhalb des Submit-Handlers nötig. Kleiner Cleanup, keine Über-Abstraktion.
+- **CSS-Selector `[aria-invalid="true"]` als globaler Stil**: greift automatisch für alle Felder ohne Klassen-Duplikation. Single source of truth für „roter Border bei invalid". Falls künftig irgendwo `aria-invalid` gesetzt wird, sieht's konsistent aus.
+
+### Gotchas
+
+- **jsdom + RTL `toHaveFocus()`**: funktioniert nur, wenn `autoFocus` nicht gleichzeitig auf demselben Feld liegt — sonst hat es Focus auch ohne Validierungs-Logik. Im Abo-Dialog hat das Name-Feld `autoFocus`, das ist Initial-State. Der Test prüft den Fokus *nach* einem Submit auf leerem Name-Feld; weil keine Tab-Bewegung stattfand, ist `autoFocus` weiterhin aktiv und der Test grün. Falls jemand `autoFocus` später entfernt: Test bleibt valide, weil meine `nameRef.current?.focus()`-Logik den Fokus dann aktiv setzt.
+- **`role="alert"` mehrfach im Dialog**: bei mehreren validation errors gleichzeitig sind mehrere alerts da. Standard-RTL `getByRole("alert")` würde das als Mehrfach-Match werfen. Tests nutzen daher `getByText(/.../)` für die spezifische Meldung statt `getByRole("alert")`. Bestehender Test „Fehler-Meldung wenn DB-Operation fehlschlägt" nutzt valide Inputs → genau ein alert → bleibt grün.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: 4 modifizierte Dateien (`App.css`, `SubscriptionDialog.tsx`, `AccountsDialog.tsx`, `SubscriptionDialog.test.tsx`) + `BACKLOG.md` + `HANDOVER.md`. Noch nicht committet.
+- Tests grün: 98 Vitest, 8 Cargo.
+- Live-Smoke vom User bestätigt.
+
+### Nächster Schritt
+
+Direkt anschließend in derselben Session: **Abo archivieren/pausieren** (Backlog-Item, `active`-Spalte existiert bereits im Schema). Danach: **Nächste-Fälligkeiten-Ansicht** als primärer Arbeitsmodus.
+
+---
+
 ## 2026-06-07 — Claude: Kontostände + Deckungswarnung + Mehrwährungs-Schnitt
 
 Claude hat den **größten Produkthebel aus dem Codex-Review** umgesetzt: SubTracked rechnet jetzt echte Kontodeckung, nicht nur Abflüsse. Konten haben Währung, aktuellen Saldo und optionalen Mindestpuffer; die Übersicht zeigt pro Buchung den Saldo danach und warnt früh, wenn das Konto unter Puffer/Null fällt. Multi-Currency wird sauber pro Konto geschnitten — der pauschale EUR-Hardcode (Codex-Befund) ist weg.

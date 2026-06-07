@@ -259,6 +259,27 @@ select:focus-visible {
   color: #888;
 }
 
+.field-error {
+  font-size: 0.8rem;
+  color: #c00;
+  display: block;
+}
+
+[aria-invalid="true"] {
+  border-color: #c00;
+  outline-color: #c00;
+}
+
+@media (prefers-color-scheme: dark) {
+  .field-error {
+    color: #fca5a5;
+  }
+
+  [aria-invalid="true"] {
+    border-color: #fca5a5;
+  }
+}
+
 .account-add {
   display: flex;
   flex-direction: column;
