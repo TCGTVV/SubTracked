@@ -4,16 +4,36 @@
 
 # SubTracked
 
-Persönlicher Abo-Tracker als native Desktop-App. Verwaltet wiederkehrende Zahlungen, kündigt Fälligkeiten als System-Notifications an und zeigt deine Konten 6 Monate in die Zukunft. Im Tray leise im Hintergrund.
+Liquiditäts-Radar für wiederkehrende Zahlungen. Pflegt deine Abos, schreibt deine Konten in die Zukunft fort und warnt früh, wenn das Geld eng wird. Native Desktop-App, im Tray leise im Hintergrund.
 
 Im Eigenbedarf gebaut: lokal, eigene Daten, kein Account, kein SaaS — Tabellen-Tracking ersetzt durch einen Client, dem man die Pflege nicht jedes Mal antrainieren muss.
 
 ## Funktionen
 
-- **Abos verwalten** mit Name, Betrag, Konto, Intervall (monatlich / quartalsweise / jährlich), erster Fälligkeit
-- **Erinnerungen** als native System-Notifications, einstellbare Vorlaufzeit pro Abo, pro Abo stummschaltbar
-- **Übersicht**: monatliche Fixkosten-Baseline und 6-Monats-Deckung pro Konto
-- **Hintergrund-Betrieb**: Tray-Icon, Fenster-X versteckt das Fenster (App läuft weiter), optional Autostart beim Login
+### Konten + Deckung
+
+- **Konten mit Saldo und Mindestpuffer**: pro Konto Währung, aktueller Stand und optionaler Sicherheitsbetrag. Saldo wird ab heute mit den anstehenden Abbuchungen fortgeschrieben.
+- **Deckungswarnung**: orange Markierung sobald der Forecast unter den Mindestpuffer fällt, rot sobald er unter null geht. Pro Buchung sieht man den Saldo danach.
+- **Saubere Mehrwährungs-Sicht**: jedes Konto rechnet in seiner eigenen Währung, fremde Abos werden ehrlich als „N Abos in anderer Währung werden hier nicht berücksichtigt" markiert statt heimlich umgerechnet.
+
+### Abos
+
+- **Verwalten** mit Name, Betrag, Konto, Intervall (monatlich / quartalsweise / jährlich) und erster Fälligkeit. Toleranter Betrags-Parser (akzeptiert `12,99`, `12.99`, `1.234,56`).
+- **Demnächst (30 Tage)**: kompakte Liste aller Fälligkeiten im nächsten Monat — der tägliche Arbeitsmodus.
+- **Filter und Sortierung** für die Abo-Liste (nach Konto, Währung, Erinnerungs-Status; sortierbar nach Name, Fälligkeit, Betrag).
+- **Archivieren statt Löschen**: gekündigte oder pausierte Abos verschwinden aus dem Forecast, lassen sich aber jederzeit reaktivieren.
+
+### Erinnerungen
+
+- **Native System-Notifications** mit einstellbarer Vorlaufzeit pro Abo, pro Abo stummschaltbar.
+- **Sichtbarer Reminder-Status** in den Einstellungen: letzte Prüfung, nächste geplante Prüfung, letzte gesendete Erinnerung — plus Button für eine sofortige Test-Notification.
+- **Idempotente Sendung**: ein Reminder wird erst dann als „gesendet" markiert, wenn die Notification wirklich rausging.
+
+### Hintergrund-Betrieb
+
+- **Tray-Icon**, Fenster-X versteckt das Fenster (App läuft weiter).
+- **Autostart beim Login** über die Einstellungen aktivierbar.
+- **Stündlicher Reminder-Loop** im Rust-Hauptprozess — unabhängig vom Webview-Lifecycle, läuft auch wenn das Fenster versteckt ist.
 
 ## Tech
 
@@ -26,7 +46,7 @@ Im Eigenbedarf gebaut: lokal, eigene Daten, kein Account, kein SaaS — Tabellen
 
 ## Status
 
-Funktional komplett für den Eigenbedarf (Stand 2026-06-06). Entwickelt und genutzt auf Linux (KDE/Cachyos). Windows und macOS sollten technisch funktionieren, sind aber nicht getestet. Noch keine getaggte Version, keine vorgefertigten Installer — siehe Quellbau unten.
+Funktional komplett für den Eigenbedarf (Stand 2026-06-07). Entwickelt und genutzt auf Linux (KDE/Cachyos). Windows und macOS sollten technisch funktionieren, sind aber nicht getestet. Noch keine getaggte Version, keine vorgefertigten Installer — siehe Quellbau unten.
 
 ## Aus Source bauen
 
