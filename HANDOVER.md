@@ -9,6 +9,75 @@
 
 ---
 
+## 2026-06-07 — Claude: Kontostände + Deckungswarnung + Mehrwährungs-Schnitt
+
+Claude hat den **größten Produkthebel aus dem Codex-Review** umgesetzt: SubTracked rechnet jetzt echte Kontodeckung, nicht nur Abflüsse. Konten haben Währung, aktuellen Saldo und optionalen Mindestpuffer; die Übersicht zeigt pro Buchung den Saldo danach und warnt früh, wenn das Konto unter Puffer/Null fällt. Multi-Currency wird sauber pro Konto geschnitten — der pauschale EUR-Hardcode (Codex-Befund) ist weg.
+
+**Wichtige Konvention ab heute:** Jeder HANDOVER-Eintrag markiert in Überschrift und Body, welcher Agent ihn geschrieben hat (`Claude:` / `Codex:`). Memory `feedback-handover` entsprechend ergänzt.
+
+### Geändert
+
+- `src-tauri/migrations/0003_account_balance.sql` (neu) — `accounts` bekommt `currency TEXT NOT NULL DEFAULT 'EUR'`, `balance_cents INTEGER NOT NULL DEFAULT 0`, `min_buffer_cents INTEGER NOT NULL DEFAULT 0`. Bestehende Konten migrieren transparent mit den Defaults.
+- `src-tauri/src/db.rs` — `Account`-Struct um die drei Felder erweitert (`serde(rename_all = "camelCase")` macht das Frontend-Mapping automatisch).
+- `src-tauri/src/commands.rs` — `list_accounts` liest die neuen Spalten; `add_account` akzeptiert sie optional (Defaults `"EUR"` / 0 / 0); neuer `update_account(account: Account)`-Command für Saldo/Puffer-Updates aus dem UI. In `lib.rs` registriert.
+- `src/types.ts` — `Account` um `currency`, `balanceCents`, `minBufferCents` erweitert.
+- `src/lib/db.ts` — `addAccount` auf Objekt-Argument umgestellt (sauberer bei 5 Feldern), neue `updateAccount(account)`-Funktion.
+- `src/lib/format.ts` — `CURRENCY_OPTIONS` + `CurrencyOption`-Typ aus `SubscriptionDialog` ausgezogen, damit AccountsDialog dieselbe Liste nutzt (single source of truth).
+- `src/lib/coverage.ts` (kernumbau) — `AccountCoverage` jetzt mit `accountId`, `currency`, `startingBalanceCents`, `minBufferCents`, `finalBalanceCents`, `firstBelowBufferDate`, `firstBelowZeroDate`, `foreignCurrencySubsCount`. `CoverageItem` bekommt `balanceAfterCents` + `belowBuffer`/`belowZero`. Algorithmus: erst Items pro Konto sammeln, nach Datum sortieren, dann in einem zweiten Pass den Saldo fortschreiben — saubere Trennung Sammeln/Berechnen. Konten ohne Buchungen werden trotzdem als Bucket gerendert (Saldo soll sichtbar bleiben). Fremdwährungs-Subs werden ignoriert und nur als Zähler ausgewiesen. `computeMonthlyBaseline` splittet jetzt pro `(Konto, Währung)`.
+- `src/components/AccountsDialog.tsx` (Neubau) — Edit-Mode pro Konto („Bearbeiten"-Knopf füllt Form mit Currency/Saldo/Puffer, Submit ruft `updateAccount`); Add-Mode wie bisher, aber mit den drei neuen Feldern. Saldo + Puffer nutzen `type=text + inputMode=decimal + parseAmountInput` (analog zum Abo-Betrag, akzeptiert Komma und Tausender). Validierung mit `role="alert"` für ungültige Eingaben.
+- `src/components/OverviewSection.tsx` (überarbeitet) — Coverage-Header zeigt jetzt "Saldo heute: X → Y" pro Konto, plus orange/rote `coverage-warning` bei Puffer/Null-Unterschreitung. Pro Buchung steht "→ Saldo danach", farblich markiert (`coverage-row-warn`/`coverage-row-danger`). `formatAmount` bekommt jetzt die echte Konto-Währung statt hartem `"EUR"`. Fremdwährungs-Hinweis als `coverage-hint`. Baseline rendert Currency in Klammern, wenn dasselbe Konto mehrere Währungen hat.
+- `src/App.css` — neue Klassen für `.account-balance`, `.account-actions`, `.field-hint`, `.coverage-balance`, `.coverage-row-balance`, `.coverage-warn`/`-danger`, `.coverage-warning-warn`/`-danger`, `.coverage-row-warn`/`-danger`, `.coverage-hint`. Dark-Mode-Anpassungen für Warn/Danger-Texte. Coverage-Row-Grid auf 4 Spalten (Name/Datum/Betrag/Saldo).
+- `src/components/SubscriptionDialog.tsx` — nur Import-Anpassung (`CURRENCY_OPTIONS` aus `format.ts` statt lokal), keine Verhaltensänderung.
+
+### Tests
+
+- `src/lib/coverage.test.ts` (überarbeitet, 14 Tests grün) — neue Tests für Saldo-Forecast (`balanceAfterCents`), Puffer-/Null-Warnungen, Fremdwährungs-Ignoranz, Currency aus Konto, Konten-ohne-Buchungen-Bucket, Aktiv-vor-Leer-Sortierung. Alte Tests an neue Feldnamen (`totalOutflowCents`) angepasst.
+- `src/components/AccountsDialog.test.tsx` (überarbeitet, 11 Tests grün) — neue Tests für Saldo/Puffer-Anzeige, `addAccount` mit Objekt-Argument inkl. Currency/Saldo-Parsing, leeres Saldo-Feld → 0, Validierungs-Meldung bei ungültigem Saldo, Edit-Mode-Start mit Vorbefüllung, `updateAccount`-Flow.
+- `src/components/OverviewSection.test.tsx` (überarbeitet, 6 Tests grün) — neue Tests für Saldo-Forecast in Coverage-Section, Saldo-pro-Buchung-Anzeige, Puffer/Null-Warnung-Rendering, Fremdwährungs-Hinweis. Tests scopen jetzt explizit auf die Coverage-Section, weil der Konto-Name jetzt auch in Baseline auftaucht (vorher nur in Coverage). Veralteter „Gesamt-Zeile"-Test entfernt (Gesamt-Summen über Währungen hinweg werden nicht mehr gezeigt).
+- `src/components/SubscriptionDialog.test.tsx` + `src/hooks/useSubscriptions.test.tsx` — Account-Mocks um die neuen Pflichtfelder erweitert.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` ✓
+- `pnpm lint` ✓ (zwei Auto-Format-Fixes für `coverage.ts` Map-Generic und `SubscriptionDialog`-Import nach `pnpm biome check --write` — Lefthook-Pattern wie üblich)
+- `pnpm test:run` ✓ — **95 Tests in 10 Files grün** (vorher 87)
+- `cd src-tauri && cargo check` ✓
+- `cd src-tauri && cargo fmt --check` ✓
+- `cd src-tauri && cargo clippy --all-targets -- -D warnings` ✓
+- `cd src-tauri && cargo test` ✓ — 8 Tests grün (keine Rust-Tests dazugekommen; Saldo-Logik lebt im Frontend in `coverage.ts`)
+- `pnpm tauri dev` gestartet; **User hat manuell durchgeklickt und „passt alles" bestätigt** (Konto-Edit, Saldo-Eingabe mit Komma, Forecast-Anzeige, Warnungen, Mehrwährungs-Ignorier-Hinweis).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Saldo-Modell „aktueller Stand, gilt ab heute"** statt Stichtag-mit-Historie. Begründung: einfach, keine zweite Tabelle, deckt den Kern „Sieht mein Konto in den nächsten Monaten gut aus?" zu 100 %. Verlauf wäre eigenes Feature (separate `account_balance_history`-Tabelle), kommt wenn echter Bedarf entsteht.
+- **Konto hat genau eine Währung**, fremde Subs werden ignoriert und nur gezählt. Begründung: ehrlicher als heimliches Umrechnen mit veralteten Kursen. Codex hatte den EUR-Hardcode im Review explizit als „stille Lüge" markiert; die neue Variante macht das transparent. Wechselkurs-Umrechnung ist eigenes Feature im Backlog.
+- **Forecast pro Buchung statt pro Monat**: direkter Mehrwert. Der User sieht „nach Netflix am 15.07. noch 482,01 EUR" konkret, nicht nur „Monatsende Juli ~480 EUR". Cost: vier Spalten statt drei im Grid; bei langen Forecast-Zeiträumen entsteht eine längere Liste, ist aber durch `<details>` collapsible.
+- **`computeCoverage`-Zwei-Pass-Architektur** (erst Items sammeln, dann Saldo fortschreiben) statt Saldo inkrementell beim Sammeln. Begründung: Items müssen vor Saldo-Berechnung nach Datum sortiert sein, sonst stimmt der Forecast nicht. Im selben Pass wäre der Code kompakter, aber falsch (Items kommen pro Subscription gruppiert herein, nicht chronologisch).
+- **`AccountCoverage`-Bucket auch ohne Buchungen** rendern: ein Konto mit Saldo aber ohne Subs ist trotzdem interessant (siehe Sparkonto). Sortierreihenfolge: Aktive Konten zuerst, dann nach Outflow-Summe — sodass der User die „brennenden" Konten oben sieht.
+- **Mindestpuffer Default 0**, nicht 100 EUR oder ähnliches. Begründung: User kennt sein eigenes Puffer-Bedürfnis besser; ein Default-Wert würde nur unnötige False-Positive-Warnungen erzeugen, bis er das Feld bewusst setzt.
+- **`addAccount` von Positional auf Objekt-Argument** umgestellt: bei 5 Feldern (Name/Note/Currency/Saldo/Puffer) wäre Positional fehleranfällig. Breaking Change im Aufruf, aber nur intern (eine Stelle in `AccountsDialog`).
+- **`CURRENCY_OPTIONS` in `format.ts` ausgezogen**: Liste lebt jetzt an genau einer Stelle und wird von SubscriptionDialog + AccountsDialog importiert. Memory `feedback_code_quality` sagt explizit „durchgehend hohe Qualität, aber keine Über-Abstraktion" — eine Konstante an einer Stelle ist die einfachste Form von DRY ohne Over-Engineering.
+- **Validierung im AccountsDialog mit `role="alert"`** statt stiller `return`: der existierende Backlog-Punkt „sichtbare Formular-Validierung im Abo-Dialog" gilt analog für Konten. Hier gleich richtig gemacht, weil neue Felder eingeführt wurden.
+
+### Gotchas / nächste Hinweise
+
+- **Migration ist additive `ALTER TABLE`** — `sqlx::migrate!` führt sie beim ersten Start automatisch aus. Bestehende User mit Konten haben danach EUR/0/0 als Werte und müssen ihren realen Saldo nachpflegen. Keine UI-Migration nötig, weil das Feld leer = 0 ist und in der Übersicht als „Saldo heute: 0,00 €" angezeigt wird — selbsterklärend, was zu tun ist.
+- **Fremdwährungs-Hinweis kann verwirren**, wenn der User einen USD-Sub auf einem EUR-Konto bewusst dort führt (z.B. Kreditkarten-Konto in EUR, aber USD-Abos drauf). Aktuell wird der USD-Sub ignoriert; Lösung wäre, das Konto in zwei aufzuteilen, oder später Wechselkurs-Umrechnung. Für jetzt ist der Hinweis die ehrliche Variante.
+- **Saldo wird nicht automatisch nach Buchungen reduziert** — die App kennt ja nicht den realen Konto-Saldo nach Abbuchungen (das macht die Bank). User muss den Saldo selbst aktualisieren, wenn er es genauer haben will. Das ist konsistent mit „SubTracked ist Radar, nicht Buchhaltung".
+- **`computeCoverage` mutiert intern Maps**, aber gibt eine reine Liste zurück. Pure Function bleibt's. Tests verlassen sich auf Determinismus — `TZ=UTC` in `vitest.config.ts` ist hier kritisch (Coverage iteriert Datum-für-Datum).
+- **Backlog-Items „Sichtbare Formular-Validierung im Abo-Dialog" + „Filter/Sortierung" + „Nächste-Fälligkeiten-Ansicht"** sind als nächstes naheliegende Kandidaten — sie heben den Nutzen der jetzt sichtbaren Forecast-Daten weiter (besseres Drilldown). Vor dem UI-Redesign aber abschließend prüfen, ob die jetzige Coverage-Darstellung reicht oder ob die Redesign-Session sie sowieso umbaut.
+
+### Geänderte Memories
+
+- `~/.claude/projects/-home-legr-SubTracked/memory/feedback_handover.md` — neue Pflicht-Regel ergänzt: „Agent-Markierung in Überschrift + Body" (Claude vs. Codex). Vom User am 2026-06-07 explizit gefordert, weil er jetzt mit zwei Agents arbeitet (Codex als Reviewer).
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree: ~20 modifizierte + 1 neue Datei (Migration + Backend + Frontend + Tests + Doku). Noch nicht committet — User-Freigabe ausstehend.
+- App-Stand: live verifiziert, alle Tests grün.
+
+---
+
 ## 2026-06-07 — Codex: Tray-Aufpopp-Bug auf KDE Plasma gefixt
 
 Codex hat den Tray-Aufpopp-Bug als eigene Debug-Session bearbeitet, fokussiert auf User-System **CachyOS + KDE Plasma** (Windows/macOS erstmal egal). Der Fix wurde im Dev-Build vom User manuell getestet und bestaetigt; App danach vom User manuell beendet. User bat danach, alles zu committen/pushen und die Arbeit fuer heute zu beenden.

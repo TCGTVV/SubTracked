@@ -5,19 +5,40 @@ import { dueDatesWithin, monthsPer } from "./recurrence";
 export interface CoverageItem {
   subscriptionId: number;
   subscription: string;
-  date: string; // ISO
+  date: string; // ISO YYYY-MM-DD
   cents: number;
+  balanceAfterCents: number;
+  belowBuffer: boolean;
+  belowZero: boolean;
 }
 
 export interface AccountCoverage {
+  accountId: number | null;
   account: string;
-  totalCents: number;
+  currency: string;
+  startingBalanceCents: number;
+  minBufferCents: number;
+  totalOutflowCents: number;
+  finalBalanceCents: number;
+  /** Erste Buchung, nach der der Saldo unter den Mindestpuffer fällt (null = nie). */
+  firstBelowBufferDate: string | null;
+  /** Erste Buchung, nach der der Saldo unter 0 fällt (null = nie). */
+  firstBelowZeroDate: string | null;
+  /** Subs in einer anderen Währung als das Konto — werden ignoriert, aber gezählt. */
+  foreignCurrencySubsCount: number;
   items: CoverageItem[];
 }
 
+const UNASSIGNED_KEY = "__unassigned__";
+const UNASSIGNED_LABEL = "(kein Konto zugeordnet)";
+
 /**
- * Anstehende Abflüsse je Konto über die nächsten `months` Monate.
- * Reine Funktion — kein DB-Zugriff, gut testbar.
+ * Anstehende Abflüsse je Konto über die nächsten `months` Monate, plus Saldo-Forecast
+ * pro Buchung und Frühwarnung für Mindestpuffer / Konto-im-Minus.
+ *
+ * Multi-Currency-Schnitt: jedes Konto rechnet nur in seiner eigenen Währung; Subs in
+ * fremder Währung werden ignoriert und nur als Zähler ausgewiesen. Subs ohne Konto
+ * landen in einem Sammel-Bucket ohne Saldo/Warnungen.
  */
 export function computeCoverage(
   subscriptions: Subscription[],
@@ -27,62 +48,131 @@ export function computeCoverage(
 ): AccountCoverage[] {
   const from = startOfDay(now);
   const until = addMonths(from, months);
-  const accName = new Map(accounts.map((a) => [a.id, a.name]));
+  const accById = new Map(accounts.map((a) => [a.id, a]));
   const buckets = new Map<string, AccountCoverage>();
 
+  // Seed Buckets fuer alle bekannten Konten, damit Saldo + Warnungen auch ohne anstehende
+  // Buchungen sichtbar bleiben.
+  for (const a of accounts) {
+    buckets.set(String(a.id), {
+      accountId: a.id,
+      account: a.name,
+      currency: a.currency,
+      startingBalanceCents: a.balanceCents,
+      minBufferCents: a.minBufferCents,
+      totalOutflowCents: 0,
+      finalBalanceCents: a.balanceCents,
+      firstBelowBufferDate: null,
+      firstBelowZeroDate: null,
+      foreignCurrencySubsCount: 0,
+      items: [],
+    });
+  }
+
+  // Erst Items sammeln (pro Konto), dann nach Datum sortieren, dann Saldo fortschreiben.
+  const itemsByBucket = new Map<
+    string,
+    Omit<CoverageItem, "balanceAfterCents" | "belowBuffer" | "belowZero">[]
+  >();
+
   for (const sub of subscriptions) {
-    const label =
-      sub.accountId != null
-        ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)")
-        : "(kein Konto zugeordnet)";
+    const account = sub.accountId != null ? accById.get(sub.accountId) : undefined;
+    const key = account ? String(account.id) : UNASSIGNED_KEY;
 
-    const bucket = buckets.get(label) ?? { account: label, totalCents: 0, items: [] };
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        accountId: account ? account.id : null,
+        account: account ? account.name : UNASSIGNED_LABEL,
+        currency: account ? account.currency : sub.currency,
+        startingBalanceCents: 0,
+        minBufferCents: 0,
+        totalOutflowCents: 0,
+        finalBalanceCents: 0,
+        firstBelowBufferDate: null,
+        firstBelowZeroDate: null,
+        foreignCurrencySubsCount: 0,
+        items: [],
+      };
+      buckets.set(key, bucket);
+    }
 
+    // Fremdwaehrung: nur zaehlen, nicht einrechnen. Saldo/Forecast bleiben ehrlich.
+    if (account && sub.currency !== account.currency) {
+      bucket.foreignCurrencySubsCount += 1;
+      continue;
+    }
+
+    const list = itemsByBucket.get(key) ?? [];
     for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
-      bucket.totalCents += sub.amountCents;
-      bucket.items.push({
+      list.push({
         subscriptionId: sub.id,
         subscription: sub.name,
         date: d.toISOString().slice(0, 10),
         cents: sub.amountCents,
       });
     }
-    buckets.set(label, bucket);
+    itemsByBucket.set(key, list);
   }
 
-  for (const b of buckets.values()) {
-    b.items.sort((a, c) => a.date.localeCompare(c.date));
+  for (const [key, raw] of itemsByBucket) {
+    const bucket = buckets.get(key);
+    if (!bucket) continue;
+    raw.sort((a, b) => a.date.localeCompare(b.date));
+
+    let running = bucket.startingBalanceCents;
+    for (const it of raw) {
+      running -= it.cents;
+      const belowZero = running < 0;
+      const belowBuffer = running < bucket.minBufferCents;
+      if (belowZero && bucket.firstBelowZeroDate === null) bucket.firstBelowZeroDate = it.date;
+      if (belowBuffer && bucket.firstBelowBufferDate === null)
+        bucket.firstBelowBufferDate = it.date;
+      bucket.items.push({ ...it, balanceAfterCents: running, belowBuffer, belowZero });
+      bucket.totalOutflowCents += it.cents;
+    }
+    bucket.finalBalanceCents = running;
   }
-  return [...buckets.values()].sort((a, b) => b.totalCents - a.totalCents);
+
+  return [...buckets.values()].sort((a, b) => {
+    // Konten mit anstehenden Abfluessen oder Warnungen zuerst, sonst nach Saldo absteigend.
+    const aActive = a.items.length > 0 ? 1 : 0;
+    const bActive = b.items.length > 0 ? 1 : 0;
+    if (aActive !== bActive) return bActive - aActive;
+    return b.totalOutflowCents - a.totalOutflowCents;
+  });
 }
 
 export interface MonthlyBaseline {
   account: string;
+  currency: string;
   monthlyCents: number;
 }
 
 /**
- * Monatlich gebundene Fixkosten je Konto: Quartalsweise/4, Jährlich/12 etc.
- * werden auf eine monatliche Basislinie normiert. Reine Funktion.
- * Hinweis: summiert über Währungen hinweg (siehe Backlog "Mehrwährungs-Handling").
+ * Monatlich gebundene Fixkosten je (Konto, Währung). Subs in einer anderen Währung als
+ * ihr Konto werden separat aufgeführt, damit nie über Währungen hinweg summiert wird.
  */
 export function computeMonthlyBaseline(
   subscriptions: Subscription[],
   accounts: Account[],
 ): MonthlyBaseline[] {
-  const accName = new Map(accounts.map((a) => [a.id, a.name]));
-  const buckets = new Map<string, number>();
+  const accById = new Map(accounts.map((a) => [a.id, a]));
+  // Key: "<account-label>__<currency>"
+  const buckets = new Map<string, MonthlyBaseline>();
 
   for (const sub of subscriptions) {
-    const label =
-      sub.accountId != null
-        ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)")
-        : "(kein Konto zugeordnet)";
+    const account = sub.accountId != null ? accById.get(sub.accountId) : undefined;
+    const label = account ? account.name : UNASSIGNED_LABEL;
+    const currency = sub.currency;
+    const key = `${label}__${currency}`;
     const monthly = sub.amountCents / monthsPer[sub.interval];
-    buckets.set(label, (buckets.get(label) ?? 0) + monthly);
+    const bucket = buckets.get(key) ?? { account: label, currency, monthlyCents: 0 };
+    bucket.monthlyCents += monthly;
+    buckets.set(key, bucket);
   }
 
-  return [...buckets.entries()]
-    .map(([account, cents]) => ({ account, monthlyCents: Math.round(cents) }))
+  return [...buckets.values()]
+    .map((b) => ({ ...b, monthlyCents: Math.round(b.monthlyCents) }))
     .sort((a, b) => b.monthlyCents - a.monthlyCents);
 }

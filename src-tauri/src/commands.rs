@@ -23,10 +23,13 @@ pub async fn list_subscriptions(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, String> {
-    sqlx::query_as::<_, Account>("SELECT id, name, note FROM accounts ORDER BY name")
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| e.to_string())
+    sqlx::query_as::<_, Account>(
+        "SELECT id, name, note, currency, balance_cents, min_buffer_cents \
+         FROM accounts ORDER BY name",
+    )
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -76,14 +79,45 @@ pub async fn add_account(
     state: State<'_, AppState>,
     name: String,
     note: Option<String>,
+    currency: Option<String>,
+    balance_cents: Option<i64>,
+    min_buffer_cents: Option<i64>,
 ) -> Result<i64, String> {
-    let res = sqlx::query("INSERT INTO accounts (name, note) VALUES (?, ?)")
-        .bind(&name)
-        .bind(&note)
-        .execute(&state.db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let currency = currency.unwrap_or_else(|| "EUR".to_string());
+    let balance_cents = balance_cents.unwrap_or(0);
+    let min_buffer_cents = min_buffer_cents.unwrap_or(0);
+    let res = sqlx::query(
+        "INSERT INTO accounts (name, note, currency, balance_cents, min_buffer_cents) \
+         VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(&name)
+    .bind(&note)
+    .bind(&currency)
+    .bind(balance_cents)
+    .bind(min_buffer_cents)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(res.last_insert_rowid())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_account(state: State<'_, AppState>, account: Account) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE accounts \
+         SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ? \
+         WHERE id = ?",
+    )
+    .bind(&account.name)
+    .bind(&account.note)
+    .bind(&account.currency)
+    .bind(account.balance_cents)
+    .bind(account.min_buffer_cents)
+    .bind(account.id)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]

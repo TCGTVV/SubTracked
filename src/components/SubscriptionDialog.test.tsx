@@ -14,8 +14,15 @@ const mockAddSubscription = vi.mocked(addSubscription);
 const mockUpdateSubscription = vi.mocked(updateSubscription);
 
 const accounts: Account[] = [
-  { id: 1, name: "Hauptkonto", note: null },
-  { id: 2, name: "Sparkonto", note: "Reserve" },
+  { id: 1, name: "Hauptkonto", note: null, currency: "EUR", balanceCents: 0, minBufferCents: 0 },
+  {
+    id: 2,
+    name: "Sparkonto",
+    note: "Reserve",
+    currency: "EUR",
+    balanceCents: 0,
+    minBufferCents: 0,
+  },
 ];
 
 const existingSub: Subscription = {

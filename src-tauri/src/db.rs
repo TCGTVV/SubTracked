@@ -26,6 +26,9 @@ pub struct Account {
     pub id: i64,
     pub name: String,
     pub note: Option<String>,
+    pub currency: String,
+    pub balance_cents: i64,
+    pub min_buffer_cents: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]

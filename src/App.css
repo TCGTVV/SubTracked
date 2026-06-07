@@ -242,6 +242,23 @@ select:focus-visible {
   color: #888;
 }
 
+.account-balance {
+  font-size: 0.85rem;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  color: #888;
+}
+
 .account-add {
   display: flex;
   flex-direction: column;
@@ -376,6 +393,81 @@ select:focus-visible {
 
 .coverage-row-amount {
   font-variant-numeric: tabular-nums;
+}
+
+.coverage-row {
+  grid-template-columns: 1fr auto auto auto;
+}
+
+.coverage-row-balance {
+  font-variant-numeric: tabular-nums;
+  color: #666;
+  min-width: 6rem;
+  text-align: right;
+}
+
+.coverage-balance {
+  font-size: 0.85rem;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.5rem;
+}
+
+.coverage-warn summary {
+  background-color: rgba(217, 119, 6, 0.08);
+}
+
+.coverage-danger summary {
+  background-color: rgba(220, 38, 38, 0.08);
+}
+
+.coverage-warning {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+}
+
+.coverage-warning-warn {
+  background-color: rgba(217, 119, 6, 0.08);
+  color: #b45309;
+}
+
+.coverage-warning-danger {
+  background-color: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.coverage-hint {
+  margin: 0;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: #888;
+  font-style: italic;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+}
+
+.coverage-row-warn {
+  background-color: rgba(217, 119, 6, 0.05);
+}
+
+.coverage-row-danger {
+  background-color: rgba(220, 38, 38, 0.07);
+  color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .coverage-warning-warn {
+    color: #fbbf24;
+  }
+
+  .coverage-warning-danger {
+    color: #fca5a5;
+  }
+
+  .coverage-row-danger {
+    color: #fca5a5;
+  }
 }
 
 .field {

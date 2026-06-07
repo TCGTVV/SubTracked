@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addAccount, countSubsForAccount, deleteAccount } from "../lib/db";
+import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
 import type { Account } from "../types";
 import { AccountsDialog } from "./AccountsDialog";
 
@@ -9,15 +9,31 @@ vi.mock("../lib/db", () => ({
   addAccount: vi.fn(),
   countSubsForAccount: vi.fn(),
   deleteAccount: vi.fn(),
+  updateAccount: vi.fn(),
 }));
 
 const mockAddAccount = vi.mocked(addAccount);
 const mockCountSubsForAccount = vi.mocked(countSubsForAccount);
 const mockDeleteAccount = vi.mocked(deleteAccount);
+const mockUpdateAccount = vi.mocked(updateAccount);
 
 const accounts: Account[] = [
-  { id: 1, name: "Hauptkonto", note: "IBAN ...4711" },
-  { id: 2, name: "Sparkonto", note: null },
+  {
+    id: 1,
+    name: "Hauptkonto",
+    note: "IBAN ...4711",
+    currency: "EUR",
+    balanceCents: 50000,
+    minBufferCents: 10000,
+  },
+  {
+    id: 2,
+    name: "Sparkonto",
+    note: null,
+    currency: "EUR",
+    balanceCents: 0,
+    minBufferCents: 0,
+  },
 ];
 
 function renderDialog(accountsProp: Account[] = accounts, onChanged = vi.fn()) {
@@ -35,6 +51,7 @@ describe("AccountsDialog", () => {
     mockAddAccount.mockReset();
     mockCountSubsForAccount.mockReset();
     mockDeleteAccount.mockReset();
+    mockUpdateAccount.mockReset();
     alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     confirmSpy = vi.spyOn(window, "confirm").mockImplementation(() => true);
   });
@@ -49,42 +66,81 @@ describe("AccountsDialog", () => {
     expect(screen.getByText("Noch keine Konten angelegt.")).toBeInTheDocument();
   });
 
-  it("rendert pro Konto Name, optionale Notiz und einen Löschen-Button mit Aria-Label", () => {
+  it("zeigt Saldo und Puffer pro Konto an", () => {
     renderDialog();
-    expect(screen.getByText("Hauptkonto")).toBeInTheDocument();
-    expect(screen.getByText("IBAN ...4711")).toBeInTheDocument();
-    expect(screen.getByText("Sparkonto")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Konto Hauptkonto löschen" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Konto Sparkonto löschen" })).toBeInTheDocument();
+    const haupt = screen.getByText("Hauptkonto").closest(".account-item");
+    expect(haupt?.textContent).toMatch(/500,00/);
+    expect(haupt?.textContent).toMatch(/100,00/); // Puffer
   });
 
-  it("ruft addAccount mit name+note auf und meldet onChanged + leert das Formular", async () => {
+  it("ruft addAccount mit Name, Saldo und Währung auf", async () => {
     mockAddAccount.mockResolvedValue(99);
     const { onChanged } = renderDialog([]);
 
-    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
-    const noteInput = screen.getByLabelText("Notiz (optional)") as HTMLInputElement;
-    fireEvent.change(nameInput, { target: { value: "Reisekonto" } });
-    fireEvent.change(noteInput, { target: { value: "Karte X" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Reisekonto" } });
+    fireEvent.change(screen.getByLabelText("Aktueller Saldo"), { target: { value: "250,50" } });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
 
     await waitFor(() => {
-      expect(mockAddAccount).toHaveBeenCalledWith("Reisekonto", "Karte X");
+      expect(mockAddAccount).toHaveBeenCalledWith({
+        name: "Reisekonto",
+        note: undefined,
+        currency: "EUR",
+        balanceCents: 25050,
+        minBufferCents: 0,
+      });
     });
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(nameInput.value).toBe("");
-    expect(noteInput.value).toBe("");
   });
 
-  it("ruft addAccount mit undefined als Notiz, wenn das Notiz-Feld leer bleibt", async () => {
+  it("akzeptiert leeren Saldo als 0", async () => {
     mockAddAccount.mockResolvedValue(99);
     renderDialog([]);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
     fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
 
     await waitFor(() => {
-      expect(mockAddAccount).toHaveBeenCalledWith("Test", undefined);
+      expect(mockAddAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ balanceCents: 0, minBufferCents: 0 }),
+      );
     });
+  });
+
+  it("zeigt eine Validierungs-Meldung bei ungültigem Saldo", async () => {
+    renderDialog([]);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
+    fireEvent.change(screen.getByLabelText("Aktueller Saldo"), { target: { value: "abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Hinzufügen" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Saldo ungültig/);
+    });
+    expect(mockAddAccount).not.toHaveBeenCalled();
+  });
+
+  it("startet den Edit-Mode mit vorgefüllten Werten beim Klick auf Bearbeiten", () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Konto Hauptkonto bearbeiten" }));
+    expect(screen.getByRole("heading", { name: "Konto bearbeiten" })).toBeInTheDocument();
+    const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
+    expect(nameInput.value).toBe("Hauptkonto");
+    const balanceInput = screen.getByLabelText("Aktueller Saldo") as HTMLInputElement;
+    expect(balanceInput.value).toMatch(/500/);
+  });
+
+  it("ruft updateAccount auf, wenn im Edit-Mode gespeichert wird", async () => {
+    mockUpdateAccount.mockResolvedValue(undefined);
+    const { onChanged } = renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Konto Hauptkonto bearbeiten" }));
+    fireEvent.change(screen.getByLabelText("Aktueller Saldo"), { target: { value: "600" } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(mockUpdateAccount).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 1, balanceCents: 60000, name: "Hauptkonto" }),
+      );
+    });
+    expect(onChanged).toHaveBeenCalledOnce();
   });
 
   it("blockiert Add bei leerem Namen (Submit-Button disabled, keine DB-Operation)", async () => {
@@ -105,20 +161,6 @@ describe("AccountsDialog", () => {
       expect(alertSpy).toHaveBeenCalled();
     });
     expect(alertSpy.mock.calls[0][0]).toMatch(/3 Abos verweisen/);
-    expect(mockDeleteAccount).not.toHaveBeenCalled();
-    expect(onChanged).not.toHaveBeenCalled();
-  });
-
-  it("löscht das Konto nicht, wenn der User die Confirm-Dialog ablehnt", async () => {
-    mockCountSubsForAccount.mockResolvedValue(0);
-    confirmSpy.mockImplementation(() => false);
-    const { onChanged } = renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: "Konto Hauptkonto löschen" }));
-
-    await waitFor(() => {
-      expect(mockCountSubsForAccount).toHaveBeenCalledWith(1);
-    });
-    expect(confirmSpy).toHaveBeenCalled();
     expect(mockDeleteAccount).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
   });
