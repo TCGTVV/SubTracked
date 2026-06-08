@@ -71,3 +71,13 @@ pnpm tauri build
 - `pnpm build` kompiliert TypeScript und baut das Frontend.
 - Relevante Tests/Checks laufen (`pnpm test:run`, `pnpm lint`, bei Rust-Änderungen `cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`).
 - Keine Secrets committen.
+
+## Zweite Augen — Code-Review-Konvention
+
+Der Implementierer ist immer parteilich, deshalb braucht jede nicht-triviale Änderung ein zweites Augenpaar vor dem Commit. Das Tooling ist da, der Aufruf ist menschlich:
+
+- **Nicht-triviale Änderungen** (neue Features, Logik-Refactors, Schema-/Migrations-Eingriffe, Sicherheits- oder Persistenz-Pfade): vor dem Commit einmal `/code-review high` laufen lassen. Reviewer sieht nur den Diff, nicht die ganze Codebase — das ist gewollt: frische Augen, kein blinder Fleck durch Über-Vertrautheit.
+- **Größere Blöcke** (Architektur-Eingriffe, Release-Vorbereitung, mehrere zusammenhängende Commits): `/code-review ultra` — Multi-Agent-Cloud-Review, deckt mehr ab, kostet mehr Token.
+- **Trivial-Änderungen** (Doku-Tippfehler, einzeilige Bugfixes mit Test, Lint-Auto-Fixes): kein Review nötig.
+- **Cross-Agent-Pattern:** Claude reviewt Codex' Sessions und umgekehrt — wer das letzte mal implementiert hat, schreibt diesmal den Review. Befunde werden im HANDOVER-Eintrag als eigene Sektion dokumentiert.
+- **Befunde behandeln:** Wenn der Review Bugs oder konkrete Verbesserungen findet, in derselben Session fixen (kurz) oder als ToDo ins BACKLOG aufnehmen (länger). Nicht ungeprüft committen mit Verweis „mache ich später".
