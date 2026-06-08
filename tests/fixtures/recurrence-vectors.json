@@ -1,0 +1,96 @@
+{
+  "_comment": "Geteilte Recurrence-Testvektoren fuer TS (src/lib/recurrence.ts) und Rust (src-tauri/src/recurrence.rs). Beide Implementierungen muessen jeden Vektor gleich beantworten — so faellt Drift sofort beim ersten Lauf auf, statt erst in der Produktion.",
+  "next_due_date": [
+    {
+      "name": "anchor_in_future_returns_anchor",
+      "anchor": "2026-08-15",
+      "interval": "monthly",
+      "from": "2026-06-05",
+      "expected": "2026-08-15"
+    },
+    {
+      "name": "anchor_equals_from_returns_anchor",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-01-31",
+      "expected": "2025-01-31"
+    },
+    {
+      "name": "monthly_simple_step",
+      "anchor": "2026-01-15",
+      "interval": "monthly",
+      "from": "2026-03-20",
+      "expected": "2026-04-15"
+    },
+    {
+      "name": "monthly_drift_31_feb_clamps_to_28",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-02-01",
+      "expected": "2025-02-28"
+    },
+    {
+      "name": "monthly_drift_31_march_back_to_31",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-03-01",
+      "expected": "2025-03-31"
+    },
+    {
+      "name": "monthly_drift_31_april_clamps_to_30",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-04-01",
+      "expected": "2025-04-30"
+    },
+    {
+      "name": "monthly_drift_31_may_back_to_31",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-05-01",
+      "expected": "2025-05-31"
+    },
+    {
+      "name": "monthly_drift_31_july_back_to_31",
+      "anchor": "2025-01-31",
+      "interval": "monthly",
+      "from": "2025-07-01",
+      "expected": "2025-07-31"
+    },
+    {
+      "name": "quarterly_exact_hit",
+      "anchor": "2025-01-15",
+      "interval": "quarterly",
+      "from": "2025-04-15",
+      "expected": "2025-04-15"
+    },
+    {
+      "name": "quarterly_one_day_past_jumps_to_next",
+      "anchor": "2025-01-15",
+      "interval": "quarterly",
+      "from": "2025-04-16",
+      "expected": "2025-07-15"
+    },
+    {
+      "name": "yearly_simple_step",
+      "anchor": "2025-03-20",
+      "interval": "yearly",
+      "from": "2026-01-01",
+      "expected": "2026-03-20"
+    },
+    {
+      "name": "yearly_leap_anchor_clamps_to_28",
+      "anchor": "2024-02-29",
+      "interval": "yearly",
+      "from": "2025-02-28",
+      "expected": "2025-02-28"
+    },
+    {
+      "name": "yearly_leap_anchor_two_years_later",
+      "anchor": "2024-02-29",
+      "interval": "yearly",
+      "from": "2025-03-01",
+      "expected": "2026-02-28"
+    }
+  ]
+}

@@ -113,4 +113,40 @@ mod tests {
     fn unbekanntes_interval() {
         assert!(next_due_date(d(2025, 1, 1), "foobar", d(2025, 1, 1)).is_err());
     }
+
+    /// Geteilte Testvektoren mit `src/lib/recurrence.ts`. Drift zwischen den beiden
+    /// Implementierungen faellt damit auf, sobald eine Seite sich anders entscheidet.
+    /// Vektoren leben unter `tests/fixtures/recurrence-vectors.json` im Repo-Root.
+    #[test]
+    fn shared_vectors_match_typescript_impl() {
+        #[derive(serde::Deserialize)]
+        struct NextDueVector {
+            name: String,
+            anchor: String,
+            interval: String,
+            from: String,
+            expected: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct SharedVectors {
+            next_due_date: Vec<NextDueVector>,
+        }
+        let json = include_str!("../../tests/fixtures/recurrence-vectors.json");
+        let vectors: SharedVectors = serde_json::from_str(json).expect("parse fixtures");
+        assert!(
+            !vectors.next_due_date.is_empty(),
+            "fixtures sollten min. einen Vektor enthalten"
+        );
+        for v in vectors.next_due_date {
+            let anchor = NaiveDate::parse_from_str(&v.anchor, "%Y-%m-%d")
+                .unwrap_or_else(|e| panic!("{}: anchor parse {e}", v.name));
+            let from = NaiveDate::parse_from_str(&v.from, "%Y-%m-%d")
+                .unwrap_or_else(|e| panic!("{}: from parse {e}", v.name));
+            let expected = NaiveDate::parse_from_str(&v.expected, "%Y-%m-%d")
+                .unwrap_or_else(|e| panic!("{}: expected parse {e}", v.name));
+            let got = next_due_date(anchor, &v.interval, from)
+                .unwrap_or_else(|e| panic!("{}: next_due_date err {e}", v.name));
+            assert_eq!(got, expected, "vektor {}", v.name);
+        }
+    }
 }
