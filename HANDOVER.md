@@ -9,6 +9,69 @@
 
 ---
 
+## 2026-06-08 — Codex: Restliche Review-Bugs + Frontend-Legacy-Semantik
+
+### Was passierte
+
+- Zweiter Bugblock aus dem Review erledigt und committed:
+  - `update_subscription` validiert `account_id` nur noch, wenn eine konkrete Zuordnung neu/anders ist. Unveraenderte Legacy-Orphans und Wechsel auf `null` blockieren Speichern nicht mehr.
+  - Neuer gemeinsamer Rust-Helper `parse_iso_date_strict` in `recurrence.rs`; `validate_anchor_date` und `compute_due_reminders` nutzen denselben strikten `YYYY-MM-DD`-Parser.
+  - `compute_due_reminders` validiert `lead_days` pro Legacy-Row mit `validate_lead_days`; ungueltige Werte werden gewarnt und geskippt.
+  - Frontend validiert `anchorDate`/Currency feldnah in `SubscriptionDialog` und Currency feldnah in `AccountsDialog`.
+  - `DateField` rendert invalide Legacy-Datumswerte roh statt beim Rendern zu crashen.
+  - TS-Pure-Layer nutzt jetzt `parseStrictISODate`: `formatNextDue` zeigt `Ungueltiges Datum`, `computeCoverage`/`computeUpcoming` skippen invalide Legacy-Daten, `applyFilterAndSort` legt sie bei Faelligkeits-Sortierung ans Ende.
+  - `formatAmount` crasht bei unbekannten Legacy-Waehrungen wie `EURO` nicht mehr, sondern rendert defensiv als Zahl + Code.
+- `BACKLOG.md`:
+  - `Orphan account_id`, `Legacy lead_days`, `Anchor-Date strict-on-write/lenient-on-read` und `Backend-Validierungs-Errors als Feld-Errors` abgehakt.
+  - Neues Test-ToDo: echter DB-/Command-Test fuer Orphan-`account_id`-Update-Pfad.
+- `/code-review high` via Subagent `Mill`:
+  - Erste Runde fand blocker: TS-Date-Pfade normalisierten Legacy-Daten weiter (`new Date(...)`) und `formatAmount` konnte bei unbekannter Currency crashen.
+  - Beides gefixt; zweite Runde: keine Blocker. Low-Testgap fuer echten DB-/Command-Test bleibt und ist im BACKLOG.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Code-Commit: `c6704fe` (`fix: Legacy-Validierung konsistent machen`).
+- Handover-Commit folgt direkt nach diesem Eintrag; danach Push auf `origin/main` zusammen mit `c6704fe`.
+- Verifikation:
+  - `cargo fmt --check` ✓
+  - `cargo clippy --all-targets -- -D warnings` ✓
+  - `cargo test` ✓ — 33 Tests gruen
+  - `pnpm test:run` ✓ — 164 Tests / 13 Files gruen
+  - `pnpm lint` ✓ — Biome 48 Files clean
+  - `pnpm build` ✓ — TS + Vite-Build gruen
+  - Lefthook beim Code-Commit ✓ — cargo-fmt, cargo-clippy, biome, vitest.
+
+### Nächster Schritt
+
+- Nach Push sind die user-facing Review-Bugs aus der Bugs-/UI-Sektion erledigt. Offene Review-Themen liegen nun vor allem in `📐 Tests & Qualität` und `🏛️ Architektur`:
+  - Reminder-Dispatcher-Reservierung/Rollback automatisiert testen.
+  - Orphan-`account_id`-Update als DB-/Command-Test absichern.
+  - Recurrence-Vektoren um non-31-Clamps ergaenzen.
+  - TS-JSON-Cast fuer Recurrence-Vektoren narrowen.
+  - Architekturpunkte: FK-PRAGMA, Lock-Poisoning, Permission-denied Log-Flut, Sichtbarkeit/Duplikationen.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Frontend normalisiert Legacy-Datumswerte nicht mehr still:** Wenn der Rust-Scheduler ein Datum skippt, darf die UI es nicht als gueltige Faelligkeit anzeigen. Deshalb strict parse + `Ungueltiges Datum`/Skip statt `new Date(...)`.
+- **Defensive Currency-Anzeige statt Crash:** Legacy-/manuell kaputte Currency-Werte sollen die App nicht beim Rendern zerlegen. Speichern bleibt ueber Whitelist blockiert; Anzeigen bleibt robust.
+- **Orphan-account_id nur bei echter Aenderung validieren:** So kann der User Legacy-Daten reparieren oder andere Felder speichern, ohne sofort am alten kaputten Konto-Verweis haengen zu bleiben.
+
+### Gotchas / Stolperfallen
+
+- `parseStrictISODate` gibt lokale `Date`s zurueck, nicht UTC-Dates. Das passt zur bestehenden `recurrence.ts`-Logik (`new Date(y, m-1, d)` in Tests) und vermeidet TZ-Verschiebungen.
+- `computeMonthlyBaseline` nutzt kein Datum und wurde deshalb nicht auf Anchor-Parsing umgestellt.
+- Der echte Tauri-Command-/DB-Test fuer den Orphan-Pfad ist noch offen; aktuell testen Rust-Unit-Tests nur den Pure-Helper.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Kein Live-Smoke mit `pnpm tauri dev` fuer den zweiten Block gelaufen; der vorherige Tauri-Start in dieser Session war fuer den Tier-1-Block gruen.
+- Kein Push vor dem Handover-Commit; Push folgt direkt danach.
+
 ## 2026-06-08 — Codex: Tier-1-Review-Fixes fuer Reminder/Account-Validation
 
 ### Was passierte
