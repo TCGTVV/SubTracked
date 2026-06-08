@@ -166,6 +166,34 @@ pub async fn count_subs_for_account(
     Ok(n)
 }
 
+fn account_id_requires_validation(
+    current_account_id: Option<i64>,
+    next_account_id: Option<i64>,
+) -> bool {
+    next_account_id.is_some() && current_account_id != next_account_id
+}
+
+async fn subscription_account_id_requires_validation(
+    db: &sqlx::SqlitePool,
+    subscription_id: i64,
+    next_account_id: Option<i64>,
+) -> Result<bool, String> {
+    if next_account_id.is_none() {
+        return Ok(false);
+    }
+    let current: Option<(Option<i64>,)> =
+        sqlx::query_as("SELECT account_id FROM subscriptions WHERE id = ? LIMIT 1")
+            .bind(subscription_id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
+    let current_account_id = current.and_then(|(account_id,)| account_id);
+    Ok(account_id_requires_validation(
+        current_account_id,
+        next_account_id,
+    ))
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn update_subscription(
     state: State<'_, AppState>,
@@ -180,7 +208,9 @@ pub async fn update_subscription(
         sub.lead_days,
     )?;
     if let Some(account_id) = sub.account_id {
-        validate_account_exists(&state.db, account_id).await?;
+        if subscription_account_id_requires_validation(&state.db, sub.id, sub.account_id).await? {
+            validate_account_exists(&state.db, account_id).await?;
+        }
     }
     sqlx::query(
         "UPDATE subscriptions \
@@ -275,4 +305,26 @@ pub async fn send_test_notification(app: tauri::AppHandle) -> Result<(), String>
         .body("Erinnerungen funktionieren — diese Test-Nachricht kam direkt aus den Einstellungen.")
         .show()
         .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unchanged_account_id_does_not_need_revalidation() {
+        assert!(!account_id_requires_validation(Some(99), Some(99)));
+    }
+
+    #[test]
+    fn changed_account_id_needs_revalidation() {
+        assert!(account_id_requires_validation(Some(99), Some(1)));
+        assert!(account_id_requires_validation(None, Some(1)));
+    }
+
+    #[test]
+    fn clearing_account_id_does_not_need_revalidation() {
+        assert!(!account_id_requires_validation(Some(99), None));
+        assert!(!account_id_requires_validation(None, None));
+    }
 }

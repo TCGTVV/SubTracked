@@ -1,5 +1,18 @@
 use chrono::{Months, NaiveDate};
 
+pub fn parse_iso_date_strict(date: &str) -> Result<NaiveDate, String> {
+    // chrono's %Y-%m-%d akzeptiert auch unpadded Werte wie "2026-6-8".
+    // In der DB speichern wir strikt YYYY-MM-DD, damit Read- und Write-Pfad
+    // dieselbe Datumssprache sprechen.
+    let bytes = date.as_bytes();
+    let strict = bytes.len() == 10 && bytes[4] == b'-' && bytes[7] == b'-';
+    if !strict {
+        return Err(format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."));
+    }
+    NaiveDate::parse_from_str(date, "%Y-%m-%d")
+        .map_err(|_| format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."))
+}
+
 pub fn months_per_interval(interval: &str) -> Result<u32, String> {
     match interval {
         "monthly" => Ok(1),
@@ -35,6 +48,15 @@ mod tests {
 
     fn d(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).expect("invalid date")
+    }
+
+    #[test]
+    fn strict_iso_date_parser_rejects_unpadded_dates() {
+        assert_eq!(parse_iso_date_strict("2026-06-08").unwrap(), d(2026, 6, 8));
+        assert!(parse_iso_date_strict("2026-6-8").is_err());
+        assert!(parse_iso_date_strict("2026-06-8").is_err());
+        assert!(parse_iso_date_strict("08.06.2026").is_err());
+        assert!(parse_iso_date_strict("2025-02-29").is_err());
     }
 
     #[test]

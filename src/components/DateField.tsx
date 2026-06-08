@@ -1,16 +1,19 @@
-import { format, parseISO } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { useEffect, useRef, useState } from "react";
+import { type Ref, useEffect, useRef, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 
 interface Props {
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
+  buttonRef?: Ref<HTMLButtonElement>;
   id: string;
   value: string;
   onChange: (value: string) => void;
 }
 
-export function DateField({ id, value, onChange }: Props) {
+export function DateField({ ariaDescribedBy, ariaInvalid, buttonRef, id, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -35,18 +38,24 @@ export function DateField({ id, value, onChange }: Props) {
     };
   }, [open]);
 
-  const selected = value ? parseISO(value) : undefined;
-  const label = selected ? format(selected, "dd.MM.yyyy", { locale: de }) : "Datum wählen …";
+  const parsed = value ? parseISO(value) : undefined;
+  const selected = parsed && isValid(parsed) ? parsed : undefined;
+  const label = selected
+    ? format(selected, "dd.MM.yyyy", { locale: de })
+    : value || "Datum wählen …";
 
   return (
     <div className="date-field" ref={containerRef}>
       <button
         id={id}
+        ref={buttonRef}
         type="button"
         className="date-trigger"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
       >
         {label}
       </button>

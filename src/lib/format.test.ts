@@ -3,8 +3,11 @@ import type { Subscription } from "../types";
 import {
   formatAmount,
   formatNextDue,
+  isCurrencyOption,
+  isStrictISODate,
   parseAmountInput,
   parseSignedAmountInput,
+  parseStrictISODate,
   todayISO,
 } from "./format";
 
@@ -46,6 +49,37 @@ describe("formatAmount", () => {
     expect(formatAmount(1500, "KRW")).toMatch(/₩|KRW/);
     expect(formatAmount(1500, "KRW")).not.toMatch(/15,00|15\.00/);
   });
+
+  it("crasht nicht bei unbekannten Legacy-Waehrungen", () => {
+    expect(formatAmount(1234, "EURO")).toBe("12,34 EURO");
+    expect(formatAmount(1234, "")).toBe("12,34 ?");
+  });
+});
+
+describe("currency/date validators", () => {
+  it("erkennt erlaubte Waehrungen", () => {
+    expect(isCurrencyOption("EUR")).toBe(true);
+    expect(isCurrencyOption("KRW")).toBe(true);
+    expect(isCurrencyOption("BTC")).toBe(false);
+    expect(isCurrencyOption("eur")).toBe(false);
+  });
+
+  it("validiert ISO-Datumswerte strikt", () => {
+    expect(isStrictISODate("2026-06-08")).toBe(true);
+    expect(isStrictISODate("2026-6-8")).toBe(false);
+    expect(isStrictISODate("2026-06-8")).toBe(false);
+    expect(isStrictISODate("08.06.2026")).toBe(false);
+    expect(isStrictISODate("2025-02-29")).toBe(false);
+  });
+
+  it("parst strikte ISO-Datumswerte als lokale Dates", () => {
+    const parsed = parseStrictISODate("2026-06-08");
+    expect(parsed).not.toBeNull();
+    expect(parsed?.getFullYear()).toBe(2026);
+    expect(parsed?.getMonth()).toBe(5);
+    expect(parsed?.getDate()).toBe(8);
+    expect(parseStrictISODate("2026-6-8")).toBeNull();
+  });
 });
 
 describe("formatNextDue", () => {
@@ -57,6 +91,12 @@ describe("formatNextDue", () => {
   it("zeigt den Anker selbst, wenn er in der Zukunft liegt", () => {
     const now = new Date(2026, 0, 1);
     expect(formatNextDue(sub({ anchorDate: "2026-08-20" }), now)).toBe("20.08.2026");
+  });
+
+  it("normalisiert ungueltige Legacy-Datumswerte nicht still", () => {
+    const now = new Date(2026, 0, 1);
+    expect(formatNextDue(sub({ anchorDate: "2026-1-5" }), now)).toBe("Ungültiges Datum");
+    expect(formatNextDue(sub({ anchorDate: "2025-02-29" }), now)).toBe("Ungültiges Datum");
   });
 });
 

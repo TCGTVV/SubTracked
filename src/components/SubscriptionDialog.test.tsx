@@ -182,6 +182,30 @@ describe("SubscriptionDialog", () => {
     expect(screen.getByText(/Vorlauf muss zwischen 0 und 365/)).toBeInTheDocument();
   });
 
+  it("zeigt feldnahe Fehlermeldung bei ungueltigem Legacy-Datum", async () => {
+    renderDialog({ ...existingSub, anchorDate: "2026-1-5" });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await Promise.resolve();
+    expect(mockUpdateSubscription).not.toHaveBeenCalled();
+    const anchorButton = screen.getByLabelText("Erste Fälligkeit");
+    expect(anchorButton).toHaveAttribute("aria-invalid", "true");
+    expect(anchorButton).toHaveFocus();
+    expect(screen.getByText(/gültiges Datum im Format YYYY-MM-DD/)).toBeInTheDocument();
+  });
+
+  it("zeigt feldnahe Fehlermeldung bei unbekannter Waehrung", async () => {
+    renderDialog({ ...existingSub, currency: "EURO" });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await Promise.resolve();
+    expect(mockUpdateSubscription).not.toHaveBeenCalled();
+    const currencySelect = screen.getByLabelText("Währung");
+    expect(currencySelect).toHaveAttribute("aria-invalid", "true");
+    expect(currencySelect).toHaveFocus();
+    expect(screen.getByText(/erlaubte Währung/)).toBeInTheDocument();
+  });
+
   it("akzeptiert Komma als Dezimaltrenner und rundet auf Cent", async () => {
     mockAddSubscription.mockResolvedValue(99);
     renderDialog(null);
