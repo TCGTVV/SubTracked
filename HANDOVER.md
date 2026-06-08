@@ -9,6 +9,54 @@
 
 ---
 
+## 2026-06-08 — Codex: Push-Abschluss der Review-Fix-Blöcke
+
+### Was passierte
+
+- User bat nach den Fix- und Push-Runden darum, den finalen Stand noch einmal sauber im HANDOVER festzuhalten und erneut zu pushen.
+- Vor diesem Nachtrag waren bereits gepusht:
+  - `d386072` — `fix: Reminder-Tier-1-Bugs haerten`
+  - `6320f94` — `docs: HANDOVER fuer Tier-1-Fixes aktualisieren`
+  - `c6704fe` — `fix: Legacy-Validierung konsistent machen`
+  - `2f5aa99` — `docs: HANDOVER fuer Legacy-Fixes aktualisieren`
+- Dieser Eintrag ist ein reiner Dokumentations-Nachtrag; keine Code-/Backlog-Aenderung.
+
+### Status am Sitzungsende
+
+- Branch: `main`, vor diesem Nachtrag synchron mit `origin/main` auf `2f5aa99`.
+- Working tree vor diesem Nachtrag: clean.
+- Dieser HANDOVER-only Commit wird direkt anschliessend erstellt und auf `origin/main` gepusht.
+- Code-Stand aus den beiden Fix-Bloecken bleibt:
+  - Rust: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` ✓ — 33 Tests.
+  - Frontend: `pnpm test:run` ✓ — 164 Tests / 13 Files; `pnpm lint` ✓; `pnpm build` ✓.
+  - `pnpm tauri dev` wurde in dieser Session fuer den ersten/Tier-1-Block gestartet und kam bis zum laufenden Rust-Binary/App-Start; fuer den zweiten Legacy/UI-Block gab es keinen erneuten Live-Smoke.
+
+### Nächster Schritt
+
+- Als naechstes keine user-facing Review-Bugs mehr: weiter mit den offenen Review-Themen in `📐 Tests & Qualität` und `🏛️ Architektur`:
+  - Reminder-Dispatcher-Reservierung/Rollback automatisiert testen.
+  - Orphan-`account_id`-Update als DB-/Command-Test absichern.
+  - Recurrence-Vektoren um non-31-Clamps ergaenzen.
+  - TS-JSON-Cast fuer Recurrence-Vektoren narrowen.
+  - Architekturpunkte: FK-PRAGMA, Lock-Poisoning, Permission-denied Log-Flut, Sichtbarkeit/Duplikationen.
+
+### Wichtige Entscheidungen + Begründung
+
+- Kein weiterer Code-Review fuer diesen Nachtrag: reine HANDOVER-Dokumentation, keine Code-/Persistenz-/UI-Aenderung.
+- Keine Tests erneut gestartet fuer diesen Nachtrag: Code-Checks liefen bereits gruen direkt vor den Fix-Commits und Lefthook lief bei den Commits.
+
+### Gotchas / Stolperfallen
+
+- Die vorherigen zwei HANDOVER-Eintraege dokumentieren die jeweilige Arbeit im Detail. Dieser Eintrag ist nur der finale Push-/Status-Abschluss, damit der naechste Agent oben sofort den tatsaechlichen Endzustand sieht.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Kein erneuter `pnpm tauri dev` nach dem zweiten Legacy/UI-Block.
+
 ## 2026-06-08 — Codex: Restliche Review-Bugs + Frontend-Legacy-Semantik
 
 ### Was passierte
@@ -32,7 +80,7 @@
 
 - Branch: `main`.
 - Code-Commit: `c6704fe` (`fix: Legacy-Validierung konsistent machen`).
-- Handover-Commit folgt direkt nach diesem Eintrag; danach Push auf `origin/main` zusammen mit `c6704fe`.
+- Handover-Commit: `2f5aa99` (`docs: HANDOVER fuer Legacy-Fixes aktualisieren`), danach Push auf `origin/main`.
 - Verifikation:
   - `cargo fmt --check` ✓
   - `cargo clippy --all-targets -- -D warnings` ✓
@@ -70,7 +118,7 @@
 ### Offen / nicht geklärt
 
 - Kein Live-Smoke mit `pnpm tauri dev` fuer den zweiten Block gelaufen; der vorherige Tauri-Start in dieser Session war fuer den Tier-1-Block gruen.
-- Kein Push vor dem Handover-Commit; Push folgt direkt danach.
+- Push auf `origin/main` erfolgte nach dem Handover-Commit.
 
 ## 2026-06-08 — Codex: Tier-1-Review-Fixes fuer Reminder/Account-Validation
 
@@ -93,7 +141,7 @@
 
 - Branch: `main`.
 - Code-Commit: `d386072` (`fix: Reminder-Tier-1-Bugs haerten`).
-- Handover-Commit folgt direkt nach diesem Eintrag; danach Push auf `origin/main`.
+- Handover-Commit: `6320f94` (`docs: HANDOVER fuer Tier-1-Fixes aktualisieren`), danach Push auf `origin/main`.
 - Verifikation:
   - `cargo fmt --check` ✓
   - `cargo clippy --all-targets -- -D warnings` ✓
