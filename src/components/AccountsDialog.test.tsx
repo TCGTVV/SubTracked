@@ -146,6 +146,29 @@ describe("AccountsDialog", () => {
     expect(mockAddAccount).not.toHaveBeenCalled();
   });
 
+  it("zeigt feldnahe Fehlermeldung bei unbekannter Waehrung", async () => {
+    const invalidCurrency: Account[] = [
+      {
+        id: 5,
+        name: "Fremdkonto",
+        note: null,
+        currency: "EURO",
+        balanceCents: 1000,
+        minBufferCents: 0,
+      },
+    ];
+    renderDialog(invalidCurrency);
+    fireEvent.click(screen.getByRole("button", { name: "Konto Fremdkonto bearbeiten" }));
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await Promise.resolve();
+    expect(mockUpdateAccount).not.toHaveBeenCalled();
+    const currencySelect = screen.getByLabelText("Währung");
+    expect(currencySelect).toHaveAttribute("aria-invalid", "true");
+    expect(currencySelect).toHaveFocus();
+    expect(screen.getByText(/erlaubte Währung/)).toBeInTheDocument();
+  });
+
   it("startet den Edit-Mode mit vorgefüllten Werten beim Klick auf Bearbeiten", () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Konto Hauptkonto bearbeiten" }));

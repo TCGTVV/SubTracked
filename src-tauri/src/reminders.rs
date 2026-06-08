@@ -4,7 +4,8 @@ use tauri::AppHandle;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 use crate::db::Subscription;
-use crate::recurrence::next_due_date;
+use crate::recurrence::{next_due_date, parse_iso_date_strict};
+use crate::validation::validate_lead_days;
 
 /// Eine im Vorlauf-Fenster faellige Erinnerung. Pure-Output von
 /// [`compute_due_reminders`]; enthaelt nur die Daten, die der Dispatcher zum
@@ -32,7 +33,16 @@ pub fn compute_due_reminders(
         if !sub.notify {
             continue;
         }
-        let anchor = match NaiveDate::parse_from_str(&sub.anchor_date, "%Y-%m-%d") {
+        if let Err(e) = validate_lead_days(sub.lead_days) {
+            tracing::warn!(
+                subscription_id = sub.id,
+                lead_days = sub.lead_days,
+                error = %e,
+                "Abo wegen ungueltigem Reminder-Vorlauf uebersprungen"
+            );
+            continue;
+        }
+        let anchor = match parse_iso_date_strict(&sub.anchor_date) {
             Ok(anchor) => anchor,
             Err(e) => {
                 tracing::warn!(
@@ -322,6 +332,14 @@ mod tests {
     }
 
     #[test]
+    fn compute_skips_unpadded_anchor_date_and_continues_batch() {
+        let subs = vec![sub(1, "2025-2-15", 7, true), sub(2, "2025-02-15", 7, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
+        assert_eq!(ids, vec![2]);
+    }
+
+    #[test]
     fn compute_skips_bad_interval_and_continues_batch() {
         let mut bad = sub(1, "2025-02-15", 7, true);
         bad.interval = "weekly".to_string();
@@ -329,6 +347,18 @@ mod tests {
         let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
         let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
         assert_eq!(ids, vec![2]);
+    }
+
+    #[test]
+    fn compute_skips_bad_lead_days_and_continues_batch() {
+        let subs = vec![
+            sub(1, "2025-02-15", -1, true),
+            sub(2, "2025-02-15", 366, true),
+            sub(3, "2025-02-15", 7, true),
+        ];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
+        assert_eq!(ids, vec![3]);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import { addDays, addMonths, startOfDay } from "date-fns";
 import type { Account, Subscription } from "../types";
+import { parseStrictISODate } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
 export interface CoverageItem {
@@ -104,7 +105,9 @@ export function computeCoverage(
     }
 
     const list = itemsByBucket.get(key) ?? [];
-    for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
+    const anchor = parseStrictISODate(sub.anchorDate);
+    if (!anchor) continue;
+    for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
       list.push({
         subscriptionId: sub.id,
         subscription: sub.name,
@@ -208,7 +211,9 @@ export function computeUpcoming(
   for (const sub of subscriptions) {
     const accountName =
       sub.accountId != null ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)") : null;
-    for (const d of dueDatesWithin(new Date(sub.anchorDate), sub.interval, from, until)) {
+    const anchor = parseStrictISODate(sub.anchorDate);
+    if (!anchor) continue;
+    for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
       items.push({
         subscriptionId: sub.id,
         subscription: sub.name,

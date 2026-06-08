@@ -82,6 +82,16 @@ describe("computeCoverage", () => {
     expect(dates).toEqual([...dates].sort());
   });
 
+  it("skippt ungueltige Legacy-Datumswerte statt sie zu normalisieren", () => {
+    const subs = [
+      sub({ id: 1, name: "Invalid", anchorDate: "2026-1-5" }),
+      sub({ id: 2, name: "Leap", anchorDate: "2025-02-29" }),
+      sub({ id: 3, name: "Valid", anchorDate: "2026-01-10" }),
+    ];
+    const result = computeCoverage(subs, [acc(1, "Giro")], 1, NOW);
+    expect(result[0]?.items.map((i) => i.subscription)).toEqual(["Valid"]);
+  });
+
   it("schreibt Saldo pro Buchung fort (balanceAfterCents)", () => {
     const subs = [sub({ amountCents: 1000 })];
     const accounts = [acc(1, "Giro", { balanceCents: 5000 })];
@@ -207,6 +217,16 @@ describe("computeUpcoming", () => {
     ];
     const result = computeUpcoming(subs, [acc(1, "Giro")], 30, NOW);
     expect(result.map((i) => i.currency)).toEqual(["EUR", "USD"]);
+  });
+
+  it("skippt ungueltige Legacy-Datumswerte", () => {
+    const subs = [
+      sub({ id: 1, name: "Invalid", anchorDate: "2026-1-5" }),
+      sub({ id: 2, name: "Leap", anchorDate: "2025-02-29" }),
+      sub({ id: 3, name: "Valid", anchorDate: "2026-01-10" }),
+    ];
+    const result = computeUpcoming(subs, [acc(1, "Giro")], 30, NOW);
+    expect(result.map((i) => i.subscription)).toEqual(["Valid"]);
   });
 
   it("uebertraegt notify, damit der Caller stumme Subs markieren kann", () => {

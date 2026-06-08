@@ -1,6 +1,13 @@
 import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addSubscription, updateSubscription } from "../lib/db";
-import { CURRENCY_OPTIONS, getCurrencySubdivisor, parseAmountInput, todayISO } from "../lib/format";
+import {
+  CURRENCY_OPTIONS,
+  getCurrencySubdivisor,
+  isCurrencyOption,
+  isStrictISODate,
+  parseAmountInput,
+  todayISO,
+} from "../lib/format";
 import type { Account, Interval, Subscription } from "../types";
 import { DateField } from "./DateField";
 
@@ -20,6 +27,8 @@ interface Props {
 interface FieldErrors {
   name?: string;
   amount?: string;
+  currency?: string;
+  anchorDate?: string;
   leadDays?: string;
 }
 
@@ -41,10 +50,14 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   const leadId = useId();
   const nameErrorId = useId();
   const amountErrorId = useId();
+  const currencyErrorId = useId();
+  const anchorErrorId = useId();
   const leadErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
+  const currencyRef = useRef<HTMLSelectElement>(null);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const leadRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(subscription?.name ?? "");
@@ -86,6 +99,14 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
       }
     }
 
+    if (!isCurrencyOption(currency)) {
+      next.currency = "Bitte eine erlaubte Währung wählen.";
+    }
+
+    if (!isStrictISODate(anchorDate)) {
+      next.anchorDate = "Erste Fälligkeit muss ein gültiges Datum im Format YYYY-MM-DD sein.";
+    }
+
     if (!Number.isInteger(leadDays) || leadDays < 0 || leadDays > 365) {
       next.leadDays = "Vorlauf muss zwischen 0 und 365 Tagen liegen.";
     }
@@ -101,6 +122,8 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
       // Fokus auf erstes fehlerhaftes Feld in DOM-Reihenfolge.
       if (validation.name) nameRef.current?.focus();
       else if (validation.amount) amountRef.current?.focus();
+      else if (validation.currency) currencyRef.current?.focus();
+      else if (validation.anchorDate) anchorRef.current?.focus();
       else if (validation.leadDays) leadRef.current?.focus();
       return;
     }
@@ -190,13 +213,28 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
           </div>
           <div className="field field-narrow">
             <label htmlFor={currencyId}>Währung</label>
-            <select id={currencyId} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            <select
+              id={currencyId}
+              ref={currencyRef}
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                clearFieldError("currency");
+              }}
+              aria-invalid={errors.currency ? true : undefined}
+              aria-describedby={errors.currency ? currencyErrorId : undefined}
+            >
               {CURRENCY_OPTIONS.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
             </select>
+            {errors.currency && (
+              <span id={currencyErrorId} className="field-error" role="alert">
+                {errors.currency}
+              </span>
+            )}
           </div>
         </div>
 
@@ -234,7 +272,22 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
         <div className="field-row">
           <div className="field">
             <label htmlFor={anchorId}>Erste Fälligkeit</label>
-            <DateField id={anchorId} value={anchorDate} onChange={setAnchorDate} />
+            <DateField
+              id={anchorId}
+              buttonRef={anchorRef}
+              value={anchorDate}
+              onChange={(value) => {
+                setAnchorDate(value);
+                clearFieldError("anchorDate");
+              }}
+              ariaInvalid={errors.anchorDate ? true : undefined}
+              ariaDescribedBy={errors.anchorDate ? anchorErrorId : undefined}
+            />
+            {errors.anchorDate && (
+              <span id={anchorErrorId} className="field-error" role="alert">
+                {errors.anchorDate}
+              </span>
+            )}
           </div>
           <div className="field field-narrow">
             <label htmlFor={leadId}>Vorlauf (Tage)</label>

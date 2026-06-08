@@ -1,5 +1,6 @@
-use chrono::NaiveDate;
 use sqlx::SqlitePool;
+
+use crate::recurrence::parse_iso_date_strict;
 
 pub const ALLOWED_CURRENCIES: &[&str] = &["EUR", "USD", "GBP", "CHF", "KRW"];
 pub const ALLOWED_INTERVALS: &[&str] = &["monthly", "quarterly", "yearly"];
@@ -34,16 +35,7 @@ pub fn validate_interval(interval: &str) -> Result<(), String> {
 }
 
 pub fn validate_anchor_date(date: &str) -> Result<(), String> {
-    // chrono's %Y-%m-%d akzeptiert auch unpadded Werte wie "2026-6-8".
-    // Wir speichern aber strikt YYYY-MM-DD, sonst stolpert die Recurrence-Logik.
-    let bytes = date.as_bytes();
-    let strict = bytes.len() == 10 && bytes[4] == b'-' && bytes[7] == b'-';
-    if !strict {
-        return Err(format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."));
-    }
-    NaiveDate::parse_from_str(date, "%Y-%m-%d")
-        .map(|_| ())
-        .map_err(|_| format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."))
+    parse_iso_date_strict(date).map(|_| ())
 }
 
 pub fn validate_amount_cents(amount_cents: i64) -> Result<(), String> {

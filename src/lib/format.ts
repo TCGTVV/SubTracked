@@ -20,6 +20,23 @@ export function getCurrencySubdivisor(currency: string): number {
   return CURRENCY_SUBDIVISIONS[currency] ?? 100;
 }
 
+export function isCurrencyOption(currency: string): currency is CurrencyOption {
+  return (CURRENCY_OPTIONS as readonly string[]).includes(currency);
+}
+
+export function parseStrictISODate(input: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) return null;
+  const [year, month, day] = input.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : null;
+}
+
+export function isStrictISODate(input: string): boolean {
+  return parseStrictISODate(input) !== null;
+}
+
 /**
  * Parst Betrags-Eingaben tolerant: akzeptiert "12,99", "12.99", "1.234,56", "1,234.56".
  * Heuristik fuer Trennzeichen:
@@ -79,14 +96,23 @@ export function parseSignedAmountInput(input: string): number | null {
 
 export function formatAmount(cents: number, currency: string): string {
   const divisor = getCurrencySubdivisor(currency);
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency,
-  }).format(cents / divisor);
+  const value = cents / divisor;
+  if (isCurrencyOption(currency)) {
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency,
+    }).format(value);
+  }
+  return `${new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: divisor === 1 ? 0 : 2,
+    maximumFractionDigits: divisor === 1 ? 0 : 2,
+  }).format(value)} ${currency || "?"}`;
 }
 
 export function formatNextDue(sub: Subscription, now: Date = new Date()): string {
-  const due = nextDueDate(new Date(sub.anchorDate), sub.interval, now);
+  const anchor = parseStrictISODate(sub.anchorDate);
+  if (!anchor) return "Ungültiges Datum";
+  const due = nextDueDate(anchor, sub.interval, now);
   return format(due, "dd.MM.yyyy");
 }
 

@@ -1,4 +1,5 @@
 import type { Subscription } from "../types";
+import { parseStrictISODate } from "./format";
 import { nextDueDate } from "./recurrence";
 
 /** null = alle Konten, "none" = nur Subs ohne Konto, number = bestimmtes Konto. */
@@ -48,14 +49,24 @@ export function applyFilterAndSort(
     return true;
   });
 
-  const dueCache = new Map<number, number>();
-  function due(sub: Subscription): number {
+  const dueCache = new Map<number, number | null>();
+  function due(sub: Subscription): number | null {
     let cached = dueCache.get(sub.id);
     if (cached === undefined) {
-      cached = nextDueDate(new Date(sub.anchorDate), sub.interval, now).getTime();
+      const anchor = parseStrictISODate(sub.anchorDate);
+      cached = anchor ? nextDueDate(anchor, sub.interval, now).getTime() : null;
       dueCache.set(sub.id, cached);
     }
     return cached;
+  }
+
+  function compareDue(a: Subscription, b: Subscription, direction: 1 | -1): number {
+    const aDue = due(a);
+    const bDue = due(b);
+    if (aDue === null && bDue === null) return a.name.localeCompare(b.name, "de");
+    if (aDue === null) return 1;
+    if (bDue === null) return -1;
+    return direction * (aDue - bDue);
   }
 
   const sorted = [...filtered];
@@ -67,10 +78,10 @@ export function applyFilterAndSort(
       sorted.sort((a, b) => b.name.localeCompare(a.name, "de"));
       break;
     case "due-asc":
-      sorted.sort((a, b) => due(a) - due(b));
+      sorted.sort((a, b) => compareDue(a, b, 1));
       break;
     case "due-desc":
-      sorted.sort((a, b) => due(b) - due(a));
+      sorted.sort((a, b) => compareDue(a, b, -1));
       break;
     case "amount-asc":
       sorted.sort((a, b) => a.amountCents - b.amountCents);

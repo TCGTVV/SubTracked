@@ -142,6 +142,32 @@ describe("applyFilterAndSort", () => {
       expect(result.map((s) => s.name)).toEqual(["Spät", "Früh"]);
     });
 
+    it("due-asc legt ungueltige Legacy-Datumswerte ans Ende", () => {
+      const subs = [
+        sub({ id: 1, name: "Invalid", anchorDate: "2026-1-5" }),
+        sub({ id: 2, name: "Valid", anchorDate: "2026-01-05" }),
+      ];
+      const result = applyFilterAndSort(
+        subs,
+        { ...DEFAULT_SUB_LIST_OPTIONS, sort: "due-asc" },
+        NOW,
+      );
+      expect(result.map((s) => s.name)).toEqual(["Valid", "Invalid"]);
+    });
+
+    it("due-desc legt ungueltige Legacy-Datumswerte ans Ende", () => {
+      const subs = [
+        sub({ id: 1, name: "Invalid", anchorDate: "2026-1-5" }),
+        sub({ id: 2, name: "Valid", anchorDate: "2026-01-05" }),
+      ];
+      const result = applyFilterAndSort(
+        subs,
+        { ...DEFAULT_SUB_LIST_OPTIONS, sort: "due-desc" },
+        NOW,
+      );
+      expect(result.map((s) => s.name)).toEqual(["Valid", "Invalid"]);
+    });
+
     it("amount-asc sortiert nach Betrag aufsteigend", () => {
       const subs = [
         sub({ id: 1, name: "Teuer", amountCents: 5000 }),

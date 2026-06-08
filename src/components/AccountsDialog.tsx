@@ -4,6 +4,7 @@ import {
   CURRENCY_OPTIONS,
   formatAmount,
   getCurrencySubdivisor,
+  isCurrencyOption,
   parseSignedAmountInput,
 } from "../lib/format";
 import type { Account } from "../types";
@@ -24,6 +25,7 @@ interface FormState {
 
 interface FieldErrors {
   name?: string;
+  currency?: string;
   balance?: string;
   buffer?: string;
 }
@@ -61,10 +63,12 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
   const balanceId = useId();
   const bufferId = useId();
   const nameErrorId = useId();
+  const currencyErrorId = useId();
   const balanceErrorId = useId();
   const bufferErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
+  const currencyRef = useRef<HTMLSelectElement>(null);
   const balanceRef = useRef<HTMLInputElement>(null);
   const bufferRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +120,10 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
     const next: FieldErrors = {};
     if (form.name.trim() === "") next.name = "Bitte Namen eingeben.";
 
+    if (!isCurrencyOption(form.currency)) {
+      next.currency = "Bitte eine erlaubte Währung wählen.";
+    }
+
     const balanceCents = parseToCents(form.balance, form.currency);
     if (balanceCents === null) {
       next.balance = "Saldo ungültig — bitte Zahl eingeben (z.B. 500 oder 500,00).";
@@ -137,6 +145,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
     if (Object.keys(validation).length > 0) {
       setErrors(validation);
       if (validation.name) nameRef.current?.focus();
+      else if (validation.currency) currencyRef.current?.focus();
       else if (validation.balance) balanceRef.current?.focus();
       else if (validation.buffer) bufferRef.current?.focus();
       return;
@@ -268,8 +277,14 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
             <label htmlFor={currencyId}>Währung</label>
             <select
               id={currencyId}
+              ref={currencyRef}
               value={form.currency}
-              onChange={(e) => updateField("currency", e.target.value)}
+              onChange={(e) => {
+                updateField("currency", e.target.value);
+                clearFieldError("currency");
+              }}
+              aria-invalid={errors.currency ? true : undefined}
+              aria-describedby={errors.currency ? currencyErrorId : undefined}
             >
               {CURRENCY_OPTIONS.map((c) => (
                 <option key={c} value={c}>
@@ -277,6 +292,11 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
                 </option>
               ))}
             </select>
+            {errors.currency && (
+              <span id={currencyErrorId} className="field-error" role="alert">
+                {errors.currency}
+              </span>
+            )}
           </div>
 
           <div className="field">
