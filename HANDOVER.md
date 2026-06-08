@@ -9,6 +9,58 @@
 
 ---
 
+## 2026-06-08 — Claude: Code-Review des Hardening-Blocks (15 Befunde dokumentiert, push as-is)
+
+Direkt nach dem Hardening-Commit-Block hat der User `/code-review` im extra-high-Recall-Modus angestossen. Ziel: zweite Augen ueber die 5 Commits, bevor sie nach origin/main pushen. Ergebnis: 15 Befunde dokumentiert, Push trotzdem (Option C — kein Fix-Pass jetzt, weil die Befunde Verbesserungen *ueber den ohnehin besseren* Stand sind, keine echten Regressionen).
+
+### Vorgehen
+
+- **Phase 1 — 9 Finder-Angles parallel** ueber den Diff `git diff origin/main...HEAD` (892 Zeilen, 688 insertions, 10 Files): A line-by-line, B removed-behavior, C cross-file, D language-pitfalls, E wrapper/proxy, plus Reuse/Simplification/Efficiency/Altitude.
+- **Phase 2 — Dedup + Verification**: ~40 Roh-Kandidaten auf ~20 deduped. Statt 20 paralleler Verifier-Agents direkt durch Code-Read verifiziert; die meisten Befunde sind Code-Fakten (Line-Numbers, fehlende Validatoren, asymmetrische Pfade). Verifier-Agents bringen bei diesem Diff-Stil zu wenig zusaetzlichen Wert fuer den Token-Aufwand.
+- **Phase 3 — Sweep**: ein zusaetzlicher Agent gegen die deduped Liste; brachte 4 echte neue Befunde (Lock-Poisoning, Shutdown-Race, Log-Flut, Vektor-Coverage-Luecke) + 2 Schaerfungen.
+- **Phase 4 — Top-15 JSON** ranked nach Severity, Korrektheit vor Cleanup, wie vom Skill vorgegeben.
+
+### Befunde (in BACKLOG aufgenommen, jeweils Quelle markiert)
+
+**Bugs (6) — `🐛 Bugs`-Sektion:**
+1. `compute_due_reminders` bricht den ganzen Batch bei einer korrupten Zeile ab (`?` propagiert) — eine kaputte `anchor_date`-Zeile killt alle Reminder.
+2. Shutdown-Race zwischen `notification.show()` und `insert_reminder_if_new` — Notification raus, INSERT fehlt, naechster Start feuert erneut.
+3. `balance_cents` ungeprueft in `add_account/update_account` — `validate_account_fields` deckt nur 3 von 4 numerischen Feldern.
+4. Orphan-account_id blockiert Edit der Sub-Row, wenn User nur den Namen aendert.
+5. Legacy `lead_days` bei Read nicht re-validiert — negative oder huge Werte unterwandern die neue Validierung.
+6. Anchor-Date strict-on-write (Validation) vs. lenient-on-read (chrono in `compute_due_reminders`) — Legacy-Row lesbar, aber nicht editierbar.
+
+**Tests & Qualitaet (2) — `📐`-Sektion:**
+7. Recurrence-Vektoren decken non-31-Clamps nicht ab — quarterly/yearly Clamp-Edges fehlen.
+8. TS-JSON-Cast widens `interval` auf `string` — Tippfehler im JSON wird vom Cast lautlos akzeptiert, scheitert dann Rust-seitig.
+
+**Architektur/Altitude (6) — `🏛️`-Sektion:**
+9. `PRAGMA foreign_keys=ON` ist die rechtere Tiefe vs. `validate_account_exists`-Patches — wuerde die Existence-Check-Funktion entbehrlich machen und alle kuenftigen Write-Pfade gleichzeitig haerten.
+10. Lock-Poisoning auf `ReminderState.last_check_at` silently dropped — `if let Ok` lasst Err verfallen.
+11. Permission-denied `tracing::info!`-Flut bei dauerhaft abgelehnter Berechtigung — verstopft das rolling 7-Tage-Log.
+12. `pub fn compute_due_reminders` nur in-modul genutzt — Sichtbarkeit suggeriert externen Vertrag, der den Idempotenz-Check umgehen koennte.
+13. `validate_interval` dupliziert `months_per_interval`-Liste — drift-anfaellig bei neuen Intervallen.
+14. `ALLOWED_CURRENCIES` dupliziert frontend `CURRENCY_OPTIONS` — drift-anfaellig bei neuen Waehrungen.
+
+**UI (1) — `🔨`-Sektion:**
+15. Backend-Validierungs-Errors landen im dialog-weiten Banner statt am Feld — `SubscriptionDialog.validate()` prueft anchorDate-Format und Currency-Whitelist nicht.
+
+### Entscheidung (Option C)
+
+- **Push der 5 Hardening-Commits as-is**, weil:
+  - Alle 15 Befunde sind Verbesserungen ueber den jetzigen Stand, nicht Regressionen gegenueber Pre-PR.
+  - Die zwei schaerfsten Befunde (#1 Batch-Abbruch, #2 Shutdown-Race) sind theoretische Pfade ohne reproduzierbaren User-Trigger im aktuellen Datenbestand.
+  - Tier-3-Befunde (Duplikation, FK-PRAGMA, Lock-Poisoning) sind Architektur-Investments fuer eine eigene Folge-Session.
+- **Befunde im BACKLOG eingestreut** in die jeweils passende Sektion (`🐛 Bugs` / `🔨 Jetzt` / `📐 Tests` / `🏛️ Architektur`), markiert mit `(2026-06-08, Review)` zur Nachvollziehbarkeit.
+
+### Naechster Schritt
+
+- Eine eigene Fix-Session fuer Tier-1-Befunde (#1, #2, #3) waere sinnvoll — alle drei sind kleine Aenderungen mit Test-Abdeckung.
+- Tier-3-Altitude-Befunde (#9 PRAGMA foreign_keys, #13/#14 Duplikations-Quellen) wuerden gut in eine "Schema-Strenge + Shared-Constants"-Session passen.
+- `pnpm tauri dev` Live-Smoke immer noch ausstehend; bei der Fix-Session mitnehmen.
+
+---
+
 ## 2026-06-08 — Claude: Hardening-Block (Server-Validierung, gemeinsame Recurrence-Vektoren, reminders-Split, Review-Konvention)
 
 User hat aus den vier offenen Hardening-Items im BACKLOG den ganzen Block am Stueck angefragt. Item 5 (E2E via Tauri WebDriver) wurde nach Rueckfrage vertagt, weil eigener Infrastruktur-Block und Backlog selbst sagt „eigentlich erst vor v1.0". Die anderen vier sind erledigt.
