@@ -9,6 +9,90 @@
 
 ---
 
+## 2026-06-08 — Claude: Hardening-Block (Server-Validierung, gemeinsame Recurrence-Vektoren, reminders-Split, Review-Konvention)
+
+User hat aus den vier offenen Hardening-Items im BACKLOG den ganzen Block am Stueck angefragt. Item 5 (E2E via Tauri WebDriver) wurde nach Rueckfrage vertagt, weil eigener Infrastruktur-Block und Backlog selbst sagt „eigentlich erst vor v1.0". Die anderen vier sind erledigt.
+
+### Geaendert
+
+- `src-tauri/src/validation.rs` (neu, ~140 Zeilen + 70 Zeilen Tests)
+  - Reine Helper: `validate_name/currency/interval/anchor_date/amount_cents/lead_days/min_buffer_cents`.
+  - Komposit-Helper `validate_subscription_fields` und `validate_account_fields`.
+  - Async-Helper `validate_account_exists(db, account_id)` — wichtig, weil SQLite-Foreign-Keys in dieser App nicht aktiviert sind (kein `PRAGMA foreign_keys=ON` in `lib.rs`), also waere ein dangling `account_id` sonst widerspruchsfrei.
+  - Strikte Anchor-Date-Pruefung (Laenge == 10, Bindestriche an Position 4 + 7) **vor** dem chrono-Parse — chrono akzeptiert `2026-6-8` mit `%Y-%m-%d`, was die Recurrence-Logik mit unpadded Werten in die DB durchlassen wuerde.
+  - Currency-Whitelist matcht `CURRENCY_OPTIONS` im Frontend (EUR/USD/GBP/CHF/KRW), Interval-Whitelist matcht das Schema-CHECK-Constraint, `lead_days` 0..=365 spiegelt die Frontend-Validierung.
+  - 9 Unit-Tests, alle async-frei (auch der Existence-Check ist nicht im Test-Modul abgedeckt — koennte spaeter mit einer in-memory sqlx-Pool kommen).
+- `src-tauri/src/lib.rs`
+  - `mod validation;` registriert.
+- `src-tauri/src/commands.rs`
+  - `add_subscription` / `update_subscription` rufen `validate_subscription_fields` und (falls `account_id.is_some()`) `validate_account_exists`.
+  - `add_account` / `update_account` rufen `validate_account_fields`. `update_account` validiert den vollen `Account` (Name + Currency + min_buffer); `add_account` mit dem nach Defaults aufgeloesten Currency-Wert.
+- `tests/fixtures/recurrence-vectors.json` (neu)
+  - 13 `next_due_date`-Vektoren als Single Source of Truth fuer beide Seiten: Anker in Zukunft, Anker == from, einfacher Monatssprung, 31.-Anker-Drift quer durch Feb/Mar/Apr/May/Jul, quartal exact-hit + one-day-past, jaehrlich-einfach, Schaltjahr-Anker (2024-02-29 → 2025-02-28 und 2026-02-28).
+  - Repo-Root, neutraler Pfad fuer beide Sprachen.
+- `src-tauri/src/recurrence.rs`
+  - Neuer Test `shared_vectors_match_typescript_impl` parst die JSON via `include_str!` + `serde_json::from_str` und prueft jeden Vektor gegen `next_due_date`.
+- `src/lib/recurrence-vectors.test.ts` (neu)
+  - Vitest-Spec liest dieselbe JSON via Import (resolveJsonModule), narrowt auf Interval-Type, prueft jeden Vektor gegen `nextDueDate`. Lokales `parseDate` baut `new Date(y, m-1, d)` — Vitest hat `TZ=UTC` gesetzt, also Mitternacht-konsistent mit Rusts `NaiveDate`.
+- `src-tauri/src/reminders.rs`
+  - **Sauberer Split:** Neue pure Funktion `compute_due_reminders(subs, today) -> Vec<DueReminder>` (Notify-Filter + Anchor-Parse + `next_due_date` + Lead-Window-Vergleich), neue Async-Funktion `dispatch_due_reminders(pool, app, granted, due)` (Idempotenz-Check + Notification-Permission-Branch + `show()` + `INSERT OR IGNORE`). `run_reminder_check` ist nur noch Orchestrator.
+  - Neuer pub-Struct `DueReminder { subscription_id, subscription_name, amount_cents, currency, due_date }` als Pipe-Format zwischen compute und dispatch.
+  - 7 neue Unit-Tests fuer den pure-Pfad: muted skipped, today < remind_from skipped, today == remind_from included, today == due_date included (lead_days=0), 31.-Anker-Drift-Schutz (2025-03-25 mit Anker 2025-01-31 → 2025-03-31, nicht 03-28), bad anchor_date Fehler, gemischter Batch.
+- `AGENTS.md`
+  - Neuer Abschnitt „Zweite Augen — Code-Review-Konvention" nach „Pruefen vor Abschluss".
+  - Regel: nicht-triviale Aenderungen vor Commit `/code-review high`; groessere Bloecke `/code-review ultra`; Triviales ohne Review.
+  - Cross-Agent-Pattern (Claude ↔ Codex) explizit als „zweite Augen"-Praxis dokumentiert; Befunde gehen in den HANDOVER oder ins BACKLOG, nicht in „mache ich spaeter".
+- `BACKLOG.md`
+  - Vier ToDos in der Architektur-Sektion + Tests/Qualitaet-Sektion auf erledigt gesetzt mit konkreten Hinweisen, was getan wurde.
+
+### Verifikation
+
+- `pnpm exec tsc --noEmit` ✓.
+- `pnpm lint` ✓ (Biome 48 Files clean — 2 neue Files dazu).
+- `pnpm test:run` ✓ — **152 Tests in 13 Files gruen** (vorher 138; +14 in dieser Session, davon 13 geteilte Vektoren + 1 Sanity-Test „Fixtures nicht leer").
+- `pnpm build` ✓ — TS-Compile + Vite-Bundle in 1.41s (305 kB JS, 18 kB CSS).
+- `cargo fmt --check` ✓.
+- `cargo clippy --all-targets -- -D warnings` ✓.
+- `cargo test` ✓ — **25 Tests gruen** (vorher 8; +17 davon: 9 in `validation::tests`, 7 in `reminders::tests` fuer compute_due, 1 shared-vectors-Test).
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` **nicht gestartet**. Memory `task_completion` empfiehlt das bei Tauri-/Plugin-Aenderungen — hier wuerde es vor allem den Validation-Pfad live abdecken (negativen Betrag, leeren Namen, nicht-existente Account-ID via Devtools-`invoke`). Cargo clippy + cargo test + cargo fmt + pnpm build sind alle gruen, also keine Compile- oder Test-Regression. **Bitte vor dem Commit kurz `pnpm tauri dev` und einen Live-Smoke-Test: Abo anlegen mit Betrag=0 oder leerem Namen sollte jetzt einen sauberen deutschen Fehler aus dem Rust zeigen, statt die Eingabe trotzdem zu speichern.** Wenn Frontend-Validierung greift, sieht man den Server-Pfad nicht — aber Konsistenz-Check, dass die Frontend-Pfade weiter funktionieren, ist sinnvoll.
+
+### Wichtige Entscheidungen + Begruendung
+
+- **Validation als eigenes Modul** statt inline in `commands.rs`: Helpers sind rein und testbar ohne Tauri/State. `commands.rs` bleibt schlank und konzentriert sich auf SQL.
+- **Strikte Anchor-Date-Pruefung (Laenge 10 + Bindestriche an Position 4/7) zusaetzlich zu chrono**: chrono parst `%Y-%m-%d` tolerant, akzeptiert `2026-6-8` und `2026-06-8`. Das wuerde sich durch die ganze Recurrence-Pipeline ziehen und an spaeteren `format("%Y-%m-%d").to_string()`-Stellen ploetzlich gepaddet wieder rauskommen — Inkonsistenz in den `due_date`-Spalten zwischen `reminders.due_date` (gepaddet) und `subscriptions.anchor_date` (gemischt). Strikt validieren, sobald die Daten reinkommen.
+- **Existence-Check fuer account_id nur wenn `Some`**: `account_id` ist nullable im Schema (Sub ohne Konto-Zuordnung ist valid). Frontend setzt `null` oft (Default), das soll weiterhin durchlaufen.
+- **Geteilte Vektoren als JSON, nicht als gemeinsame Code-Datei**: minimaler Polyglot-Aufwand, beide Sprachen koennen JSON nativ lesen. Rust-Seite via `include_str!` (compile-time einbinden), TS via Vite-JSON-Import. Wenn das Setup mal flaky waere, gibt's klare Fehler-Pfade (parse failure beim Test-Start).
+- **`DueReminder` enthaelt schon `subscription_name`/`amount_cents`/`currency`** statt nur ID + Datum. Begruendung: compute besitzt den `Subscription` ohnehin, der Dispatcher braucht diese Werte fuer die Notification, und wenn ich nur IDs zurueckgebe, muesste der Dispatcher die Subs nochmal aus der DB lesen oder durch einen Lookup ziehen. Pragmatischer Cut.
+- **`compute_due_reminders` ist `pub`** im Modul, `dispatch_due_reminders` ist privat. Das spiegelt die Test-Intention: die pure Funktion ist die Stelle, an der man drift-saubere Lead-Window-Logik beweist; der Dispatcher ist Glue.
+- **Review-Konvention als Doku, nicht als Code-Hook**: das Memory `feedback_workflow` ist explizit gegen Prozess-Overhead in der Solo-Fruehphase. CI-side Reviewer oder scheduled Review-Agent wuerden Token kosten und Zwang erzeugen, ohne dass das Solo-Setting davon profitiert. Konvention + `/code-review`-Tooling existiert schon — die Doku hebt es auf die Ebene „erinnere dich vor dem Commit".
+
+### Gotchas
+
+- **Rust-Modul `validation` nicht ueber `pub mod` exportiert** in `lib.rs` — wird nur `commands.rs`-intern benutzt. Wenn der Integration-Test fuer den Existence-Check spaeter dazukommt, koennte das von `pub mod` profitieren, aktuell nicht noetig.
+- **`shared_vectors_match_typescript_impl` ist ein einziger `#[test]`**, der eine Schleife laeuft. Wenn ein Vektor scheitert, panic-Message enthaelt den Vektor-Namen (`panic!("vektor {}", v.name)`) — `cargo test` zeigt das im Stacktrace. TS-Seite hat einen `it(v.name)` pro Vektor, da sieht man jeden Fail einzeln. Asymmetrisch, aber pragmatisch.
+- **`update_account` validiert die volle Account-Struktur** inkl. `min_buffer_cents`. Falls jemand spaeter einen `update_account_balance`-Command einfuehrt, der nur den Saldo aendert, muss er nicht den ganzen Account validieren — neuer schlanker Validator analog zu `set_subscription_active`.
+- **`reminders::tests::sub` ist als Helper im Test-Modul** — wenn ein Test-File spaeter externe Subscription-Fixtures braucht, lohnt sich evtl. ein eigenes `mod test_fixtures` mit `pub(crate)`-Visibility. Aktuell aber kein Bedarf.
+- **`pnpm tauri dev` nicht gelaufen**, siehe oben. Falls bei `tauri dev` doch ein Rust-Panic-Start passiert: hat fast sicher mit `validation`-Modulladung oder neuen Imports zu tun, dann erst `cargo check` lokal, dann gezielt im File suchen.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working tree dirty mit:
+  - 3 neue Files: `src-tauri/src/validation.rs`, `src/lib/recurrence-vectors.test.ts`, `tests/fixtures/recurrence-vectors.json`.
+  - Modifiziert: `src-tauri/src/lib.rs`, `src-tauri/src/commands.rs`, `src-tauri/src/recurrence.rs`, `src-tauri/src/reminders.rs`, `AGENTS.md`, `BACKLOG.md`, `HANDOVER.md`.
+- Tests gruen: 152 Vitest, 25 Cargo. Alle Linter/Formatter clean. Build clean.
+- Live-Smoke vom User noch ausstehend.
+
+### Naechster Schritt
+
+- Vor Commit: `pnpm tauri dev` + Live-Smoke fuer Validation-Pfad (negativer Betrag, leerer Name, gefaktes account_id) und Sanity-Check, dass der Reminder-Loop weiter laeuft.
+- Vor Push: optional `/code-review high` ueber die Session-Diff laufen lassen (nach der frisch eingefuehrten Konvention in AGENTS.md).
+- Naechstes Backlog-Thema laut User-Wahl: entweder **Release-Reife-Block** (Matrix-Build → Tag v0.1.0 → Updater) oder **UI-Redesign Richtung arsnova**. **E2E via Tauri WebDriver** bleibt offen, sinnvoll vor v1.0 als eigene Session-Reihe.
+
+---
+
 ## 2026-06-08 — Codex: Review-Befunde 3/4 ebenfalls gefixt
 
 Direkt im Anschluss an die Fix-Session fuer Befunde 1/2 bat der User darum, die zuvor geparkten Befunde 3/4 doch direkt mitzunehmen. Ergebnis: beide erledigt, Backlog entsprechend auf erledigt gesetzt.
