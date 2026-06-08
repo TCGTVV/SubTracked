@@ -9,6 +9,61 @@
 
 ---
 
+## 2026-06-08 — Codex: Tier-1-Review-Fixes fuer Reminder/Account-Validation
+
+### Was passierte
+
+- Aus dem obersten HANDOVER/Review-Block wurden die drei Tier-1-Befunde umgesetzt:
+  - `compute_due_reminders` bricht den Reminder-Tick nicht mehr wegen einer kaputten DB-Zeile ab. Kaputte `anchor_date`- oder Intervall-Werte werden pro Abo mit `tracing::warn!` geloggt und geskippt; gueltige Abos im selben Batch laufen weiter.
+  - Der Reminder-Dispatcher reserviert `(subscription_id, due_date)` jetzt vor dem OS-Notification-Aufruf via `INSERT OR IGNORE`. Bei `show()`-Fehler wird die Reservierung wieder geloescht. Damit ist das konkrete Shutdown-Fenster `show()` erfolgreich, aber Reminder-Row fehlt, geschlossen.
+  - `validate_account_fields` nimmt jetzt `balance_cents` als vierten Parameter und prueft den Saldo gegen `±9_000_000_000_000_000` kleinste Waehrungseinheiten. Negative Salden bleiben erlaubt, extreme i64-Werte werden abgefangen.
+- Tests ergaenzt/angepasst:
+  - Reminder-Test fuer gemischten Batch: kaputtes Ankerdatum wird geskippt, gueltiges Abo bleibt faellig.
+  - Reminder-Test fuer gemischten Batch: ungueltiges Intervall wird geskippt, gueltiges Abo bleibt faellig (nach `/code-review high` nachgezogen).
+  - Validation-Test fuer positive/negative Salden und Range-Grenzen.
+- `BACKLOG.md` markiert die drei Review-Bugs als erledigt mit Codex-Spur.
+- `/code-review high` lief vor dem Commit via Subagent `Sartre`: keine blockierenden Findings.
+  - Medium-Testgap: Dispatcher-Reservierung/Rollback (`INSERT OR IGNORE` vor `show()`, Rollback bei `show()`-Fehler) ist nicht direkt automatisiert getestet. Als neues ToDo in `BACKLOG.md` aufgenommen, weil dafuer ein kleiner Side-Effect-Seam/Integrationstest-Harness sinnvoll ist.
+  - Low-Testgap: ungueltiger Intervall-Skip war nicht direkt getestet. Direkt in dieser Session gefixt.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Code-Commit: `d386072` (`fix: Reminder-Tier-1-Bugs haerten`).
+- Handover-Commit folgt direkt nach diesem Eintrag; danach Push auf `origin/main`.
+- Verifikation:
+  - `cargo fmt --check` ✓
+  - `cargo clippy --all-targets -- -D warnings` ✓
+  - `cargo test` ✓ — 27 Tests gruen
+  - `pnpm test:run` ✓ — 152 Tests / 13 Files gruen
+  - `pnpm lint` ✓ — Biome 48 Files clean
+  - `pnpm build` ✓ — TS + Vite-Build gruen
+  - `pnpm tauri dev` ✓ bis zum laufenden Rust-Binary/App-Start; danach manuell per Ctrl-C beendet. Log zeigte nur die bekannte `libayatana-appindicator`-Warnung, keinen Rust-Startfehler.
+  - Lefthook beim Code-Commit ✓ — cargo-fmt, biome, cargo-clippy, vitest.
+
+### Nächster Schritt
+
+- Naechste Review-Bugs aus `BACKLOG.md` angehen: sinnvoller naechster kleiner Block waere `Orphan account_id blockiert Edit der Sub-Row` + `Legacy lead_days bei Read nicht re-validiert` + `Anchor-Date strict-on-write, lenient-on-read`.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Reminder-Race per Vorab-Reservierung geloest:** Es gibt keinen atomaren Commit ueber OS-Notification und SQLite. Die Aenderung priorisiert, dass eine erfolgreich angestossene OS-Notification nicht beim naechsten Start doppelt feuert. `show()`-Fehler werden durch Loeschen der Reservierung zurueckgerollt.
+- **Compute bleibt tolerant statt migrationshart:** Kaputte Legacy-Zeilen sollen den stundenweisen Reminder-Loop nicht komplett killen. Warnlog + Skip ist fuer den Scheduler der robustere Default; Datenbereinigung kann spaeter separat passieren.
+- **Saldo-Range orientiert sich an JS-Safe-Integer-Grenze:** Frontend/Forecast rechnen mit `number`, deshalb wird nicht nur i64-Gueltigkeit akzeptiert. Der gewaehlte Grenzwert ist praktisch riesig, faengt aber `i64::MIN`/`i64::MAX`-Missbrauch ab.
+
+### Gotchas / Stolperfallen
+
+- Die Vorab-Reservierung schliesst die Doppelbenachrichtigung, akzeptiert aber ein umgekehrtes Restrisiko: harter Prozessabbruch genau zwischen `INSERT OR IGNORE` und `show()` kann eine Row hinterlassen, ohne dass die Notification sichtbar wurde. Normale `show()`-Fehler werden zurueckgerollt.
+- `compute_due_reminders` ist weiterhin als `Result<Vec<DueReminder>, String>` signiert, obwohl korrupte Einzelzeilen jetzt geskippt werden. Das haelt den bestehenden Call-Site-Shape klein; kuenftige systemische Compute-Fehler koennen weiter propagiert werden.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Direktes automatisiertes Testen des Dispatcher-Reservierung/Rollback-Pfads ist als Backlog-ToDo offen.
+
 ## 2026-06-08 — Claude: Code-Review des Hardening-Blocks (15 Befunde dokumentiert, push as-is)
 
 Direkt nach dem Hardening-Commit-Block hat der User `/code-review` im extra-high-Recall-Modus angestossen. Ziel: zweite Augen ueber die 5 Commits, bevor sie nach origin/main pushen. Ergebnis: 15 Befunde dokumentiert, Push trotzdem (Option C — kein Fix-Pass jetzt, weil die Befunde Verbesserungen *ueber den ohnehin besseren* Stand sind, keine echten Regressionen).
