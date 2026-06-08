@@ -6,12 +6,99 @@ use tauri_plugin_notification::{NotificationExt, PermissionState};
 use crate::db::Subscription;
 use crate::recurrence::next_due_date;
 
-/// Pruegt alle aktiven Abos und sendet Notifications fuer Faelligkeiten
-/// im Vorlauf-Fenster.
+/// Eine im Vorlauf-Fenster faellige Erinnerung. Pure-Output von
+/// [`compute_due_reminders`]; enthaelt nur die Daten, die der Dispatcher zum
+/// Senden + Schreiben braucht — kein DB- oder App-Handle-Bezug.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DueReminder {
+    pub subscription_id: i64,
+    pub subscription_name: String,
+    pub amount_cents: i64,
+    pub currency: String,
+    pub due_date: NaiveDate,
+}
+
+/// Bestimmt fuer die uebergebenen Abos diejenigen, deren naechste Faelligkeit
+/// im konfigurierten Vorlauf-Fenster liegt. Reine Funktion ohne Side-Effects:
+/// kein DB-Zugriff, keine Notification, kein Tauri-AppHandle. Stumme Abos
+/// (`notify = false`) werden uebersprungen; der Idempotenz-Check (bereits
+/// gesendet?) gehoert in den Dispatcher, weil er DB braucht.
+pub fn compute_due_reminders(
+    subs: &[Subscription],
+    today: NaiveDate,
+) -> Result<Vec<DueReminder>, String> {
+    let mut out = Vec::new();
+    for sub in subs {
+        if !sub.notify {
+            continue;
+        }
+        let anchor = NaiveDate::parse_from_str(&sub.anchor_date, "%Y-%m-%d")
+            .map_err(|e| format!("anchor_date parse '{}': {e}", sub.anchor_date))?;
+        let due = next_due_date(anchor, &sub.interval, today)?;
+        let remind_from = due - Duration::days(sub.lead_days);
+        if today < remind_from {
+            continue;
+        }
+        out.push(DueReminder {
+            subscription_id: sub.id,
+            subscription_name: sub.name.clone(),
+            amount_cents: sub.amount_cents,
+            currency: sub.currency.clone(),
+            due_date: due,
+        });
+    }
+    Ok(out)
+}
+
+/// Versendet Notifications und schreibt Reminder-Rows fuer die uebergebenen
+/// Faelligkeiten. Side-Effect-Seite zu [`compute_due_reminders`].
 ///
 /// Idempotenz: Ein Reminder-Row bedeutet "Notification wurde erfolgreich
 /// angestossen". Bei fehlender Permission oder show()-Fehler wird nichts als
 /// gesendet markiert, damit der Check spaeter erneut versuchen kann.
+async fn dispatch_due_reminders(
+    pool: &SqlitePool,
+    app: &AppHandle,
+    granted: bool,
+    due: &[DueReminder],
+) -> Result<u32, String> {
+    let mut sent = 0u32;
+    for d in due {
+        let due_str = d.due_date.format("%Y-%m-%d").to_string();
+        if reminder_already_sent(pool, d.subscription_id, &due_str).await? {
+            continue;
+        }
+        if !granted {
+            tracing::info!(
+                subscription_id = d.subscription_id,
+                due_date = %due_str,
+                "Erinnerung faellig, aber Notification-Berechtigung fehlt; nicht als gesendet markiert"
+            );
+            continue;
+        }
+        let title = format!("{} fällig", d.subscription_name);
+        let body = format!(
+            "{}: {}. Konto rechtzeitig decken.",
+            d.due_date.format("%d.%m.%Y"),
+            format_amount_for_notification(d.amount_cents, &d.currency),
+        );
+        app.notification()
+            .builder()
+            .title(title)
+            .body(body)
+            .show()
+            .map_err(|e| e.to_string())?;
+
+        if insert_reminder_if_new(pool, d.subscription_id, &due_str).await? {
+            sent += 1;
+        }
+    }
+    Ok(sent)
+}
+
+/// Orchestriert den Reminder-Check: laedt aktive Abos, berechnet faellige
+/// Erinnerungen ([`compute_due_reminders`]) und dispatcht sie
+/// ([`dispatch_due_reminders`]).
 pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u32, String> {
     let granted = matches!(
         app.notification()
@@ -30,52 +117,8 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
     .await
     .map_err(|e| e.to_string())?;
 
-    let mut sent = 0u32;
-    for sub in subs {
-        if !sub.notify {
-            continue;
-        }
-        let anchor = NaiveDate::parse_from_str(&sub.anchor_date, "%Y-%m-%d")
-            .map_err(|e| format!("anchor_date parse '{}': {e}", sub.anchor_date))?;
-        let due = next_due_date(anchor, &sub.interval, today)?;
-        let remind_from = due - Duration::days(sub.lead_days);
-        if today < remind_from {
-            continue;
-        }
-
-        let due_str = due.format("%Y-%m-%d").to_string();
-        if reminder_already_sent(pool, sub.id, &due_str).await? {
-            continue;
-        }
-
-        if !granted {
-            tracing::info!(
-                subscription_id = sub.id,
-                due_date = %due_str,
-                "Erinnerung faellig, aber Notification-Berechtigung fehlt; nicht als gesendet markiert"
-            );
-            continue;
-        }
-
-        let title = format!("{} fällig", sub.name);
-        let body = format!(
-            "{}: {}. Konto rechtzeitig decken.",
-            due.format("%d.%m.%Y"),
-            format_amount_for_notification(sub.amount_cents, &sub.currency),
-        );
-        app.notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show()
-            .map_err(|e| e.to_string())?;
-
-        if insert_reminder_if_new(pool, sub.id, &due_str).await? {
-            sent += 1;
-        }
-    }
-
-    Ok(sent)
+    let due = compute_due_reminders(&subs, today)?;
+    dispatch_due_reminders(pool, app, granted, &due).await
 }
 
 async fn reminder_already_sent(
@@ -157,6 +200,92 @@ fn format_unsigned_whole_number_de(value: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sub(id: i64, anchor: &str, lead_days: i64, notify: bool) -> Subscription {
+        Subscription {
+            id,
+            name: format!("Sub{id}"),
+            amount_cents: 1_799,
+            currency: "EUR".to_string(),
+            account_id: None,
+            interval: "monthly".to_string(),
+            anchor_date: anchor.to_string(),
+            lead_days,
+            active: true,
+            notify,
+        }
+    }
+
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    #[test]
+    fn compute_skips_muted_subscriptions() {
+        let subs = vec![sub(1, "2025-01-15", 7, false)];
+        let due = compute_due_reminders(&subs, d(2025, 1, 10)).unwrap();
+        assert!(due.is_empty(), "stumme Abos werden ignoriert");
+    }
+
+    #[test]
+    fn compute_skips_when_today_before_lead_window() {
+        // Faellig am 2025-02-15, lead_days = 7 -> Vorlauf startet 2025-02-08.
+        // Am 2025-02-07 ist das Fenster noch nicht offen.
+        let subs = vec![sub(1, "2025-02-15", 7, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 7)).unwrap();
+        assert!(due.is_empty(), "vor dem Vorlauf-Fenster keine Erinnerung");
+    }
+
+    #[test]
+    fn compute_includes_when_today_inside_lead_window() {
+        let subs = vec![sub(1, "2025-02-15", 7, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 8)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].subscription_id, 1);
+        assert_eq!(due[0].due_date, d(2025, 2, 15));
+    }
+
+    #[test]
+    fn compute_includes_when_today_equals_due_date() {
+        // Selbst am Faelligkeitstag soll noch erinnert werden (lead_days = 0).
+        let subs = vec![sub(1, "2025-02-15", 0, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 15)).unwrap();
+        assert_eq!(due.len(), 1);
+    }
+
+    #[test]
+    fn compute_uses_anker_additive_next_due_not_anchor() {
+        // 31.-Anker im Januar; today = 2025-03-25, lead_days = 14.
+        // Naechster Termin nach today ist 2025-03-31 (anker-additiv, kein Drift),
+        // Vorlauf startet 2025-03-17 -> 2025-03-25 liegt drin.
+        let subs = vec![sub(1, "2025-01-31", 14, true)];
+        let due = compute_due_reminders(&subs, d(2025, 3, 25)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(
+            due[0].due_date,
+            d(2025, 3, 31),
+            "31.-Anker darf nicht auf 28. driften"
+        );
+    }
+
+    #[test]
+    fn compute_returns_error_for_bad_anchor_date() {
+        let subs = vec![sub(1, "31.01.2025", 7, true)];
+        let err = compute_due_reminders(&subs, d(2025, 2, 1)).unwrap_err();
+        assert!(err.contains("anchor_date parse"), "Fehlertext: {err}");
+    }
+
+    #[test]
+    fn compute_handles_mixed_batch() {
+        let subs = vec![
+            sub(1, "2025-02-15", 7, true),  // inside window
+            sub(2, "2025-02-15", 7, false), // muted
+            sub(3, "2025-04-01", 7, true),  // outside window
+        ];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
+        assert_eq!(ids, vec![1]);
+    }
 
     #[test]
     fn formats_regular_currency_for_notifications() {
