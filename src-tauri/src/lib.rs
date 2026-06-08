@@ -2,6 +2,7 @@ mod commands;
 mod db;
 mod recurrence;
 mod reminders;
+mod validation;
 
 use std::str::FromStr;
 use std::time::Duration as StdDuration;
