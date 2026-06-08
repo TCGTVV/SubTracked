@@ -3,6 +3,9 @@ use tauri::State;
 use tauri_plugin_notification::NotificationExt;
 
 use crate::db::{Account, AppState, NewSubscription, ReminderState, Subscription};
+use crate::validation::{
+    validate_account_exists, validate_account_fields, validate_subscription_fields,
+};
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_subscriptions(
@@ -39,6 +42,17 @@ pub async fn add_subscription(
     state: State<'_, AppState>,
     sub: NewSubscription,
 ) -> Result<i64, String> {
+    validate_subscription_fields(
+        &sub.name,
+        sub.amount_cents,
+        &sub.currency,
+        &sub.interval,
+        &sub.anchor_date,
+        sub.lead_days,
+    )?;
+    if let Some(account_id) = sub.account_id {
+        validate_account_exists(&state.db, account_id).await?;
+    }
     let res = sqlx::query(
         "INSERT INTO subscriptions \
            (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify) \
@@ -88,6 +102,7 @@ pub async fn add_account(
     let currency = currency.unwrap_or_else(|| "EUR".to_string());
     let balance_cents = balance_cents.unwrap_or(0);
     let min_buffer_cents = min_buffer_cents.unwrap_or(0);
+    validate_account_fields(&name, &currency, min_buffer_cents)?;
     let res = sqlx::query(
         "INSERT INTO accounts (name, note, currency, balance_cents, min_buffer_cents) \
          VALUES (?, ?, ?, ?, ?)",
@@ -105,6 +120,7 @@ pub async fn add_account(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn update_account(state: State<'_, AppState>, account: Account) -> Result<(), String> {
+    validate_account_fields(&account.name, &account.currency, account.min_buffer_cents)?;
     sqlx::query(
         "UPDATE accounts \
          SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ? \
@@ -150,6 +166,17 @@ pub async fn update_subscription(
     state: State<'_, AppState>,
     sub: Subscription,
 ) -> Result<(), String> {
+    validate_subscription_fields(
+        &sub.name,
+        sub.amount_cents,
+        &sub.currency,
+        &sub.interval,
+        &sub.anchor_date,
+        sub.lead_days,
+    )?;
+    if let Some(account_id) = sub.account_id {
+        validate_account_exists(&state.db, account_id).await?;
+    }
     sqlx::query(
         "UPDATE subscriptions \
          SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
