@@ -4,6 +4,7 @@ use sqlx::SqlitePool;
 pub const ALLOWED_CURRENCIES: &[&str] = &["EUR", "USD", "GBP", "CHF", "KRW"];
 pub const ALLOWED_INTERVALS: &[&str] = &["monthly", "quarterly", "yearly"];
 pub const MAX_LEAD_DAYS: i64 = 365;
+pub const MAX_ACCOUNT_BALANCE_CENTS: i64 = 9_000_000_000_000_000;
 
 pub fn validate_name(name: &str) -> Result<(), String> {
     if name.trim().is_empty() {
@@ -52,6 +53,15 @@ pub fn validate_amount_cents(amount_cents: i64) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_balance_cents(balance_cents: i64) -> Result<(), String> {
+    if !(-MAX_ACCOUNT_BALANCE_CENTS..=MAX_ACCOUNT_BALANCE_CENTS).contains(&balance_cents) {
+        return Err(format!(
+            "Saldo muss zwischen -{MAX_ACCOUNT_BALANCE_CENTS} und {MAX_ACCOUNT_BALANCE_CENTS} kleinsten Waehrungseinheiten liegen."
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_lead_days(lead_days: i64) -> Result<(), String> {
     if !(0..=MAX_LEAD_DAYS).contains(&lead_days) {
         return Err(format!(
@@ -88,10 +98,12 @@ pub fn validate_subscription_fields(
 pub fn validate_account_fields(
     name: &str,
     currency: &str,
+    balance_cents: i64,
     min_buffer_cents: i64,
 ) -> Result<(), String> {
     validate_name(name)?;
     validate_currency(currency)?;
+    validate_balance_cents(balance_cents)?;
     validate_min_buffer_cents(min_buffer_cents)?;
     Ok(())
 }
@@ -168,6 +180,17 @@ mod tests {
     }
 
     #[test]
+    fn balance_cents_allows_realistic_negative_and_positive_values() {
+        assert!(validate_balance_cents(0).is_ok());
+        assert!(validate_balance_cents(50_000).is_ok());
+        assert!(validate_balance_cents(-12_550).is_ok());
+        assert!(validate_balance_cents(MAX_ACCOUNT_BALANCE_CENTS).is_ok());
+        assert!(validate_balance_cents(-MAX_ACCOUNT_BALANCE_CENTS).is_ok());
+        assert!(validate_balance_cents(MAX_ACCOUNT_BALANCE_CENTS + 1).is_err());
+        assert!(validate_balance_cents(-MAX_ACCOUNT_BALANCE_CENTS - 1).is_err());
+    }
+
+    #[test]
     fn lead_days_in_range() {
         assert!(validate_lead_days(0).is_ok());
         assert!(validate_lead_days(60).is_ok());
@@ -220,10 +243,13 @@ mod tests {
 
     #[test]
     fn account_fields_composed_check() {
-        assert!(validate_account_fields("Hauptkonto", "EUR", 0).is_ok());
-        assert!(validate_account_fields("Hauptkonto", "EUR", 50_000).is_ok());
-        assert!(validate_account_fields("", "EUR", 0).is_err());
-        assert!(validate_account_fields("Hauptkonto", "BTC", 0).is_err());
-        assert!(validate_account_fields("Hauptkonto", "EUR", -1).is_err());
+        assert!(validate_account_fields("Hauptkonto", "EUR", 0, 0).is_ok());
+        assert!(validate_account_fields("Hauptkonto", "EUR", -12_550, 50_000).is_ok());
+        assert!(validate_account_fields("", "EUR", 0, 0).is_err());
+        assert!(validate_account_fields("Hauptkonto", "BTC", 0, 0).is_err());
+        assert!(
+            validate_account_fields("Hauptkonto", "EUR", MAX_ACCOUNT_BALANCE_CENTS + 1, 0).is_err()
+        );
+        assert!(validate_account_fields("Hauptkonto", "EUR", 0, -1).is_err());
     }
 }

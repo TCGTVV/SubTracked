@@ -102,7 +102,7 @@ pub async fn add_account(
     let currency = currency.unwrap_or_else(|| "EUR".to_string());
     let balance_cents = balance_cents.unwrap_or(0);
     let min_buffer_cents = min_buffer_cents.unwrap_or(0);
-    validate_account_fields(&name, &currency, min_buffer_cents)?;
+    validate_account_fields(&name, &currency, balance_cents, min_buffer_cents)?;
     let res = sqlx::query(
         "INSERT INTO accounts (name, note, currency, balance_cents, min_buffer_cents) \
          VALUES (?, ?, ?, ?, ?)",
@@ -120,7 +120,12 @@ pub async fn add_account(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn update_account(state: State<'_, AppState>, account: Account) -> Result<(), String> {
-    validate_account_fields(&account.name, &account.currency, account.min_buffer_cents)?;
+    validate_account_fields(
+        &account.name,
+        &account.currency,
+        account.balance_cents,
+        account.min_buffer_cents,
+    )?;
     sqlx::query(
         "UPDATE accounts \
          SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ? \
