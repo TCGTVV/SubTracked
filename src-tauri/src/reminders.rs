@@ -32,9 +32,30 @@ pub fn compute_due_reminders(
         if !sub.notify {
             continue;
         }
-        let anchor = NaiveDate::parse_from_str(&sub.anchor_date, "%Y-%m-%d")
-            .map_err(|e| format!("anchor_date parse '{}': {e}", sub.anchor_date))?;
-        let due = next_due_date(anchor, &sub.interval, today)?;
+        let anchor = match NaiveDate::parse_from_str(&sub.anchor_date, "%Y-%m-%d") {
+            Ok(anchor) => anchor,
+            Err(e) => {
+                tracing::warn!(
+                    subscription_id = sub.id,
+                    anchor_date = %sub.anchor_date,
+                    error = %e,
+                    "Abo wegen ungueltigem Ankerdatum beim Reminder-Check uebersprungen"
+                );
+                continue;
+            }
+        };
+        let due = match next_due_date(anchor, &sub.interval, today) {
+            Ok(due) => due,
+            Err(e) => {
+                tracing::warn!(
+                    subscription_id = sub.id,
+                    interval = %sub.interval,
+                    error = %e,
+                    "Abo wegen ungueltiger Wiederholung beim Reminder-Check uebersprungen"
+                );
+                continue;
+            }
+        };
         let remind_from = due - Duration::days(sub.lead_days);
         if today < remind_from {
             continue;
@@ -53,9 +74,11 @@ pub fn compute_due_reminders(
 /// Versendet Notifications und schreibt Reminder-Rows fuer die uebergebenen
 /// Faelligkeiten. Side-Effect-Seite zu [`compute_due_reminders`].
 ///
-/// Idempotenz: Ein Reminder-Row bedeutet "Notification wurde erfolgreich
-/// angestossen". Bei fehlender Permission oder show()-Fehler wird nichts als
-/// gesendet markiert, damit der Check spaeter erneut versuchen kann.
+/// Idempotenz: Bei fehlender Permission wird nichts als gesendet markiert. Bei
+/// vorhandener Permission reserviert `INSERT OR IGNORE` die Faelligkeit direkt
+/// vor `show()`, damit ein Shutdown zwischen OS-Notification und DB-Write nicht
+/// zu Doppelbenachrichtigungen fuehrt. Schlaegt `show()` fehl, wird die
+/// Reservierung wieder entfernt, damit der Check spaeter erneut versuchen kann.
 async fn dispatch_due_reminders(
     pool: &SqlitePool,
     app: &AppHandle,
@@ -76,22 +99,30 @@ async fn dispatch_due_reminders(
             );
             continue;
         }
+        if !insert_reminder_if_new(pool, d.subscription_id, &due_str).await? {
+            continue;
+        }
+
         let title = format!("{} fällig", d.subscription_name);
         let body = format!(
             "{}: {}. Konto rechtzeitig decken.",
             d.due_date.format("%d.%m.%Y"),
             format_amount_for_notification(d.amount_cents, &d.currency),
         );
-        app.notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show()
-            .map_err(|e| e.to_string())?;
-
-        if insert_reminder_if_new(pool, d.subscription_id, &due_str).await? {
-            sent += 1;
+        if let Err(e) = app.notification().builder().title(title).body(body).show() {
+            if let Err(delete_err) =
+                delete_reminder_reservation(pool, d.subscription_id, &due_str).await
+            {
+                tracing::error!(
+                    subscription_id = d.subscription_id,
+                    due_date = %due_str,
+                    error = %delete_err,
+                    "Reminder-Reservierung nach Notification-Fehler konnte nicht entfernt werden"
+                );
+            }
+            return Err(e.to_string());
         }
+        sent += 1;
     }
     Ok(sent)
 }
@@ -150,6 +181,20 @@ async fn insert_reminder_if_new(
             .await
             .map_err(|e| e.to_string())?;
     Ok(res.rows_affected() > 0)
+}
+
+async fn delete_reminder_reservation(
+    pool: &SqlitePool,
+    subscription_id: i64,
+    due_date: &str,
+) -> Result<(), String> {
+    sqlx::query("DELETE FROM reminders WHERE subscription_id = ? AND due_date = ?")
+        .bind(subscription_id)
+        .bind(due_date)
+        .execute(pool)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 fn currency_subdivisor(currency: &str) -> i64 {
@@ -269,10 +314,21 @@ mod tests {
     }
 
     #[test]
-    fn compute_returns_error_for_bad_anchor_date() {
-        let subs = vec![sub(1, "31.01.2025", 7, true)];
-        let err = compute_due_reminders(&subs, d(2025, 2, 1)).unwrap_err();
-        assert!(err.contains("anchor_date parse"), "Fehlertext: {err}");
+    fn compute_skips_bad_anchor_date_and_continues_batch() {
+        let subs = vec![sub(1, "31.01.2025", 7, true), sub(2, "2025-02-15", 7, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
+        assert_eq!(ids, vec![2]);
+    }
+
+    #[test]
+    fn compute_skips_bad_interval_and_continues_batch() {
+        let mut bad = sub(1, "2025-02-15", 7, true);
+        bad.interval = "weekly".to_string();
+        let subs = vec![bad, sub(2, "2025-02-15", 7, true)];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
+        assert_eq!(ids, vec![2]);
     }
 
     #[test]
