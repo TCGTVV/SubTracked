@@ -9,6 +9,86 @@
 
 ---
 
+## 2026-06-09 — Claude: Tests-Block (4 Review-ToDos abgearbeitet, 1 Production-Bug gefixt)
+
+### Was passierte
+
+User hat sich nach dem Session-Start fuer den **Tests-Block** entschieden (`📐 Tests & Qualitaet` aus dem BACKLOG). Vier offene Test-ToDos aus dem Review-Block 2026-06-08 in dieser Reihenfolge erledigt — sortiert nach Aufwand (klein → gross):
+
+1. **Recurrence-Vektoren um non-31-Clamps ergaenzt.** Vier neue Vektoren in [tests/fixtures/recurrence-vectors.json](tests/fixtures/recurrence-vectors.json):
+   - `quarterly_drift_aug31_clamps_to_nov30` (Anker 2024-08-31, Nov hat 30 Tage)
+   - `quarterly_drift_aug31_clamps_to_feb28` (zwei Quartale weiter, Feb 2025 hat 28 Tage)
+   - `quarterly_drift_aug31_back_to_may31` (drei Quartale weiter, anker-additiv zurueck auf 31)
+   - `yearly_leap_anchor_returns_to_29_in_next_leap_year` (2024-02-29 ueber drei 28er-Clamps zurueck auf 2028-02-29)
+
+   Beide Seiten (TS + Rust) lesen die JSON via shared-fixtures-Loader; Drift in der Quartal-/Jahres-Klemmsemantik wuerde jetzt sofort auffliegen.
+
+2. **TS-JSON-Cast fuer Recurrence-Vektoren narrowed.** Neuer `assertInterval`-Helper in [recurrence-vectors.test.ts](src/lib/recurrence-vectors.test.ts) plus eine `ALLOWED_INTERVALS as const satisfies readonly Interval[]`-Whitelist. Tippfehler im JSON (z.B. `"Monthly"`) fallen jetzt direkt im TS-Test mit Vektor-Name als klare Fehlermeldung auf, statt erst Rust-seitig als `Unbekanntes Intervall`. Drei zusaetzliche Helper-Tests dokumentieren die Schutzwirkung. Bewusst kein zod/io-ts — Single-Use-Site, minimaler Helper reicht.
+
+3. **Orphan-account_id-Update als DB-/Command-Test absichern.** Inner-Helper `update_subscription_in_db(&SqlitePool, &Subscription)` aus dem `update_subscription`-Tauri-Command extrahiert; der Command delegiert nur noch. Vier `#[tokio::test]`-Faelle mit in-memory sqlx-Pool + Migrations decken unchanged/changed/cleared/invalid ab. **Im selben Aufwasch Production-Bug entdeckt und gefixt:** sqlx 0.9.0 aktiviert SQLite-FK per Default (`SqliteConnectOptions::foreign_keys: true`), entgegen der bisherigen Annahme im BACKLOG-Architekturpunkt #9. Der vorherige Orphan-Fix liess die Rust-Validierung fuer unveraenderte Orphans durch, aber SQLite blockierte das UPDATE-Statement wegen FK-Constraint, weil `account_id` weiterhin im `SET`-Clause stand. **Fix: bei unveraendertem `account_id` die Spalte komplett aus dem `SET`-Clause weglassen.** Zwei SQL-Pfade in `update_subscription_in_db` — einer mit account_id im SET (wenn geaendert + validiert), einer ohne (wenn unveraendert). Dadurch loest SQLite den FK-Check fuer die Legacy-Bindung gar nicht erst aus. Pure Helper `account_id_requires_validation` + `subscription_account_id_requires_validation` und ihre drei Pure-Tests sind im Zuge dessen weggefallen — Logik ist jetzt direkt im Update-Pfad inline und besser nachvollziehbar.
+
+4. **Reminder-Dispatcher-Reservierung/Rollback automatisiert testen.** Neue `Notifier`-Trait in [reminders.rs](src-tauri/src/reminders.rs) als Side-Effect-Seam:
+   - Production-Pfad: `struct AppNotifier<'a>(&'a AppHandle)` impl `Notifier` ruft `app.notification().builder().show()`.
+   - Test-Pfad: `MockNotifier { calls: Mutex<u32>, result: Result<(), String> }` mit `success()`/`failure(msg)`-Convenience-Konstruktoren und `call_count()`-Inspektion.
+   - `dispatch_due_reminders` nimmt jetzt `&dyn Notifier` statt `&AppHandle`; `run_reminder_check` als Orchestrator baut den `AppNotifier` und reicht ihn durch.
+   - Trait-Bound: `pub trait Notifier: Send + Sync` — der Reminder-Loop laeuft als `tauri::async_runtime::spawn`-Task und braucht damit ein Send-Future.
+
+   Vier Tests am Ende des `reminders::tests`-Moduls decken die kritische Reihenfolge `INSERT OR IGNORE` → `show()` → ggf. `DELETE` ab: Success-Pfad persistiert die Reservierung; show()-Failure rollt sie zurueck und propagiert den Notifier-Fehler; bereits reservierte Faelligkeit blockiert sowohl INSERT als auch show(); fehlende Permission reserviert nichts.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Working tree dirty mit:
+  - Modifiziert: `BACKLOG.md`, `HANDOVER.md`, `src-tauri/Cargo.toml`, `src-tauri/src/commands.rs`, `src-tauri/src/reminders.rs`, `src/lib/recurrence-vectors.test.ts`, `tests/fixtures/recurrence-vectors.json`.
+  - Keine neuen Dateien.
+- Verifikation gruen:
+  - `cargo fmt --check` ✓
+  - `cargo clippy --all-targets -- -D warnings` ✓
+  - `cargo test` ✓ — **38 Tests** (vorher 33; +4 Orphan-DB-Tests, +4 Dispatcher-Tests, −3 entfernte Pure-Helper-Tests).
+  - `pnpm test:run` ✓ — **171 Tests / 13 Files** (vorher 164; +4 neue Recurrence-Vektoren, +3 narrowing-Helper-Tests).
+  - `pnpm lint` ✓ — Biome 48 Files clean.
+  - `pnpm build` ✓ — TS + Vite-Build gruen.
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` Live-Smoke nicht gestartet. Der Notifier-Refactor laesst die Production-Codeloop strukturell identisch (`AppNotifier` reicht alle Argumente unveraendert an `app.notification().builder()` weiter), aber ein kurzer Live-Test waere trotzdem gut, vor allem fuer den `update_subscription_in_db`-Pfad: Abo bearbeiten mit unveraendertem account_id muss durchgehen. Bei der naechsten Session mitnehmen.
+
+### Wichtige Entscheidungen + Begruendung
+
+- **Inner-Helper-Extraktion (`update_subscription_in_db`, `Notifier`-Trait):** Side-Effect-Seam ist die saubere Antwort auf die Test-Lucke. Tauri-State und AppHandle sind in Unit-Tests schwer zu mocken; ein duenner Adapter ueber sqlite-Pool bzw. Trait macht den Pfad direkt testbar, ohne dass der Production-Aufrufpfad sich aendert.
+- **FK-Bypass via `SET`-Weglassen statt `PRAGMA foreign_keys=OFF`-Patch:** Der Fix bleibt schemakonform — wir umgehen die FK-Pruefung nur fuer den Spezialfall „unveraenderter Wert", in dem es semantisch nichts zu pruefen gibt. PRAGMA-Toggle wuerde die gesamte Connection beruehren und ist als Production-Pfad zu invasiv.
+- **Pure-Helper entfernt statt umbenannt:** `account_id_requires_validation` hatte nach dem Inline der Decision in den UPDATE-Pfad keinen Konsumenten mehr. Inline-Code ist hier kuerzer und transparenter als ein zwei-Zeilen-Helper plus Tests, die nur sich selbst absichern.
+- **Trait `Notifier: Send + Sync` statt `&AppHandle + 'static`-Workaround:** Der bestehende `tauri::async_runtime::spawn`-Aufruf erzwingt Send-Future. Send + Sync auf dem Trait ist der direkte Weg; alle Implementierungen (Production + Mock) erfuellen das ohnehin.
+- **`dev-dependencies tokio = { features = ["rt", "macros"] }`** statt rt-multi-thread: single-threaded reicht fuer alle Tests dieser Session, kein Test braucht parallele Tasks oder `block_in_place`.
+
+### Gotchas / Stolperfallen
+
+- **BACKLOG-Architekturpunkt #9 (`PRAGMA foreign_keys=ON statt validate_account_exists-Patches`) basiert auf einer falschen Annahme.** Das Item sagt „SQLite-FKs in dieser App nicht aktiviert" — tatsaechlich sind sie per sqlx-Default ON. `validate_account_exists` bleibt trotzdem sinnvoll, weil die Existence-Pruefung in der Validierung einen klar lesbaren deutschen Fehler liefert (`Konto mit ID 9999 existiert nicht.`) statt einer rohen FK-Constraint-Fehlermeldung. Der Architekturpunkt selbst sollte umformuliert oder geschlossen werden.
+- **`update_subscription_in_db` hat jetzt zwei UPDATE-SQL-Varianten** (mit/ohne `account_id` im `SET`). Wer das Schema kuenftig erweitert (z.B. neue Spalte), muss daran denken, sie in *beiden* Varianten zu erwaehnen. Pragmatischer Cut gegen reine Eleganz — eine dynamische `SET`-Klausel ueber Query-Builder waere komplexer als die Duplikation.
+- **`MockNotifier` ist ein dummer Stub** — er prueft NICHT, dass die Reservierung *vor* `show()` in der DB liegt. Die Tests zeigen nur: nach erfolgreichem dispatch existiert die Row (Success-Pfad), und nach fehlgeschlagenem dispatch existiert sie nicht (Rollback-Pfad). Die strenge „happens-before"-Garantie ist implizit im Code, nicht im Test. Fuer den expliziten Beweis koennte spaeter ein `AssertingNotifier` mit `tokio::task::block_in_place` + multi-thread-Runtime dazukommen — heute nicht gemacht, weil der ROI klein ist und die einfacheren Tests die wahrscheinlich auftauchenden Refactoring-Fallen schon abfangen.
+
+### Naechster Schritt
+
+- Vor Push: optional kurzer `pnpm tauri dev`-Smoke fuer den Abo-Edit-Pfad (unchanged account_id, Wechsel auf null, Wechsel auf gueltiges Konto).
+- Wenn die Tests-Sektion damit komplett ist (E2E via Tauri WebDriver bleibt bewusst offen vor v1.0), waere als naechster Block der **Architektur-Cleanup** dran:
+  - BACKLOG-Architekturpunkt #9 umformulieren oder schliessen (FK-Annahme korrigieren).
+  - Lock-Poisoning auf `ReminderState.last_check_at` heilen (Architekturpunkt #10).
+  - Permission-denied `tracing::info!`-Flut entzerren (Architekturpunkt #11).
+  - Sichtbarkeit von `compute_due_reminders` (Architekturpunkt #12).
+  - Duplikations-Quellen `ALLOWED_INTERVALS` (Architekturpunkt #13) und `ALLOWED_CURRENCIES` (Architekturpunkt #14).
+- Alternativ: **UI-Redesign Richtung arsnova.eu** als groesserer Sprung (siehe `📐 Spaeter`-Sektion und `mem:ui_vision`).
+
+### Geaenderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklaert
+
+- Live-Smoke mit `pnpm tauri dev` ausstehend.
+- Push auf `origin/main` ausstehend.
+
+---
+
 ## 2026-06-08 — Codex: Push-Abschluss der Review-Fix-Blöcke
 
 ### Was passierte
