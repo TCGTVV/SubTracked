@@ -166,38 +166,30 @@ pub async fn count_subs_for_account(
     Ok(n)
 }
 
-fn account_id_requires_validation(
-    current_account_id: Option<i64>,
-    next_account_id: Option<i64>,
-) -> bool {
-    next_account_id.is_some() && current_account_id != next_account_id
-}
-
-async fn subscription_account_id_requires_validation(
+async fn fetch_current_account_id(
     db: &sqlx::SqlitePool,
     subscription_id: i64,
-    next_account_id: Option<i64>,
-) -> Result<bool, String> {
-    if next_account_id.is_none() {
-        return Ok(false);
-    }
-    let current: Option<(Option<i64>,)> =
+) -> Result<Option<i64>, String> {
+    let row: Option<(Option<i64>,)> =
         sqlx::query_as("SELECT account_id FROM subscriptions WHERE id = ? LIMIT 1")
             .bind(subscription_id)
             .fetch_optional(db)
             .await
             .map_err(|e| e.to_string())?;
-    let current_account_id = current.and_then(|(account_id,)| account_id);
-    Ok(account_id_requires_validation(
-        current_account_id,
-        next_account_id,
-    ))
+    Ok(row.and_then(|(account_id,)| account_id))
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub async fn update_subscription(
-    state: State<'_, AppState>,
-    sub: Subscription,
+/// Tatsaechlicher Update-Pfad fuer Subscriptions. Direkt testbar mit einem
+/// in-memory-Pool, ohne Tauri-State-Setup. Der `#[tauri::command]`-Wrapper
+/// `update_subscription` darunter delegiert nur.
+///
+/// account_id-Sonderbehandlung: bei unveraendertem account_id lassen wir die
+/// Spalte komplett aus dem SET-Clause. Sonst pruefte SQLite (FK an per
+/// sqlx-Default) die FK-Bindung auch fuer den unveraenderten Wert und Legacy-
+/// Orphan-Rows aus der `tauri-plugin-sql`-Aera wuerden den UPDATE blockieren.
+pub(crate) async fn update_subscription_in_db(
+    db: &sqlx::SqlitePool,
+    sub: &Subscription,
 ) -> Result<(), String> {
     validate_subscription_fields(
         &sub.name,
@@ -207,31 +199,60 @@ pub async fn update_subscription(
         &sub.anchor_date,
         sub.lead_days,
     )?;
-    if let Some(account_id) = sub.account_id {
-        if subscription_account_id_requires_validation(&state.db, sub.id, sub.account_id).await? {
-            validate_account_exists(&state.db, account_id).await?;
+    let current_account_id = fetch_current_account_id(db, sub.id).await?;
+    let account_id_changed = current_account_id != sub.account_id;
+    if account_id_changed {
+        if let Some(new_account_id) = sub.account_id {
+            validate_account_exists(db, new_account_id).await?;
         }
+        sqlx::query(
+            "UPDATE subscriptions \
+             SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
+                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
+             WHERE id = ?",
+        )
+        .bind(&sub.name)
+        .bind(sub.amount_cents)
+        .bind(&sub.currency)
+        .bind(sub.account_id)
+        .bind(&sub.interval)
+        .bind(&sub.anchor_date)
+        .bind(sub.lead_days)
+        .bind(sub.active)
+        .bind(sub.notify)
+        .bind(sub.id)
+        .execute(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query(
+            "UPDATE subscriptions \
+             SET name = ?, amount_cents = ?, currency = ?, \
+                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
+             WHERE id = ?",
+        )
+        .bind(&sub.name)
+        .bind(sub.amount_cents)
+        .bind(&sub.currency)
+        .bind(&sub.interval)
+        .bind(&sub.anchor_date)
+        .bind(sub.lead_days)
+        .bind(sub.active)
+        .bind(sub.notify)
+        .bind(sub.id)
+        .execute(db)
+        .await
+        .map_err(|e| e.to_string())?;
     }
-    sqlx::query(
-        "UPDATE subscriptions \
-         SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
-             interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
-         WHERE id = ?",
-    )
-    .bind(&sub.name)
-    .bind(sub.amount_cents)
-    .bind(&sub.currency)
-    .bind(sub.account_id)
-    .bind(&sub.interval)
-    .bind(&sub.anchor_date)
-    .bind(sub.lead_days)
-    .bind(sub.active)
-    .bind(sub.notify)
-    .bind(sub.id)
-    .execute(&state.db)
-    .await
-    .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_subscription(
+    state: State<'_, AppState>,
+    sub: Subscription,
+) -> Result<(), String> {
+    update_subscription_in_db(&state.db, &sub).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -310,21 +331,159 @@ pub async fn send_test_notification(app: tauri::AppHandle) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::SqlitePool;
 
-    #[test]
-    fn unchanged_account_id_does_not_need_revalidation() {
-        assert!(!account_id_requires_validation(Some(99), Some(99)));
+    /// In-memory SQLite-Pool mit Migrations. `max_connections=1` weil
+    /// `sqlite::memory:` pro Connection eine eigene DB anlegt — wir wollen
+    /// aber durchgaengig dieselbe Test-DB.
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect in-memory sqlite");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("apply migrations");
+        pool
     }
 
-    #[test]
-    fn changed_account_id_needs_revalidation() {
-        assert!(account_id_requires_validation(Some(99), Some(1)));
-        assert!(account_id_requires_validation(None, Some(1)));
+    async fn insert_account(db: &SqlitePool, name: &str) -> i64 {
+        let res = sqlx::query(
+            "INSERT INTO accounts (name, note, currency, balance_cents, min_buffer_cents) \
+             VALUES (?, NULL, 'EUR', 0, 0)",
+        )
+        .bind(name)
+        .execute(db)
+        .await
+        .expect("insert account");
+        res.last_insert_rowid()
     }
 
-    #[test]
-    fn clearing_account_id_does_not_need_revalidation() {
-        assert!(!account_id_requires_validation(Some(99), None));
-        assert!(!account_id_requires_validation(None, None));
+    async fn insert_sub(db: &SqlitePool, account_id: Option<i64>) -> Subscription {
+        let res = sqlx::query(
+            "INSERT INTO subscriptions \
+               (name, amount_cents, currency, account_id, interval, anchor_date, \
+                lead_days, active, notify) \
+             VALUES ('Netflix', 1799, 'EUR', ?, 'monthly', '2026-01-15', 7, 1, 1)",
+        )
+        .bind(account_id)
+        .execute(db)
+        .await
+        .expect("insert subscription");
+        Subscription {
+            id: res.last_insert_rowid(),
+            name: "Netflix".into(),
+            amount_cents: 1799,
+            currency: "EUR".into(),
+            account_id,
+            interval: "monthly".into(),
+            anchor_date: "2026-01-15".into(),
+            lead_days: 7,
+            active: true,
+            notify: true,
+        }
+    }
+
+    async fn fetch_account_id(db: &SqlitePool, sub_id: i64) -> Option<i64> {
+        let (account_id,): (Option<i64>,) =
+            sqlx::query_as("SELECT account_id FROM subscriptions WHERE id = ?")
+                .bind(sub_id)
+                .fetch_one(db)
+                .await
+                .expect("fetch account_id");
+        account_id
+    }
+
+    /// Baut eine Subscription nach, deren account_id auf ein nicht mehr
+    /// existierendes Konto zeigt. Echte Orphan-Rows entstehen so nur aus
+    /// der `tauri-plugin-sql`-Aera, in der FK-Enforcement nicht garantiert
+    /// war — sqlx schaltet FKs per Default ein. Hier wird FK kurz aus
+    /// geschaltet, damit das DELETE durchgeht, danach wieder an, damit der
+    /// Testpfad genau die Production-Bedingung sieht.
+    async fn make_orphan_sub(db: &SqlitePool) -> (Subscription, i64) {
+        let orphan_account_id = insert_account(db, "Altes Konto").await;
+        let sub = insert_sub(db, Some(orphan_account_id)).await;
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(db)
+            .await
+            .expect("pragma off");
+        sqlx::query("DELETE FROM accounts WHERE id = ?")
+            .bind(orphan_account_id)
+            .execute(db)
+            .await
+            .expect("delete account");
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(db)
+            .await
+            .expect("pragma on");
+        (sub, orphan_account_id)
+    }
+
+    /// Orphan-Pfad #1: Sub zeigt auf geloeschtes Konto. Wer nur den Namen
+    /// aendert (account_id unveraendert), darf nicht am Existence-Check
+    /// scheitern. Vor dem Fix war genau das blockiert.
+    #[tokio::test]
+    async fn update_subscription_with_unchanged_orphan_account_id_passes() {
+        let db = test_pool().await;
+        let (mut sub, orphan_account_id) = make_orphan_sub(&db).await;
+
+        sub.name = "Netflix Premium".into();
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("unchanged orphan account_id sollte durchgehen");
+
+        assert_eq!(fetch_account_id(&db, sub.id).await, Some(orphan_account_id));
+    }
+
+    /// Orphan-Pfad #2: Wechsel auf ein existierendes anderes Konto.
+    /// validate_account_exists muss die neue ID akzeptieren.
+    #[tokio::test]
+    async fn update_subscription_changing_orphan_to_valid_account_passes() {
+        let db = test_pool().await;
+        let (mut sub, _orphan_account_id) = make_orphan_sub(&db).await;
+
+        let new_account_id = insert_account(&db, "Neues Konto").await;
+        sub.account_id = Some(new_account_id);
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("Wechsel auf gueltiges Konto sollte durchgehen");
+
+        assert_eq!(fetch_account_id(&db, sub.id).await, Some(new_account_id));
+    }
+
+    /// Orphan-Pfad #3: Wechsel auf ein nicht existierendes Konto bleibt
+    /// blockiert — der Existence-Check soll genau das verhindern.
+    #[tokio::test]
+    async fn update_subscription_changing_to_nonexistent_account_is_rejected() {
+        let db = test_pool().await;
+        let (mut sub, orphan_account_id) = make_orphan_sub(&db).await;
+
+        sub.account_id = Some(9999);
+        let err = update_subscription_in_db(&db, &sub)
+            .await
+            .expect_err("nicht existierendes Konto muss abgelehnt werden");
+        assert!(
+            err.contains("9999"),
+            "Fehlertext referenziert die ID: {err}"
+        );
+        assert_eq!(fetch_account_id(&db, sub.id).await, Some(orphan_account_id));
+    }
+
+    /// Orphan-Pfad #4: account_id auf null setzen, um die Orphan-Bindung
+    /// abzuhaengen, muss ohne Validierung des alten Werts durchgehen.
+    #[tokio::test]
+    async fn update_subscription_clearing_orphan_account_passes() {
+        let db = test_pool().await;
+        let (mut sub, _orphan_account_id) = make_orphan_sub(&db).await;
+
+        sub.account_id = None;
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("account_id auf null darf nicht blockiert sein");
+
+        assert_eq!(fetch_account_id(&db, sub.id).await, None);
     }
 }
