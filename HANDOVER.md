@@ -9,6 +9,53 @@
 
 ---
 
+## 2026-06-09 — Codex: Tagesabschluss, nächste Backlog-Entscheidung vertagt
+
+### Was passierte
+
+- Nach dem Push von `6cb4d22` fragte der User, was aus dem Backlog jetzt sinnvoll wäre.
+- `BACKLOG.md` wurde geprüft; `HANDOVER.md` wurde dabei gemäß neuer `AGENTS.md`-Regel nicht erneut gelesen.
+- Empfehlung an den User:
+  - **Priorität 1:** GitHub-Actions-Matrix-Build (`tauri-action`) als nächster Release-Reife-Schritt vor `v0.1.0`.
+  - **Alternative sichtbar/kleiner:** Empty-State nützlicher machen oder Buttons/Aktionen app-artiger gestalten.
+  - **Alternative Desktop-Polish:** Settings-Dialog ausbauen (App-Version, Log-Pfad, später Update-Check).
+- User entscheidet morgen, welcher Block gestartet wird. Heute keine weitere Implementierung.
+
+### Status am Sitzungsende
+
+- Branch: `main`, synchron mit `origin/main` vor diesem Handover-Update.
+- Working tree war vor diesem Eintrag clean.
+- Nach diesem Eintrag ist nur `HANDOVER.md` geändert; wird direkt committet und gepusht.
+- Keine Code-Änderungen in diesem Abschlussblock.
+
+### Verifikation
+
+- Keine Checks erneut gelaufen; es gab nur eine Doku-/Handover-Änderung.
+- Vorheriger Arbeitsblock war bereits grün:
+  - `cargo fmt --check`
+  - `cargo test`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `pnpm test:run`
+  - `pnpm lint`
+  - `pnpm build`
+
+### Nächster Schritt
+
+- Morgen Entscheidung treffen:
+  - Empfohlen: **GitHub-Actions-Matrix-Build** vorbereiten.
+  - Danach: `v0.1.0`-Tag, README-/GitHub-Polish, später Updater.
+- Wenn Matrix-Build umgesetzt wird: aktuelle `tauri-action`-/Tauri-v2-Release-Doku prüfen, weil Actions-Konfigurationen und Signier-/Artifact-Details zeitlich beweglich sind.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Backlog-Priorität für morgen noch offen; User entscheidet.
+
+---
+
 ## 2026-06-09 — Codex: Currency-Fixture-Guards + Rust-Version gepinnt
 
 ### Was passierte
