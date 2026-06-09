@@ -91,6 +91,34 @@
       "interval": "yearly",
       "from": "2025-03-01",
       "expected": "2026-02-28"
+    },
+    {
+      "name": "quarterly_drift_aug31_clamps_to_nov30",
+      "anchor": "2024-08-31",
+      "interval": "quarterly",
+      "from": "2024-09-01",
+      "expected": "2024-11-30"
+    },
+    {
+      "name": "quarterly_drift_aug31_clamps_to_feb28",
+      "anchor": "2024-08-31",
+      "interval": "quarterly",
+      "from": "2024-12-01",
+      "expected": "2025-02-28"
+    },
+    {
+      "name": "quarterly_drift_aug31_back_to_may31",
+      "anchor": "2024-08-31",
+      "interval": "quarterly",
+      "from": "2025-03-01",
+      "expected": "2025-05-31"
+    },
+    {
+      "name": "yearly_leap_anchor_returns_to_29_in_next_leap_year",
+      "anchor": "2024-02-29",
+      "interval": "yearly",
+      "from": "2027-03-01",
+      "expected": "2028-02-29"
     }
   ]
 }

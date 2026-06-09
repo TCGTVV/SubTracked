@@ -7,6 +7,31 @@ use crate::db::Subscription;
 use crate::recurrence::{next_due_date, parse_iso_date_strict};
 use crate::validation::validate_lead_days;
 
+/// Side-Effect-Seam fuer den Dispatcher. Production-Pfad ist
+/// [`AppNotifier`] (Tauri-Notification-Plugin); im Test bekommt der Dispatcher
+/// eine Stub-Implementierung, deren Success/Failure kontrolliert werden kann.
+///
+/// `Send + Sync`: der Reminder-Loop laeuft als `tauri::async_runtime::spawn`-
+/// Task und braucht deshalb ein Send-Future. `&dyn Notifier` muss daher
+/// thread-sicher sein.
+pub trait Notifier: Send + Sync {
+    fn show(&self, title: &str, body: &str) -> Result<(), String>;
+}
+
+struct AppNotifier<'a>(&'a AppHandle);
+
+impl Notifier for AppNotifier<'_> {
+    fn show(&self, title: &str, body: &str) -> Result<(), String> {
+        self.0
+            .notification()
+            .builder()
+            .title(title.to_string())
+            .body(body.to_string())
+            .show()
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Eine im Vorlauf-Fenster faellige Erinnerung. Pure-Output von
 /// [`compute_due_reminders`]; enthaelt nur die Daten, die der Dispatcher zum
 /// Senden + Schreiben braucht — kein DB- oder App-Handle-Bezug.
@@ -91,7 +116,7 @@ pub fn compute_due_reminders(
 /// Reservierung wieder entfernt, damit der Check spaeter erneut versuchen kann.
 async fn dispatch_due_reminders(
     pool: &SqlitePool,
-    app: &AppHandle,
+    notifier: &dyn Notifier,
     granted: bool,
     due: &[DueReminder],
 ) -> Result<u32, String> {
@@ -119,7 +144,7 @@ async fn dispatch_due_reminders(
             d.due_date.format("%d.%m.%Y"),
             format_amount_for_notification(d.amount_cents, &d.currency),
         );
-        if let Err(e) = app.notification().builder().title(title).body(body).show() {
+        if let Err(e) = notifier.show(&title, &body) {
             if let Err(delete_err) =
                 delete_reminder_reservation(pool, d.subscription_id, &due_str).await
             {
@@ -130,7 +155,7 @@ async fn dispatch_due_reminders(
                     "Reminder-Reservierung nach Notification-Fehler konnte nicht entfernt werden"
                 );
             }
-            return Err(e.to_string());
+            return Err(e);
         }
         sent += 1;
     }
@@ -159,7 +184,8 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
     .map_err(|e| e.to_string())?;
 
     let due = compute_due_reminders(&subs, today)?;
-    dispatch_due_reminders(pool, app, granted, &due).await
+    let notifier = AppNotifier(app);
+    dispatch_due_reminders(pool, &notifier, granted, &due).await
 }
 
 async fn reminder_already_sent(
@@ -392,5 +418,189 @@ mod tests {
     fn formats_negative_amounts_defensively() {
         assert_eq!(format_amount_for_notification(-1799, "EUR"), "-17,99 EUR");
         assert_eq!(format_amount_for_notification(-1500, "KRW"), "-1.500 KRW");
+    }
+
+    // -- Dispatcher-Tests: Reservierung + Rollback --------------------------
+    //
+    // Der Dispatcher koppelt INSERT OR IGNORE, notification.show() und DELETE
+    // (bei show()-Fehler) in genau dieser Reihenfolge. Damit das auch nach
+    // Refactorings stabil bleibt, simulieren wir show() ueber den
+    // `Notifier`-Seam und pruefen den DB-Endzustand.
+
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::SqlitePool;
+    use std::sync::Mutex;
+
+    struct MockNotifier {
+        calls: Mutex<u32>,
+        result: Result<(), String>,
+    }
+
+    impl MockNotifier {
+        fn success() -> Self {
+            Self {
+                calls: Mutex::new(0),
+                result: Ok(()),
+            }
+        }
+
+        fn failure(msg: &str) -> Self {
+            Self {
+                calls: Mutex::new(0),
+                result: Err(msg.to_string()),
+            }
+        }
+
+        fn call_count(&self) -> u32 {
+            *self.calls.lock().unwrap()
+        }
+    }
+
+    impl Notifier for MockNotifier {
+        fn show(&self, _title: &str, _body: &str) -> Result<(), String> {
+            *self.calls.lock().unwrap() += 1;
+            self.result.clone()
+        }
+    }
+
+    async fn test_pool() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .expect("connect in-memory sqlite");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("apply migrations");
+        // Subscription-Row fuer FK-Bindung der reminders-Tabelle (FK an per
+        // sqlx-Default). subscription_id = 1 wird in den Tests genutzt.
+        sqlx::query(
+            "INSERT INTO subscriptions \
+               (id, name, amount_cents, currency, account_id, interval, anchor_date, \
+                lead_days, active, notify) \
+             VALUES (1, 'Netflix', 1799, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("seed subscription");
+        pool
+    }
+
+    fn due_reminder() -> DueReminder {
+        DueReminder {
+            subscription_id: 1,
+            subscription_name: "Netflix".into(),
+            amount_cents: 1799,
+            currency: "EUR".into(),
+            due_date: d(2025, 2, 15),
+        }
+    }
+
+    async fn reservation_exists(pool: &SqlitePool, subscription_id: i64, due_date: &str) -> bool {
+        let row: Option<(i64,)> = sqlx::query_as(
+            "SELECT 1 FROM reminders WHERE subscription_id = ? AND due_date = ? LIMIT 1",
+        )
+        .bind(subscription_id)
+        .bind(due_date)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+        row.is_some()
+    }
+
+    /// Pfad #1: erfolgreiches show() laesst die Reservierung in der DB stehen.
+    /// Damit ist die Erinnerung gegen Doppelversand abgesichert.
+    #[tokio::test]
+    async fn dispatch_persists_reservation_on_show_success() {
+        let pool = test_pool().await;
+        let notifier = MockNotifier::success();
+        let due = vec![due_reminder()];
+
+        let sent = dispatch_due_reminders(&pool, &notifier, true, &due)
+            .await
+            .expect("dispatch ok");
+
+        assert_eq!(sent, 1);
+        assert_eq!(
+            notifier.call_count(),
+            1,
+            "show() muss aufgerufen worden sein"
+        );
+        assert!(
+            reservation_exists(&pool, 1, "2025-02-15").await,
+            "Reservierung muss nach erfolgreichem show() in der DB stehen"
+        );
+    }
+
+    /// Pfad #2: schlaegt show() fehl, muss die zuvor reservierte Row wieder
+    /// entfernt werden — sonst wuerde ein spaeterer Check die Erinnerung als
+    /// gesendet betrachten und nie nachtragen.
+    #[tokio::test]
+    async fn dispatch_rolls_back_reservation_on_show_failure() {
+        let pool = test_pool().await;
+        let notifier = MockNotifier::failure("OS-Notification kaputt");
+        let due = vec![due_reminder()];
+
+        let err = dispatch_due_reminders(&pool, &notifier, true, &due)
+            .await
+            .expect_err("dispatch muss show()-Fehler durchreichen");
+
+        assert!(
+            err.contains("OS-Notification kaputt"),
+            "Fehler aus dem Notifier muss propagiert werden: {err}"
+        );
+        assert_eq!(notifier.call_count(), 1, "show() wurde versucht");
+        assert!(
+            !reservation_exists(&pool, 1, "2025-02-15").await,
+            "Reservierung muss nach Notification-Fehler zurueckgerollt sein"
+        );
+    }
+
+    /// Pfad #3: Idempotenz — eine bereits vorhandene Reservierung blockiert
+    /// sowohl INSERT als auch show(). Der Dispatcher darf an einer schon
+    /// gesendeten Erinnerung nicht erneut versuchen.
+    #[tokio::test]
+    async fn dispatch_skips_already_reserved_reminder() {
+        let pool = test_pool().await;
+        sqlx::query("INSERT INTO reminders (subscription_id, due_date) VALUES (1, '2025-02-15')")
+            .execute(&pool)
+            .await
+            .expect("seed reminder");
+        let notifier = MockNotifier::success();
+        let due = vec![due_reminder()];
+
+        let sent = dispatch_due_reminders(&pool, &notifier, true, &due)
+            .await
+            .expect("dispatch ok");
+
+        assert_eq!(sent, 0, "doppelte Erinnerung darf nicht gezaehlt werden");
+        assert_eq!(
+            notifier.call_count(),
+            0,
+            "show() darf bei bereits gesendeter Erinnerung nicht aufgerufen werden"
+        );
+        assert!(reservation_exists(&pool, 1, "2025-02-15").await);
+    }
+
+    /// Pfad #4: ohne Permission wird weder reserviert noch show() aufgerufen,
+    /// damit ein spaeterer Check nach Permission-Erteilung die Erinnerung noch
+    /// nachtragen kann.
+    #[tokio::test]
+    async fn dispatch_without_permission_does_not_reserve_or_show() {
+        let pool = test_pool().await;
+        let notifier = MockNotifier::success();
+        let due = vec![due_reminder()];
+
+        let sent = dispatch_due_reminders(&pool, &notifier, false, &due)
+            .await
+            .expect("dispatch ok");
+
+        assert_eq!(sent, 0);
+        assert_eq!(notifier.call_count(), 0);
+        assert!(
+            !reservation_exists(&pool, 1, "2025-02-15").await,
+            "ohne Permission darf keine Reservierung entstehen"
+        );
     }
 }

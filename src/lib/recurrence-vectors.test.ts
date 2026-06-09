@@ -7,15 +7,31 @@ import { type Interval, nextDueDate } from "./recurrence";
 // entscheidet. Vektoren leben unter `tests/fixtures/recurrence-vectors.json`
 // im Repo-Root und sind die einzige Source of Truth fuer beide Seiten.
 
-interface NextDueVector {
+// Roh aus JSON: interval ist nur string. Die Whitelist unten narrowt auf
+// Interval, damit ein Tippfehler in der Fixture (z.B. "Monthly") schon hier
+// als klarer Fehler auffaellt — und nicht erst Rust-seitig als
+// "Unbekanntes Intervall".
+interface NextDueVectorRaw {
   name: string;
   anchor: string;
-  interval: Interval;
+  interval: string;
   from: string;
   expected: string;
 }
 
-const vectors = vectorsJson as { next_due_date: NextDueVector[] };
+const ALLOWED_INTERVALS = ["monthly", "quarterly", "yearly"] as const satisfies readonly Interval[];
+
+function assertInterval(value: string, vectorName: string): Interval {
+  if ((ALLOWED_INTERVALS as readonly string[]).includes(value)) {
+    return value as Interval;
+  }
+  throw new Error(
+    `Vektor "${vectorName}": ungueltiges interval ${JSON.stringify(value)} ` +
+      `(erlaubt: ${ALLOWED_INTERVALS.join(", ")}).`,
+  );
+}
+
+const vectors = vectorsJson as { next_due_date: NextDueVectorRaw[] };
 
 // Lokale Mitternacht — Vitest setzt TZ=UTC, damit dieselben numerischen
 // Mitternacht-Werte rauskommen wie Rusts NaiveDate.
@@ -31,8 +47,26 @@ describe("shared recurrence vectors (TS-Seite)", () => {
 
   for (const v of vectors.next_due_date) {
     it(v.name, () => {
-      const got = nextDueDate(parseDate(v.anchor), v.interval, parseDate(v.from));
+      const interval = assertInterval(v.interval, v.name);
+      const got = nextDueDate(parseDate(v.anchor), interval, parseDate(v.from));
       expect(got).toEqual(parseDate(v.expected));
     });
   }
+});
+
+describe("assertInterval narrowing", () => {
+  it("akzeptiert alle erlaubten Intervalle", () => {
+    for (const interval of ALLOWED_INTERVALS) {
+      expect(assertInterval(interval, "test")).toBe(interval);
+    }
+  });
+
+  it("wirft bei Capitalization-Tippfehler", () => {
+    expect(() => assertInterval("Monthly", "broken_vector")).toThrow(/broken_vector/);
+    expect(() => assertInterval("Monthly", "broken_vector")).toThrow(/Monthly/);
+  });
+
+  it("wirft bei voellig unbekanntem Intervall", () => {
+    expect(() => assertInterval("weekly", "v1")).toThrow(/weekly/);
+  });
 });
