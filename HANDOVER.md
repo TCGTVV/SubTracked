@@ -9,6 +9,76 @@
 
 ---
 
+## 2026-06-09 — Claude: Architektur-Cleanup-Block (6 ToDos abgearbeitet)
+
+### Was passierte
+
+Direkt nach dem Tests-Block (siehe Eintrag darunter) wollte der User den **Architektur-Cleanup-Block** komplett durchziehen. Sechs offene Architektur-ToDos aus dem Review-Block 2026-06-08 erledigt; Reihenfolge wieder klein → gross:
+
+1. **BACKLOG-Architekturpunkt #9 (PRAGMA foreign_keys=ON) korrigiert.** Annahme im Original war falsch — sqlx 0.9 aktiviert FK per Default, das wurde im Tests-Block schon entdeckt. In dieser Session: `foreign_keys(true)` in [lib.rs](src-tauri/src/lib.rs) jetzt explizit gesetzt (Schutz gegen kuenftigen sqlx-Default-Wechsel + Code-Doku der Abhaengigkeit aus `update_subscription_in_db`). Doc-Kommentar auf `validate_account_exists` in [validation.rs](src-tauri/src/validation.rs) auf den tatsaechlichen Zweck umgeschrieben: lesbarer deutscher Fehler statt SQLite-Raw-Constraint-Meldung.
+
+2. **`compute_due_reminders` Sichtbarkeit verengt.** `compute_due_reminders`, `DueReminder` und `Notifier`-Trait in [reminders.rs](src-tauri/src/reminders.rs) sind jetzt modul-privat. Der Tests-Block davor hatte `Notifier` versehentlich `pub` gemacht — jetzt korrigiert. Externe Caller koennen damit nicht mehr versehentlich am Idempotenz-Check vorbei Notifications schicken. Tests im `#[cfg(test)] mod tests` sehen die Items weiter via `super::*`, keine Anpassung dort noetig.
+
+3. **`validate_interval` an `months_per_interval` delegiert.** Single Source of Truth in [recurrence.rs](src-tauri/src/recurrence.rs) jetzt als `pub const ALLOWED_INTERVALS: &[(&str, u32)]` — Name + Monatsschritt nebeneinander. `months_per_interval` macht einen Slice-Scan, `validate_interval` delegiert reine `months_per_interval(interval).map(|_| ())`. Neues Intervall = ein Eintrag in der Liste. Die Erlaubt-Liste taucht in der Fehlermeldung von `months_per_interval` jetzt automatisch komplett auf.
+
+4. **Lock-Poisoning auf `ReminderState.last_check_at` geheilt.** Neue Methoden `ReminderState::record_check(when)` und `ReminderState::last_check()` in [db.rs](src-tauri/src/db.rs) heilen Poisoning automatisch via `tracing::error!` + `clear_poison()` + `into_inner()`. Das Mutex-Feld ist jetzt privat, beide Call-Sites (Reminder-Loop in `lib.rs`, `get_reminder_status` in `commands.rs`) gehen ueber die Methoden. `get_reminder_status` kann den Lock-Fehler nicht mehr nach oben durchreichen, weil die Methode poison-resilient ist — die `Result<ReminderStatus, String>`-Signatur bleibt aber wegen der SQL-Query erhalten.
+
+5. **Permission-denied `tracing::info!`-Flut entzerrt.** `dispatch_due_reminders` in [reminders.rs](src-tauri/src/reminders.rs) zaehlt jetzt `skipped_no_permission` pro Tick und loggt nach der Schleife einmal aggregiert (`count = N`), statt pro faelliger Erinnerung eine separate Info-Zeile zu schreiben. Bei dauerhaft abgelehnter Permission und N Abos: 1 Log/Stunde statt N Logs/Stunde — das rolling 7-Tage-Log wird nicht mehr von Rauschen verstopft.
+
+6. **`ALLOWED_CURRENCIES` als gemeinsame JSON.** Single Source of Truth jetzt in [tests/fixtures/currencies.json](tests/fixtures/currencies.json) (Code + Subdivisions pro Waehrung, analog `recurrence-vectors.json`). **Rust-Seite:** neues Modul [src-tauri/src/currencies.rs](src-tauri/src/currencies.rs) — `LazyLock<Vec<Currency>>` mit `include_str!` + `serde_json` zur Compile-Zeit eingebunden, Public-API `is_allowed`/`allowed_codes`/`subdivisor`. `validate_currency` und der Notification-Formatierer (frueher die Mini-`currency_subdivisor`-Funktion in `reminders.rs`) nutzen diese Helper. Pure Konstante `ALLOWED_CURRENCIES` aus `validation.rs` ist weg. **TS-Seite:** [src/lib/format.ts](src/lib/format.ts) importiert dieselbe JSON, derived `CURRENCY_OPTIONS` + `CURRENCY_SUBDIVISIONS` davon. `CurrencyOption` ist jetzt schlicht `string` (statt einer Literal-Union), weil JSON-Inhalt zur Compile-Zeit von TS nicht zu literalen Typen verengt wird; die Runtime-Pruefung via `isCurrencyOption` bleibt die Quelle der Wahrheit. Beim Hinzufuegen einer neuen Waehrung reicht jetzt ein Eintrag in der JSON; beide Seiten ziehen automatisch nach.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Working tree dirty mit:
+  - Modifiziert: `BACKLOG.md`, `HANDOVER.md`, `src-tauri/src/commands.rs`, `src-tauri/src/db.rs`, `src-tauri/src/lib.rs`, `src-tauri/src/recurrence.rs`, `src-tauri/src/reminders.rs`, `src-tauri/src/validation.rs`, `src/lib/format.ts`.
+  - Neue Dateien: `src-tauri/src/currencies.rs`, `tests/fixtures/currencies.json`.
+- Verifikation gruen:
+  - `cargo fmt --check` ✓
+  - `cargo clippy --all-targets -- -D warnings` ✓
+  - `cargo test` ✓ — **43 Tests** (+5 currencies-Modul-Tests gegenueber dem Tests-Block).
+  - `pnpm test:run` ✓ — **171 Tests / 13 Files** (unveraendert; format.ts-Refactor war strukturell, alle Tests haben weiter Bestand).
+  - `pnpm lint` ✓ — Biome 49 Files clean (+1 neues Rust-File wird von Biome ignoriert; +1 TS-Code-Pfad).
+  - `pnpm build` ✓ — TS + Vite-Build in 1,25s gruen.
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` Live-Smoke nicht gestartet. Strukturell beruehren die Aenderungen den Boot-Pfad (Modul `currencies` muss laden), die Reminder-Schleife (Logger-Aggregation, neuer Notifier-Trait), den Settings-Status (`record_check`/`last_check` als Adapter) und Validierung (Currency-Whitelist aus JSON). Live-Test waere wertvoll, besonders: (a) App startet ohne Panic (`currencies::LazyLock` greift beim ersten Validate); (b) Settings-Dialog zeigt `last_check_at` weiter sauber; (c) Abo mit z.B. `KRW` speichern → akzeptiert; (d) Abo mit `BTC` (manuell ueber Devtools) → klar lesbarer Fehler.
+
+### Wichtige Entscheidungen + Begruendung
+
+- **Shared JSON statt Codegen fuer Waehrungen.** Codegen (ts-rs / specta) waere robuster fuer Typen, aber zieht Build-Step + Dependency rein, die fuer 5 Waehrungen Overkill ist. Shared JSON mit doppeltem Loader ist mit dem `recurrence-vectors.json`-Pattern schon etabliert; ein neues Modul + ein neuer Import sind das ganze Setup.
+- **`tests/fixtures/` als Ort fuer Runtime-Shared-Config.** Dort liegt schon `recurrence-vectors.json`, das beide Seiten lesen. Der Dir-Name passt nicht perfekt (Currencies sind Runtime-Config, nicht Test-Fixtures), aber ein eigener `data/`-Ordner fuer eine einzelne Datei waere Over-Engineering. Wenn weitere Shared-Config dazu kommt, umbenennen.
+- **`CurrencyOption = string` statt Literal-Union.** TS kann beim JSON-Import keine Literale ableiten — der Cast verliert sie. Statt komplizierter Codegen-Loesung wird der Typ schlicht; die Runtime-Pruefung via `isCurrencyOption` ist der echte Gate. Existierende Verwender (`SubscriptionDialog`, `AccountsDialog`) brauchten Null Anpassungen.
+- **Poison-Recovery als Methoden auf `ReminderState`.** Inline-Recovery an zwei Call-Sites waere ~12 LOC Duplikation. Inhaerente Methoden auf der bestehenden Struct sind die natuerliche Heimat — kostet ein `tracing`-Import in `db.rs`, was OK ist (db.rs hat eh schon sqlx/serde/chrono-Imports, ist also kein pristines Data-only-Modul).
+- **Aggregiertes Permission-denied-Log statt warn-once-Persistenz.** Pro Tick einmal loggen ist die einfachste Loesung, die das Volumen runterbringt. Ein `HashSet<i64>` ueber Subscription-IDs zu pflegen waere genauer, aber bei dauerhaft abgelehnter Permission egal — der Diagnose-Wert ist „Permission fehlt, X Erinnerungen wuerden gehen", nicht „welche genau".
+
+### Gotchas / Stolperfallen
+
+- **`LazyLock` ist Rust 1.80+.** Die Crate kompiliert damit. Falls jemand auf aelterem Rust baut, schlaegt der Build fehl mit `cannot find type 'LazyLock'`. Falls das jemals auftaucht: `std::sync::OnceLock` + Getter-Funktion ist die naechstbessere Option.
+- **`tests/fixtures/currencies.json` enthaelt einen `_comment`-Key.** Serde deserialisiert mit `serde_json::from_str` standardmaessig zusaetzliche Keys still — das funktioniert. Falls jemand `deny_unknown_fields` einschaltet, knallt es. Vorgewarnt.
+- **`tests/fixtures/` wird jetzt von Production-Code via `include_str!` referenziert.** Wer den Dir bei einem kuenftigen Cleanup umbenennt, muss BEIDE Pfade (`recurrence-vectors.json`, `currencies.json`) und BEIDE Loader (Rust `include_str!`, TS-Import) anpassen. Schwer zu vergessen, weil cargo build sofort scheitert.
+- **`CurrencyOption` ist jetzt strukturell `string`.** Wer im Frontend kuenftig stark-typisierte Currency-Werte braucht (etwa fuer eine `Map<CurrencyOption, X>`), muss die Funktionalitaet ueber Runtime-Checks oder einen Brand-Typ nachziehen — die alte Literal-Union ist weg.
+- **Code von dieser Session ist NICHT reviewed.** Wie der Tests-Block darunter ist der Architektur-Block auf User-Wunsch direkt commited + gepusht worden, ohne `/code-review high`-Lauf. Der naechste Agent sollte vor weiteren funktionalen Aenderungen den kombinierten Diff `git diff ba060fa..HEAD` durch `/code-review high` schicken — Schwerpunkte: (a) Tests-Block (siehe Eintrag unten); (b) Architektur-Block-Spezifika: `LazyLock` Verhalten beim Tauri-Boot, die `ReminderState`-Poison-Recovery, der Doppel-`include_str!` auf die Test-Fixtures.
+
+### Naechster Schritt
+
+- Vor weiteren Code-Aenderungen: `/code-review high` ueber `git diff ba060fa..HEAD` (umfasst Tests- + Architektur-Block), siehe Stolperfallen oben.
+- Live-Smoke mit `pnpm tauri dev` fuer den Boot-Pfad und die Validation-/Reminder-Adapter.
+- Wenn beides sauber: die Tests- und Architektur-Sektionen im BACKLOG sind damit weitgehend leer (E2E vor v1.0 ist bewusst offen, Reload-Pattern ist optional). Naechste sinnvolle Themen waeren der **Release-Reife-Block** (Matrix-Build → Tag v0.1.0 → Updater) oder das **UI-Redesign Richtung arsnova.eu** (siehe `📐 Spaeter`-Sektion und `mem:ui_vision`).
+
+### Geaenderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklaert
+
+- Code-Review fuer Tests- + Architektur-Block ausstehend (siehe Stolperfallen).
+- Live-Smoke ausstehend.
+- Push erfolgt mit Commits dieses Blocks.
+
+---
+
 ## 2026-06-09 — Claude: Tests-Block (4 Review-ToDos abgearbeitet, 1 Production-Bug gefixt)
 
 ### Was passierte
