@@ -9,6 +9,64 @@
 
 ---
 
+## 2026-06-09 — Codex: Currency-Fixture-Guards + Rust-Version gepinnt
+
+### Was passierte
+
+- User hatte `AGENTS.md` angepasst: `HANDOVER.md` soll nur noch am Beginn einer neuen Session gelesen werden, nicht vor jedem Arbeitsschritt. Diese Regel wurde in der Session beachtet; `HANDOVER.md` wurde nur beim Session-Start gelesen.
+- Kleiner Härtungsblock aus dem vorherigen Handover erledigt:
+  - [src-tauri/Cargo.toml](src-tauri/Cargo.toml): `rust-version = "1.80"` ergänzt, weil `std::sync::LazyLock` Rust 1.80+ voraussetzt.
+  - [src-tauri/src/currencies.rs](src-tauri/src/currencies.rs): `Currency.subdivisions` von `i64` auf `u32` verengt. Negative Werte in `tests/fixtures/currencies.json` scheitern damit bereits beim Deserialisieren.
+  - Drei neue Rust-Guard-Tests für `tests/fixtures/currencies.json`:
+    - Währungscodes dürfen nicht leer sein und keine führenden/folgenden Leerzeichen enthalten.
+    - Währungscodes müssen eindeutig sein.
+    - `subdivisions` muss strikt größer 0 sein.
+- Keine Änderung an `tests/fixtures/currencies.json` selbst; die bestehende Liste bleibt `EUR/USD/GBP/CHF/KRW`.
+
+### Status am Sitzungsende
+
+- Branch: `main`, synchron mit `origin/main` zu Beginn der Session.
+- Vor dem Abschluss-Commit waren geändert:
+  - User-Änderung: `AGENTS.md` (nicht von Codex bearbeitet).
+  - Codex-Änderungen: `src-tauri/Cargo.toml`, `src-tauri/src/currencies.rs`, `HANDOVER.md`.
+- Auf User-Wunsch wird der gesamte Stand direkt nach diesem Handover-Eintrag committet und gepusht.
+
+### Verifikation
+
+- `cargo fmt --check` ✓
+- `cargo test` ✓ — **46 Tests**
+- `cargo clippy --all-targets -- -D warnings` ✓
+- `pnpm test:run` ✓ — **171 Tests / 13 Files**
+- `pnpm lint` ✓ — Biome 49 Files clean
+- `pnpm build` ✓ — TypeScript + Vite-Build grün
+
+### Nicht gelaufen
+
+- `pnpm tauri dev` wurde nicht gestartet. Die Änderung betrifft nur Rust-Test-/Fixture-Invarianten und das Cargo-MSRV-Feld; kein App-Startpfad wurde funktional geändert.
+- `/code-review high` wurde nicht gestartet. Der Block ist klein und eng auf Tests/Manifest begrenzt.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`u32` für `subdivisions` statt nur Test auf `> 0`:** Negative Werte sind semantisch unmöglich und sollen gar nicht erst in den Runtime-State gelangen. `0` bleibt JSON-technisch parsebar, wird aber durch den neuen Guard-Test blockiert.
+- **Rust-Version im Cargo-Manifest statt nur Doku-Text:** `rust-version = "1.80"` ist maschinenlesbar und dokumentiert gleichzeitig, warum ältere Toolchains nicht unterstützt werden.
+
+### Gotchas / Stolperfallen
+
+- `Cargo.toml` pinnt jetzt die MSRV auf 1.80. Falls jemand mit älterem Rust baut, wird Cargo entsprechend stoppen.
+- Die neuen Guard-Tests laufen auf Rust-Seite. Das ist bewusst dort platziert, weil `src-tauri/src/currencies.rs` die JSON als Production-Quelle lädt und `cargo test` den kritischen Loader-Pfad direkt ausführt.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Nächste größere Themen bleiben:
+  - **Release-Reife-Block:** Matrix-Build → Tag `v0.1.0` → Updater.
+  - **UI-Redesign Richtung arsnova.eu:** dafür `mem:ui_vision` lesen.
+
+---
+
 ## 2026-06-09 — Codex: Review + Live-Smoke nach Architektur-Block
 
 ### Was passierte

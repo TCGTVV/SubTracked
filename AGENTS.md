@@ -4,7 +4,7 @@ Anweisungen für KI-Agents, die an diesem Projekt arbeiten. Kurz halten, Konvent
 
 ## 🛎️ Schichtübergabe — IMMER ZUERST LESEN
 
-**Vor jeder Arbeit:** zuerst [HANDOVER.md](./HANDOVER.md) — den **obersten Eintrag** — vollständig lesen. Dort steht der letzte Sitzungs-Stand, der nächste geplante Schritt, getroffene Entscheidungen mit Begründung und Stolperfallen.
+**Vor jeder neuen Session:** zuerst [HANDOVER.md](./HANDOVER.md) — den **obersten Eintrag** — vollständig lesen. Dort steht der letzte Sitzungs-Stand, der nächste geplante Schritt, getroffene Entscheidungen mit Begründung und Stolperfallen.
 
 **Am Sitzungsende:** in HANDOVER.md **oben** einen neuen Eintrag anfügen. Schablone steht unten in der Datei.
 
