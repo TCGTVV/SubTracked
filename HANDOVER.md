@@ -9,6 +9,59 @@
 
 ---
 
+## 2026-06-09 — Codex: Review + Live-Smoke nach Architektur-Block
+
+### Was passierte
+
+- User wollte den im vorherigen Handover vorgeschlagenen Absicherungsblock: `/code-review high` über `git diff ba060fa..HEAD` und danach Live-Smoke mit `pnpm tauri dev`.
+- Code-Review wurde mit einem separaten Review-Agenten auf exakt diesen Diff gefahren. Ergebnis: **keine Findings**.
+- Review-Schwerpunkte waren laut Handover: Tests-Block, Architektur-Block, `LazyLock`/Currencies beim Tauri-Boot, `ReminderState`-Poison-Recovery, `dispatch_due_reminders`/Notifier-Reservierung und Rollback, `update_subscription_in_db` mit unveränderter Orphan-`account_id`, sowie doppelte `include_str!`/JSON-Nutzung.
+- Live-Smoke mit `pnpm tauri dev` gestartet:
+  - Vite kam hoch auf `http://localhost:1420/`.
+  - Rust baute `subtracked` im Dev-Profil sauber.
+  - App-Prozess startete ohne Panic/Compile-Fehler.
+  - Nach ca. einer Minute Laufzeit keine weitere Fehlerausgabe.
+  - Nur bekannte Linux-AppIndicator-Warnung: `libayatana-appindicator is deprecated`.
+  - Prozess wurde per Ctrl-C beendet; das folgende `ELIFECYCLE` ist dadurch erwartbar und kein Laufzeitfehler.
+
+### Status am Sitzungsende
+
+- Branch: `main`, synchron mit `origin/main` vor diesem Handover-Update.
+- HEAD: `134de98`.
+- Working tree war vor dem Handover-Update clean; nach diesem Eintrag ist nur `HANDOVER.md` geändert.
+- Review: grün, keine Findings.
+- App-Startbarkeit: `pnpm tauri dev` startet erfolgreich.
+- Keine neuen Code-Änderungen, keine Commits in dieser Session.
+
+### Nächster Schritt
+
+- Der ausstehende Review-/Smoke-Block ist erledigt. Nächste sinnvolle Themen:
+  - **Release-Reife-Block** aus dem Backlog: Matrix-Build → Tag `v0.1.0` → Updater.
+  - Oder **UI-Redesign Richtung arsnova.eu** (`mem:ui_vision` lesen), falls heute Oberfläche Priorität hat.
+- Optionaler Mini-Härtungsblock aus der Review-Restliste:
+  - Guard-Tests für `tests/fixtures/currencies.json` gegen leere Codes, Duplikate und ungültige `subdivisions`.
+  - Rust-Version explizit dokumentieren/pinnen, weil `std::sync::LazyLock` Rust 1.80+ voraussetzt.
+
+### Wichtige Entscheidungen + Begründung
+
+- Keine Code-Änderungen trotz Rest-Risiken. Der Review meldete keine Bugs, nur optionale Härtungspunkte. Deshalb wurde der angefragte Absicherungsblock abgeschlossen, ohne neuen Scope hineinzuziehen.
+- `pnpm tauri dev` wurde nach erfolgreichem Smoke bewusst beendet, damit kein Dev-Prozess im Hintergrund offen bleibt.
+
+### Gotchas / Stolperfallen
+
+- `ELIFECYCLE` nach dem Live-Smoke kam vom manuellen Ctrl-C und ist nicht als Fehler des App-Starts zu werten.
+- Review-Agent hat keinen Live-Smoke selbst gestartet; der Live-Smoke wurde lokal in dieser Session ausgeführt und war sauber.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Die beiden optionalen Härtungspunkte aus der Review-Restliste sind nicht umgesetzt; bei Bedarf als kleiner Qualitätsblock einschieben.
+
+---
+
 ## 2026-06-09 — Claude: Architektur-Cleanup-Block (6 ToDos abgearbeitet)
 
 ### Was passierte
