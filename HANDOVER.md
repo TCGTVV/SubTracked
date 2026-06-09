@@ -84,8 +84,9 @@ User hat sich nach dem Session-Start fuer den **Tests-Block** entschieden (`📐
 
 ### Offen / nicht geklaert
 
+- **Code von dieser Session ist NICHT reviewed.** Der naechste Agent soll vor weiteren funktionalen Aenderungen `/code-review high` ueber den Diff `git diff ba060fa..5bd17e7` laufen lassen — AGENTS.md-Konvention ("Zweite Augen") wurde fuer diese Session bewusst uebersprungen, weil der User direkt commit+push wollte. Schwerpunkte fuer den Review: (a) die zwei `UPDATE`-SQL-Varianten in `update_subscription_in_db` — Schemaerweiterung muss beide Pfade beruehren, leicht zu uebersehen; (b) der FK-Bypass via `SET`-Weglassen — semantisch korrekt, aber konzeptionell ueberraschend; (c) `Notifier`-Trait-Bound `Send + Sync` korrekt fuer Production-`spawn`-Pfad?
 - Live-Smoke mit `pnpm tauri dev` ausstehend.
-- Push auf `origin/main` ausstehend.
+- Push auf `origin/main` erfolgt (`5bd17e7`).
 
 ---
 
