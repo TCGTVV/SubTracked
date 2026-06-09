@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Deserialize)]
 struct Currency {
     code: String,
-    subdivisions: i64,
+    subdivisions: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,12 +41,14 @@ pub fn subdivisor(code: &str) -> i64 {
     CURRENCIES
         .iter()
         .find(|c| c.code == code)
-        .map(|c| c.subdivisions)
+        .map(|c| i64::from(c.subdivisions))
         .unwrap_or(100)
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
 
     #[test]
@@ -70,6 +72,45 @@ mod tests {
         assert!(!is_allowed("BTC"));
         assert!(!is_allowed("eur"), "case sensitive");
         assert!(!is_allowed(""));
+    }
+
+    #[test]
+    fn fixture_codes_are_not_empty() {
+        for currency in CURRENCIES.iter() {
+            assert!(
+                !currency.code.trim().is_empty(),
+                "Waehrungscode darf nicht leer sein"
+            );
+            assert_eq!(
+                currency.code,
+                currency.code.trim(),
+                "Waehrungscode darf keine fuehrenden oder folgenden Leerzeichen enthalten"
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_codes_are_unique() {
+        let mut seen = HashSet::new();
+
+        for currency in CURRENCIES.iter() {
+            assert!(
+                seen.insert(currency.code.as_str()),
+                "Waehrungscode '{}' ist doppelt in tests/fixtures/currencies.json",
+                currency.code
+            );
+        }
+    }
+
+    #[test]
+    fn fixture_subdivisions_are_positive() {
+        for currency in CURRENCIES.iter() {
+            assert!(
+                currency.subdivisions > 0,
+                "Waehrungscode '{}' muss subdivisions > 0 haben",
+                currency.code
+            );
+        }
     }
 
     #[test]
