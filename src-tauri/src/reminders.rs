@@ -14,7 +14,7 @@ use crate::validation::validate_lead_days;
 /// `Send + Sync`: der Reminder-Loop laeuft als `tauri::async_runtime::spawn`-
 /// Task und braucht deshalb ein Send-Future. `&dyn Notifier` muss daher
 /// thread-sicher sein.
-pub trait Notifier: Send + Sync {
+trait Notifier: Send + Sync {
     fn show(&self, title: &str, body: &str) -> Result<(), String>;
 }
 
@@ -36,12 +36,12 @@ impl Notifier for AppNotifier<'_> {
 /// [`compute_due_reminders`]; enthaelt nur die Daten, die der Dispatcher zum
 /// Senden + Schreiben braucht — kein DB- oder App-Handle-Bezug.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DueReminder {
-    pub subscription_id: i64,
-    pub subscription_name: String,
-    pub amount_cents: i64,
-    pub currency: String,
-    pub due_date: NaiveDate,
+struct DueReminder {
+    subscription_id: i64,
+    subscription_name: String,
+    amount_cents: i64,
+    currency: String,
+    due_date: NaiveDate,
 }
 
 /// Bestimmt fuer die uebergebenen Abos diejenigen, deren naechste Faelligkeit
@@ -49,7 +49,7 @@ pub struct DueReminder {
 /// kein DB-Zugriff, keine Notification, kein Tauri-AppHandle. Stumme Abos
 /// (`notify = false`) werden uebersprungen; der Idempotenz-Check (bereits
 /// gesendet?) gehoert in den Dispatcher, weil er DB braucht.
-pub fn compute_due_reminders(
+fn compute_due_reminders(
     subs: &[Subscription],
     today: NaiveDate,
 ) -> Result<Vec<DueReminder>, String> {
@@ -121,17 +121,17 @@ async fn dispatch_due_reminders(
     due: &[DueReminder],
 ) -> Result<u32, String> {
     let mut sent = 0u32;
+    // Pro Tick einmal aggregiert loggen, damit dauerhaft abgelehnte Permission
+    // bei N faelligen Abos nicht N Info-Zeilen pro Stunde ins 7-Tage-Log
+    // schreibt und echte Errors verdraengt.
+    let mut skipped_no_permission = 0u32;
     for d in due {
         let due_str = d.due_date.format("%Y-%m-%d").to_string();
         if reminder_already_sent(pool, d.subscription_id, &due_str).await? {
             continue;
         }
         if !granted {
-            tracing::info!(
-                subscription_id = d.subscription_id,
-                due_date = %due_str,
-                "Erinnerung faellig, aber Notification-Berechtigung fehlt; nicht als gesendet markiert"
-            );
+            skipped_no_permission += 1;
             continue;
         }
         if !insert_reminder_if_new(pool, d.subscription_id, &due_str).await? {
@@ -158,6 +158,12 @@ async fn dispatch_due_reminders(
             return Err(e);
         }
         sent += 1;
+    }
+    if skipped_no_permission > 0 {
+        tracing::info!(
+            count = skipped_no_permission,
+            "Faellige Erinnerungen uebersprungen, weil Notification-Berechtigung fehlt; spaetere Checks koennen sie nachtragen."
+        );
     }
     Ok(sent)
 }
@@ -233,15 +239,8 @@ async fn delete_reminder_reservation(
         .map_err(|e| e.to_string())
 }
 
-fn currency_subdivisor(currency: &str) -> i64 {
-    match currency {
-        "KRW" => 1,
-        _ => 100,
-    }
-}
-
 fn format_amount_for_notification(amount_minor: i64, currency: &str) -> String {
-    let divisor = currency_subdivisor(currency);
+    let divisor = crate::currencies::subdivisor(currency);
     if divisor == 1 {
         return format!("{} {}", format_whole_number_de(amount_minor), currency);
     }

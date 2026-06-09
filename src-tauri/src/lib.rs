@@ -1,4 +1,5 @@
 mod commands;
+mod currencies;
 mod db;
 mod recurrence;
 mod reminders;
@@ -94,7 +95,13 @@ pub fn run() {
                     db_path.to_string_lossy()
                 ))?
                 .create_if_missing(true)
-                .journal_mode(SqliteJournalMode::Wal);
+                .journal_mode(SqliteJournalMode::Wal)
+                // FK-Enforcement explizit setzen, statt auf den sqlx-Default zu
+                // vertrauen. Der Update-Pfad in commands::update_subscription_in_db
+                // verlaesst sich darauf, dass FK aktiv ist (siehe dort: account_id
+                // wird nur dann ins SET aufgenommen, wenn sie wirklich aendert,
+                // damit Legacy-Orphans nicht am FK-Check scheitern).
+                .foreign_keys(true);
                 let pool = SqlitePool::connect_with(options).await?;
                 sqlx::migrate!("./migrations").run(&pool).await?;
                 Ok::<SqlitePool, Box<dyn std::error::Error>>(pool)
@@ -115,9 +122,7 @@ pub fn run() {
                     // Last-Check-Zeitstempel immer aktualisieren, auch bei Error —
                     // semantisch "Loop ist gelaufen", egal ob er was geschickt hat.
                     if let Some(state) = app_handle.try_state::<ReminderState>() {
-                        if let Ok(mut last) = state.last_check_at.lock() {
-                            *last = Some(chrono::Utc::now());
-                        }
+                        state.record_check(chrono::Utc::now());
                     }
                     tokio::time::sleep(REMINDER_INTERVAL).await;
                 }

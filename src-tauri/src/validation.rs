@@ -1,9 +1,8 @@
 use sqlx::SqlitePool;
 
-use crate::recurrence::parse_iso_date_strict;
+use crate::currencies;
+use crate::recurrence::{months_per_interval, parse_iso_date_strict};
 
-pub const ALLOWED_CURRENCIES: &[&str] = &["EUR", "USD", "GBP", "CHF", "KRW"];
-pub const ALLOWED_INTERVALS: &[&str] = &["monthly", "quarterly", "yearly"];
 pub const MAX_LEAD_DAYS: i64 = 365;
 pub const MAX_ACCOUNT_BALANCE_CENTS: i64 = 9_000_000_000_000_000;
 
@@ -15,23 +14,17 @@ pub fn validate_name(name: &str) -> Result<(), String> {
 }
 
 pub fn validate_currency(currency: &str) -> Result<(), String> {
-    if !ALLOWED_CURRENCIES.contains(&currency) {
+    if !currencies::is_allowed(currency) {
         return Err(format!(
             "Unbekannte Waehrung: {currency}. Erlaubt: {}.",
-            ALLOWED_CURRENCIES.join(", ")
+            currencies::allowed_codes().join(", ")
         ));
     }
     Ok(())
 }
 
 pub fn validate_interval(interval: &str) -> Result<(), String> {
-    if !ALLOWED_INTERVALS.contains(&interval) {
-        return Err(format!(
-            "Unbekanntes Intervall: {interval}. Erlaubt: {}.",
-            ALLOWED_INTERVALS.join(", ")
-        ));
-    }
-    Ok(())
+    months_per_interval(interval).map(|_| ())
 }
 
 pub fn validate_anchor_date(date: &str) -> Result<(), String> {
@@ -101,9 +94,10 @@ pub fn validate_account_fields(
 }
 
 /// Verifiziert, dass das angegebene Konto in der DB existiert. SQLite-Foreign-Keys
-/// sind in dieser App nicht aktiviert (kein `PRAGMA foreign_keys=ON`), deshalb ist
-/// der explizite Check noetig, sonst werden Abos auch mit nicht existenter
-/// `account_id` widerspruchsfrei geschrieben.
+/// sind in dieser App aktiv (siehe `lib.rs::run`, `foreign_keys(true)`); der
+/// explizite Check existiert trotzdem, damit der User bei einem nicht
+/// existierenden Konto einen lesbaren deutschen Fehler bekommt — statt der rohen
+/// SQLite-FK-Constraint-Meldung, die SQLite sonst beim INSERT/UPDATE liefert.
 pub async fn validate_account_exists(db: &SqlitePool, account_id: i64) -> Result<(), String> {
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE id = ?")
         .bind(account_id)
@@ -131,7 +125,7 @@ mod tests {
 
     #[test]
     fn currency_whitelist_matches_frontend() {
-        for currency in ALLOWED_CURRENCIES {
+        for currency in currencies::allowed_codes() {
             assert!(validate_currency(currency).is_ok(), "{currency}");
         }
         assert!(validate_currency("eur").is_err(), "case sensitive");
@@ -141,7 +135,7 @@ mod tests {
 
     #[test]
     fn interval_whitelist_matches_schema() {
-        for interval in ALLOWED_INTERVALS {
+        for (interval, _) in crate::recurrence::ALLOWED_INTERVALS {
             assert!(validate_interval(interval).is_ok(), "{interval}");
         }
         assert!(validate_interval("weekly").is_err());

@@ -13,13 +13,30 @@ pub fn parse_iso_date_strict(date: &str) -> Result<NaiveDate, String> {
         .map_err(|_| format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."))
 }
 
+/// Single Source of Truth fuer Intervalle: Name + Monatsschritt. Wer ein neues
+/// Intervall einfuehrt, ergaenzt hier eine Zeile — `months_per_interval` und
+/// `validation::validate_interval` ziehen daraus automatisch nach.
+pub const ALLOWED_INTERVALS: &[(&str, u32)] = &[("monthly", 1), ("quarterly", 3), ("yearly", 12)];
+
 pub fn months_per_interval(interval: &str) -> Result<u32, String> {
-    match interval {
-        "monthly" => Ok(1),
-        "quarterly" => Ok(3),
-        "yearly" => Ok(12),
-        _ => Err(format!("Unbekanntes Intervall: {interval}")),
-    }
+    ALLOWED_INTERVALS
+        .iter()
+        .find(|(name, _)| *name == interval)
+        .map(|(_, months)| *months)
+        .ok_or_else(|| {
+            format!(
+                "Unbekanntes Intervall: {interval}. Erlaubt: {}.",
+                allowed_interval_names()
+            )
+        })
+}
+
+fn allowed_interval_names() -> String {
+    ALLOWED_INTERVALS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Naechstes Faelligkeitsdatum am oder nach `from`.

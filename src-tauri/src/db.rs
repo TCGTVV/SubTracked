@@ -13,7 +13,39 @@ pub struct AppState {
 /// Diagnose reicht das, Persistenz waere Overhead.
 #[derive(Default)]
 pub struct ReminderState {
-    pub last_check_at: Mutex<Option<DateTime<Utc>>>,
+    last_check_at: Mutex<Option<DateTime<Utc>>>,
+}
+
+impl ReminderState {
+    /// Schreibt den Zeitstempel des letzten Checks. Poison-resilient: wenn ein
+    /// vorheriger Panic den Mutex poisoned hat, heilen wir ihn und schreiben
+    /// den neuen Wert trotzdem. Der Diagnose-Zeitstempel ist lose genug, dass
+    /// ein verlorener Vorgaenger-Wert kein semantisches Problem ist.
+    pub fn record_check(&self, when: DateTime<Utc>) {
+        let mut guard = self.last_check_at.lock().unwrap_or_else(|poisoned| {
+            tracing::error!(
+                "ReminderState-Mutex war poisoned — wird geheilt und neuer Zeitstempel geschrieben."
+            );
+            self.last_check_at.clear_poison();
+            poisoned.into_inner()
+        });
+        *guard = Some(when);
+    }
+
+    /// Liest den Zeitstempel des letzten Checks. Poison-resilient analog zu
+    /// `record_check`: bei poisoned Mutex liefern wir den letzten gehaltenen
+    /// Wert zurueck und heilen den Mutex, damit der naechste Settings-Refresh
+    /// wieder regulaer laeuft.
+    pub fn last_check(&self) -> Option<DateTime<Utc>> {
+        let guard = self.last_check_at.lock().unwrap_or_else(|poisoned| {
+            tracing::error!(
+                "ReminderState-Mutex war poisoned — letzter bekannter Wert wird gelesen, Mutex geheilt."
+            );
+            self.last_check_at.clear_poison();
+            poisoned.into_inner()
+        });
+        *guard
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

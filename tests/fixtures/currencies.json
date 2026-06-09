@@ -1,0 +1,10 @@
+{
+  "_comment": "Single Source of Truth fuer unterstuetzte Waehrungen. TS-Frontend (src/lib/format.ts) und Rust-Backend (src-tauri/src/currencies.rs) lesen beide diese Datei. Neue Waehrung = ein Eintrag hier, beide Seiten ziehen automatisch nach. subdivisions = kleinste Einheiten pro Hauptwaehrung (EUR-Cent = 100, KRW ohne Subdivision = 1).",
+  "currencies": [
+    { "code": "EUR", "subdivisions": 100 },
+    { "code": "USD", "subdivisions": 100 },
+    { "code": "GBP", "subdivisions": 100 },
+    { "code": "CHF", "subdivisions": 100 },
+    { "code": "KRW", "subdivisions": 1 }
+  ]
+}

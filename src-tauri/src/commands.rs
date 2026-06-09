@@ -292,11 +292,7 @@ pub async fn get_reminder_status(
     state: State<'_, AppState>,
     reminder_state: State<'_, ReminderState>,
 ) -> Result<ReminderStatus, String> {
-    let last_check_at = reminder_state
-        .last_check_at
-        .lock()
-        .map_err(|e| format!("reminder state lock: {e}"))?
-        .map(|dt| dt.to_rfc3339());
+    let last_check_at = reminder_state.last_check().map(|dt| dt.to_rfc3339());
 
     let last_sent: Option<(String, String, String)> = sqlx::query_as(
         "SELECT r.due_date, s.name, r.sent_at FROM reminders r \
