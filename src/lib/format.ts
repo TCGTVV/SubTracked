@@ -1,27 +1,41 @@
 import { format } from "date-fns";
+import currenciesJson from "../../tests/fixtures/currencies.json";
 import type { Subscription } from "../types";
 import { nextDueDate } from "./recurrence";
 
-// Smallest currency unit pro ISO-4217-Code. Bei Waehrungen ohne Subdivision
-// (z.B. KRW, JPY) ist der Wert in der DB direkt die ganze Einheit, nicht ein
-// Subunit. Default 100 deckt EUR/USD/GBP/CHF und die meisten anderen ab.
-export const CURRENCY_OPTIONS = ["EUR", "USD", "GBP", "CHF", "KRW"] as const;
-export type CurrencyOption = (typeof CURRENCY_OPTIONS)[number];
+// Single Source of Truth fuer die Waehrungs-Whitelist: tests/fixtures/currencies.json.
+// Das Rust-Backend (src-tauri/src/currencies.rs) liest dieselbe Datei via
+// include_str!, sodass Drift zwischen Frontend-Dropdown und Backend-Validierung
+// nicht entstehen kann. Neue Waehrung = ein Eintrag in der JSON, beide Seiten
+// ziehen automatisch nach.
+//
+// Subdivision: kleinste Einheit pro Hauptwaehrung. Bei Waehrungen ohne
+// Subdivision (z.B. KRW, JPY) ist der Wert in der DB direkt die ganze Einheit,
+// nicht ein Subunit. Default 100 deckt EUR/USD/GBP/CHF und die meisten ab.
+interface CurrencyEntry {
+  code: string;
+  subdivisions: number;
+}
 
-const CURRENCY_SUBDIVISIONS: Record<string, number> = {
-  EUR: 100,
-  USD: 100,
-  GBP: 100,
-  CHF: 100,
-  KRW: 1,
-};
+const CURRENCIES = (currenciesJson as { currencies: CurrencyEntry[] }).currencies;
+
+export const CURRENCY_OPTIONS: readonly string[] = CURRENCIES.map((c) => c.code);
+// `CurrencyOption` repraesentiert eine vom Backend akzeptierte Waehrung. Die
+// konkrete Mitgliedschaft wird zur Laufzeit via `isCurrencyOption` geprueft —
+// statische Literal-Narrowing-Schaerfe gibt's hier bewusst nicht (siehe oben:
+// JSON ist Source of Truth, nicht die TS-Typ-Aufzaehlung).
+export type CurrencyOption = string;
+
+const CURRENCY_SUBDIVISIONS: Record<string, number> = Object.fromEntries(
+  CURRENCIES.map((c) => [c.code, c.subdivisions]),
+);
 
 export function getCurrencySubdivisor(currency: string): number {
   return CURRENCY_SUBDIVISIONS[currency] ?? 100;
 }
 
 export function isCurrencyOption(currency: string): currency is CurrencyOption {
-  return (CURRENCY_OPTIONS as readonly string[]).includes(currency);
+  return CURRENCY_OPTIONS.includes(currency);
 }
 
 export function parseStrictISODate(input: string): Date | null {
