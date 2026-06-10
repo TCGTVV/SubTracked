@@ -210,19 +210,6 @@ pub async fn count_subs_for_account(
     Ok(n)
 }
 
-async fn fetch_current_account_id(
-    db: &sqlx::SqlitePool,
-    subscription_id: i64,
-) -> Result<Option<i64>, String> {
-    let row: Option<(Option<i64>,)> =
-        sqlx::query_as("SELECT account_id FROM subscriptions WHERE id = ? LIMIT 1")
-            .bind(subscription_id)
-            .fetch_optional(db)
-            .await
-            .map_err(|e| e.to_string())?;
-    Ok(row.and_then(|(account_id,)| account_id))
-}
-
 /// Tatsaechlicher Update-Pfad fuer Subscriptions. Direkt testbar mit einem
 /// in-memory-Pool, ohne Tauri-State-Setup. Der `#[tauri::command]`-Wrapper
 /// `update_subscription` darunter delegiert nur.
