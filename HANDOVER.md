@@ -9,6 +9,23 @@
 
 ---
 
+## 2026-06-10 — Claude: Kontostand-Frische
+
+### Was passierte
+
+- **Kontostand-Frische** (`2cdbb43`): Dezenter Hinweis wenn der hinterlegte Saldo veraltet ist (≥ 7 Tage):
+  - **Migration `0005_account_balance_updated_at.sql`**: neue Spalte `balance_updated_at TEXT` in `accounts`; bestehende Zeilen bekommen `datetime('now')`.
+  - **Rust** (`db.rs`): `Account`-Struct um `balance_updated_at: Option<String>` erweitert (`#[serde(default)]`, damit das Feld beim `update_account`-Aufruf aus dem Frontend fehlen darf). `list_accounts` liest das Feld. `add_account` setzt `datetime('now')`. `update_account` macht einen SELECT-vor-UPDATE-Vergleich auf `balance_cents` — nur wenn der Wert sich geändert hat wird `balance_updated_at` neu gesetzt, sodass reine Name-/Notiz-Änderungen den Timestamp nicht berühren.
+  - **TypeScript**: `Account.balanceUpdatedAt: string | null` in `types.ts`. Neuer `daysSince(sqliteDatetime)` Helper in `format.ts` (parst SQLite-`datetime('now')`-Format `"YYYY-MM-DD HH:MM:SS"` als UTC). `AccountsDialog` zeigt pro Konto-Zeile `"Saldo vor N Tagen aktualisiert"` (amber) wenn ≥ 7 Tage. `OverviewSection` zeigt dasselbe in der Account-Summary-Zeile des Cashflow-Blocks.
+  - 171 Tests grün, Rust-Build clean.
+
+### Offene Punkte
+
+- CI (fmt + clippy) läuft nach Push durch — falls Fehler, Fix-Commit nötig.
+- Nächste kandidaten: CSP härten (Security-Review-Fund vor Public Release), GitHub-Actions-Matrix-Build (unblocked v0.1.0).
+
+---
+
 ## 2026-06-10 — Claude: Wiederkehrende Einnahmen + Top-Statuskarte
 
 ### Was passierte
