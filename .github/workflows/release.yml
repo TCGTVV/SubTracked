@@ -1,0 +1,101 @@
+name: Release
+
+# Läuft, sobald ein Versions-Tag wie v0.1.0 gepusht wird. Baut die Installer
+# für Windows, Linux und macOS (Intel + Apple Silicon) und hängt sie an einen
+# GitHub-Release. Der Release wird als ENTWURF angelegt — die Assets erst
+# prüfen, dann manuell veröffentlichen.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Pro Tag nur einen Release-Lauf; ein erneuter Push desselben Tags bricht den
+# alten Lauf ab.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build & Release
+    permissions:
+      # tauri-action legt den Release an und lädt die Assets hoch.
+      contents: write
+
+    strategy:
+      # Schlägt eine Plattform fehl, laufen die anderen trotzdem zu Ende.
+      fail-fast: false
+      matrix:
+        include:
+          # Apple Silicon (M-Serie)
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          # Intel-Macs
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+          # Linux: gleiche Runner-Version wie die tauri-action-Vorlage.
+          - platform: ubuntu-22.04
+            args: ''
+          - platform: windows-latest
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Auf macOS beide Architekturen, damit die Cross-Target-Builds oben
+          # ihre Toolchain finden. Auf Linux/Windows leer.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache Cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # System-Deps fürs Tauri-Bundling unter Linux. Gleiche Liste wie in
+      # checks.yml (libayatana statt libappindicator, plus libxdo für den Tray)
+      # und zusätzlich patchelf, das die AppImage-Erzeugung braucht.
+      - name: Tauri Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            file \
+            patchelf
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build & publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Den bereits gepushten Tag verwenden, keinen neuen erzeugen.
+          tagName: ${{ github.ref_name }}
+          releaseName: 'SubTracked ${{ github.ref_name }}'
+          releaseBody: 'Installer zum Download unten unter „Assets". Lokale-first Abo-Tracker, keine Cloud.'
+          # Entwurf: erst prüfen, dann manuell veröffentlichen.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
