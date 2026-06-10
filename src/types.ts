@@ -7,6 +7,8 @@ export interface Account {
   currency: string;
   balanceCents: number;
   minBufferCents: number;
+  /** SQLite datetime string (UTC), e.g. "2026-06-10 14:23:00". Null for legacy rows. */
+  balanceUpdatedAt: string | null;
 }
 
 export interface Income {

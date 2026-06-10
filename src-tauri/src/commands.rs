@@ -31,7 +31,7 @@ pub async fn list_subscriptions(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_accounts(state: State<'_, AppState>) -> Result<Vec<Account>, String> {
     sqlx::query_as::<_, Account>(
-        "SELECT id, name, note, currency, balance_cents, min_buffer_cents \
+        "SELECT id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at \
          FROM accounts ORDER BY name",
     )
     .fetch_all(&state.db)
@@ -106,8 +106,9 @@ pub async fn add_account(
     let min_buffer_cents = min_buffer_cents.unwrap_or(0);
     validate_account_fields(&name, &currency, balance_cents, min_buffer_cents)?;
     let res = sqlx::query(
-        "INSERT INTO accounts (name, note, currency, balance_cents, min_buffer_cents) \
-         VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO accounts \
+           (name, note, currency, balance_cents, min_buffer_cents, balance_updated_at) \
+         VALUES (?, ?, ?, ?, ?, datetime('now'))",
     )
     .bind(&name)
     .bind(&note)
@@ -128,20 +129,45 @@ pub async fn update_account(state: State<'_, AppState>, account: Account) -> Res
         account.balance_cents,
         account.min_buffer_cents,
     )?;
-    sqlx::query(
-        "UPDATE accounts \
-         SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ? \
-         WHERE id = ?",
-    )
-    .bind(&account.name)
-    .bind(&account.note)
-    .bind(&account.currency)
-    .bind(account.balance_cents)
-    .bind(account.min_buffer_cents)
-    .bind(account.id)
-    .execute(&state.db)
-    .await
-    .map_err(|e| e.to_string())?;
+    let current: Option<(i64,)> =
+        sqlx::query_as("SELECT balance_cents FROM accounts WHERE id = ?")
+            .bind(account.id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+    let balance_changed = current.map(|(b,)| b) != Some(account.balance_cents);
+    if balance_changed {
+        sqlx::query(
+            "UPDATE accounts \
+             SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ?, \
+                 balance_updated_at = datetime('now') \
+             WHERE id = ?",
+        )
+        .bind(&account.name)
+        .bind(&account.note)
+        .bind(&account.currency)
+        .bind(account.balance_cents)
+        .bind(account.min_buffer_cents)
+        .bind(account.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query(
+            "UPDATE accounts \
+             SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ? \
+             WHERE id = ?",
+        )
+        .bind(&account.name)
+        .bind(&account.note)
+        .bind(&account.currency)
+        .bind(account.balance_cents)
+        .bind(account.min_buffer_cents)
+        .bind(account.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 

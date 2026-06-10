@@ -1,7 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { type AccountCoverage, computeCoverage, computeMonthlyBaseline } from "../lib/coverage";
-import { formatAmount } from "../lib/format";
+import { daysSince, formatAmount } from "../lib/format";
 import type { Account, Income, Subscription } from "../types";
 
 interface Props {
@@ -86,6 +86,17 @@ export function OverviewSection({ subscriptions, accounts, incomes = [], months 
                           {formatAmount(account.finalBalanceCents, account.currency)}
                         </>
                       )}
+                      {(() => {
+                        const days = daysSince(
+                          accounts.find((a) => a.id === account.accountId)?.balanceUpdatedAt ??
+                            null,
+                        );
+                        return days !== null && days >= 7 ? (
+                          <span className="balance-stale-hint">
+                            {" · "}vor {days} {days === 1 ? "Tag" : "Tagen"} aktualisiert
+                          </span>
+                        ) : null;
+                      })()}
                     </span>
                   )}
                   <span className="coverage-total">

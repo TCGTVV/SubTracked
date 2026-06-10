@@ -72,6 +72,9 @@ pub struct Account {
     pub currency: String,
     pub balance_cents: i64,
     pub min_buffer_cents: i64,
+    /// SQLite `datetime('now')` string (UTC). Absent on Tauri-command input — set server-side.
+    #[serde(default)]
+    pub balance_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

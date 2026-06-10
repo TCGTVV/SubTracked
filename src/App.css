@@ -348,6 +348,11 @@ select:focus-visible {
   color: #888;
 }
 
+.balance-stale-hint {
+  font-size: 0.8rem;
+  color: #b45309;
+}
+
 .account-balance {
   font-size: 0.85rem;
   color: #666;
@@ -383,6 +388,10 @@ select:focus-visible {
 
   [aria-invalid="true"] {
     border-color: #fca5a5;
+  }
+
+  .balance-stale-hint {
+    color: #fbbf24;
   }
 }
 

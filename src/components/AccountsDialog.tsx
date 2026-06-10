@@ -2,6 +2,7 @@ import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
+  daysSince,
   formatAmount,
   getCurrencySubdivisor,
   isCurrencyOption,
@@ -164,6 +165,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
           currency: form.currency,
           balanceCents,
           minBufferCents,
+          balanceUpdatedAt: null,
         });
       } else {
         await addAccount({
@@ -224,6 +226,14 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
                       <> · Puffer: {formatAmount(a.minBufferCents, a.currency)}</>
                     )}
                   </span>
+                  {(() => {
+                    const days = daysSince(a.balanceUpdatedAt);
+                    return days !== null && days >= 7 ? (
+                      <span className="balance-stale-hint">
+                        Saldo vor {days} {days === 1 ? "Tag" : "Tagen"} aktualisiert
+                      </span>
+                    ) : null;
+                  })()}
                   {a.note && <span className="account-note">{a.note}</span>}
                 </div>
                 <div className="account-actions">
