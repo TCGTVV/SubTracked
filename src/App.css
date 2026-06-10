@@ -840,6 +840,30 @@ select:focus-visible {
   color: #16a34a;
 }
 
+.setting-confirm-box {
+  margin-top: 0.6em;
+  padding: 0.7em 0.9em;
+  border: 1px solid #c0392b;
+  border-radius: 8px;
+  background-color: rgba(192, 57, 43, 0.07);
+}
+
+.setting-confirm-box p {
+  margin: 0 0 0.6em;
+  font-size: 0.9rem;
+}
+
+button.danger {
+  background-color: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+
+button.danger:hover:not(:disabled) {
+  background-color: #a93226;
+  border-color: #a93226;
+}
+
 .reminder-status {
   display: grid;
   grid-template-columns: max-content 1fr;

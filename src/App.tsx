@@ -334,7 +334,11 @@ function App() {
         onSaved={handleIncomeSaved}
       />
       <AccountsDialog ref={accountsDialogRef} accounts={accounts} onChanged={reloadAccounts} />
-      <SettingsDialog ref={settingsDialogRef} openSeq={settingsOpenSeq} />
+      <SettingsDialog
+        ref={settingsDialogRef}
+        openSeq={settingsOpenSeq}
+        onDataReplaced={reloadAll}
+      />
     </main>
   );
 }
