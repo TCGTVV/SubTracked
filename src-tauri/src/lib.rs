@@ -49,6 +49,11 @@ pub fn run() {
             commands::set_subscription_active,
             commands::get_reminder_status,
             commands::send_test_notification,
+            commands::list_incomes,
+            commands::add_income,
+            commands::update_income,
+            commands::delete_income,
+            commands::set_income_active,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei

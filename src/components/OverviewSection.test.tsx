@@ -78,7 +78,7 @@ describe("OverviewSection", () => {
     const subs = [makeSub({ id: 1, name: "Netflix", amountCents: 1799, accountId: 1 })];
     render(<OverviewSection subscriptions={subs} accounts={accounts} months={6} />);
 
-    const coverageSection = screen.getByRole("heading", { name: /Anstehende Abflüsse/ })
+    const coverageSection = screen.getByRole("heading", { name: /Cashflow/ })
       .parentElement as HTMLElement;
     const summary = within(coverageSection).getByText("Hauptkonto").closest("summary");
     expect(summary).not.toBeNull();
@@ -101,7 +101,7 @@ describe("OverviewSection", () => {
     ];
     render(<OverviewSection subscriptions={subs} accounts={accounts} months={1} />);
 
-    const coverageSection = screen.getByRole("heading", { name: /Anstehende Abflüsse/ })
+    const coverageSection = screen.getByRole("heading", { name: /Cashflow/ })
       .parentElement as HTMLElement;
     const details = within(coverageSection).getByText("Hauptkonto").closest("details");
     expect(details).not.toBeNull();

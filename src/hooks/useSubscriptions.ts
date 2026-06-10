@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { listAccounts, listSubscriptions } from "../lib/db";
-import type { Account, Subscription } from "../types";
+import { listAccounts, listIncomes, listSubscriptions } from "../lib/db";
+import type { Account, Income, Subscription } from "../types";
 
 export interface UseSubscriptionsResult {
   subs: Subscription[];
   accounts: Account[];
+  incomes: Income[];
   loading: boolean;
   error: string | null;
   setError: (message: string | null) => void;
@@ -15,6 +16,7 @@ export interface UseSubscriptionsResult {
 export function useSubscriptions(): UseSubscriptionsResult {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,9 +25,14 @@ export function useSubscriptions(): UseSubscriptionsResult {
       // Bewusst alle Subs (inkl. archiviert) — App.tsx filtert per Toggle.
       // OverviewSection bekommt nur die aktiven, damit Coverage keine archivierten
       // Abos in den Forecast einrechnet.
-      const [subRows, accountRows] = await Promise.all([listSubscriptions(false), listAccounts()]);
+      const [subRows, accountRows, incomeRows] = await Promise.all([
+        listSubscriptions(false),
+        listAccounts(),
+        listIncomes(false),
+      ]);
       setSubs(subRows);
       setAccounts(accountRows);
+      setIncomes(incomeRows);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -46,5 +53,5 @@ export function useSubscriptions(): UseSubscriptionsResult {
     void reloadAll();
   }, [reloadAll]);
 
-  return { subs, accounts, loading, error, setError, reloadAll, reloadAccounts };
+  return { subs, accounts, incomes, loading, error, setError, reloadAll, reloadAccounts };
 }

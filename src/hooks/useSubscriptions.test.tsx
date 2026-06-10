@@ -1,16 +1,18 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listAccounts, listSubscriptions } from "../lib/db";
+import { listAccounts, listIncomes, listSubscriptions } from "../lib/db";
 import type { Account, Subscription } from "../types";
 import { useSubscriptions } from "./useSubscriptions";
 
 vi.mock("../lib/db", () => ({
   listSubscriptions: vi.fn(),
   listAccounts: vi.fn(),
+  listIncomes: vi.fn(),
 }));
 
 const mockListSubscriptions = vi.mocked(listSubscriptions);
 const mockListAccounts = vi.mocked(listAccounts);
+const mockListIncomes = vi.mocked(listIncomes);
 
 const sampleSubs: Subscription[] = [
   {
@@ -35,6 +37,7 @@ describe("useSubscriptions", () => {
   beforeEach(() => {
     mockListSubscriptions.mockReset();
     mockListAccounts.mockReset();
+    mockListIncomes.mockResolvedValue([]);
   });
 
   it("startet im loading-State mit leeren Listen", () => {
