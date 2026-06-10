@@ -3,7 +3,8 @@ use tauri::State;
 use tauri_plugin_notification::NotificationExt;
 
 use crate::db::{
-    Account, AppState, Income, NewIncome, NewSubscription, ReminderState, Subscription,
+    Account, AppState, Income, NewIncome, NewSubscription, PriceHistoryEntry, ReminderState,
+    Subscription,
 };
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_subscription_fields,
@@ -72,13 +73,29 @@ pub async fn add_subscription(
     .execute(&state.db)
     .await
     .map_err(|e| e.to_string())?;
-    Ok(res.last_insert_rowid())
+    let new_id = res.last_insert_rowid();
+    sqlx::query(
+        "INSERT INTO subscription_price_history (subscription_id, amount_cents, currency, changed_at) \
+         VALUES (?, ?, ?, datetime('now'))",
+    )
+    .bind(new_id)
+    .bind(sub.amount_cents)
+    .bind(&sub.currency)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(new_id)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn delete_subscription(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let mut tx = state.db.begin().await.map_err(|e| e.to_string())?;
     sqlx::query("DELETE FROM reminders WHERE subscription_id = ?")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM subscription_price_history WHERE subscription_id = ?")
         .bind(id)
         .execute(&mut *tx)
         .await
@@ -226,8 +243,18 @@ pub(crate) async fn update_subscription_in_db(
         &sub.anchor_date,
         sub.lead_days,
     )?;
-    let current_account_id = fetch_current_account_id(db, sub.id).await?;
+    let current: Option<(Option<i64>, i64, String)> = sqlx::query_as(
+        "SELECT account_id, amount_cents, currency FROM subscriptions WHERE id = ?",
+    )
+    .bind(sub.id)
+    .fetch_optional(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    let (current_account_id, current_amount_cents, current_currency) =
+        current.unwrap_or((None, sub.amount_cents, sub.currency.clone()));
     let account_id_changed = current_account_id != sub.account_id;
+    let price_changed =
+        current_amount_cents != sub.amount_cents || current_currency != sub.currency;
     if account_id_changed {
         if let Some(new_account_id) = sub.account_id {
             validate_account_exists(db, new_account_id).await?;
@@ -267,6 +294,19 @@ pub(crate) async fn update_subscription_in_db(
         .bind(sub.active)
         .bind(sub.notify)
         .bind(sub.id)
+        .execute(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    if price_changed {
+        sqlx::query(
+            "INSERT INTO subscription_price_history \
+               (subscription_id, amount_cents, currency, changed_at) \
+             VALUES (?, ?, ?, datetime('now'))",
+        )
+        .bind(sub.id)
+        .bind(sub.amount_cents)
+        .bind(&sub.currency)
         .execute(db)
         .await
         .map_err(|e| e.to_string())?;
@@ -427,6 +467,23 @@ pub async fn set_income_active(
         .await
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_price_history(
+    state: State<'_, AppState>,
+    subscription_id: i64,
+) -> Result<Vec<PriceHistoryEntry>, String> {
+    sqlx::query_as::<_, PriceHistoryEntry>(
+        "SELECT id, subscription_id, amount_cents, currency, changed_at \
+         FROM subscription_price_history \
+         WHERE subscription_id = ? \
+         ORDER BY changed_at DESC",
+    )
+    .bind(subscription_id)
+    .fetch_all(&state.db)
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]

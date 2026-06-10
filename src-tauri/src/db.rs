@@ -115,3 +115,13 @@ pub struct NewSubscription {
     pub active: Option<bool>,
     pub notify: Option<bool>,
 }
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceHistoryEntry {
+    pub id: i64,
+    pub subscription_id: i64,
+    pub amount_cents: i64,
+    pub currency: String,
+    pub changed_at: String,
+}

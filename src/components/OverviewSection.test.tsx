@@ -11,6 +11,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 50000,
     minBufferCents: 0,
+    balanceUpdatedAt: null,
   },
   {
     id: 2,
@@ -19,6 +20,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 20000,
     minBufferCents: 0,
+    balanceUpdatedAt: null,
   },
 ];
 
@@ -122,6 +124,7 @@ describe("OverviewSection", () => {
         currency: "EUR",
         balanceCents: 3000,
         minBufferCents: 2000,
+        balanceUpdatedAt: null,
       },
     ];
     const subs = [makeSub({ id: 1, amountCents: 2000, accountId: 1 })];

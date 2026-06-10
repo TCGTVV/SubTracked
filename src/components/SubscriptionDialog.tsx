@@ -1,14 +1,15 @@
-import { type FormEvent, type Ref, useId, useRef, useState } from "react";
-import { addSubscription, updateSubscription } from "../lib/db";
+import { type FormEvent, type Ref, useEffect, useId, useRef, useState } from "react";
+import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
+  formatAmount,
   getCurrencySubdivisor,
   isCurrencyOption,
   isStrictISODate,
   parseAmountInput,
   todayISO,
 } from "../lib/format";
-import type { Account, Interval, Subscription } from "../types";
+import type { Account, Interval, PriceHistoryEntry, Subscription } from "../types";
 import { DateField } from "./DateField";
 
 const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
@@ -73,6 +74,17 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryEntry[]>([]);
+
+  useEffect(() => {
+    if (!isEdit || !subscription) {
+      setPriceHistory([]);
+      return;
+    }
+    listPriceHistory(subscription.id)
+      .then(setPriceHistory)
+      .catch(() => {});
+  }, [isEdit, subscription]);
 
   function clearFieldError(field: keyof FieldErrors) {
     setErrors((prev) => {
@@ -326,6 +338,25 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
           <p className="error" role="alert">
             Fehler beim Speichern: {error}
           </p>
+        )}
+
+        {isEdit && priceHistory.length > 1 && (
+          <details className="price-history">
+            <summary>Preis-Historie ({priceHistory.length} Einträge)</summary>
+            <ul className="price-history-list">
+              {priceHistory.map((entry, i) => (
+                <li key={entry.id} className="price-history-row">
+                  <span className="price-history-amount">
+                    {formatAmount(entry.amountCents, entry.currency)}
+                  </span>
+                  <span className="price-history-date">
+                    {entry.changedAt.slice(0, 10)}
+                    {i === 0 && <span className="price-history-current"> (aktuell)</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
 
         <div className="form-actions">

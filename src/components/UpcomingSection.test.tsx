@@ -11,6 +11,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 0,
     minBufferCents: 0,
+    balanceUpdatedAt: null,
   },
 ];
 

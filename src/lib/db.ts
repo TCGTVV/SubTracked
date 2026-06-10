@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, Income, Interval, Subscription } from "../types";
+import type { Account, Income, Interval, PriceHistoryEntry, Subscription } from "../types";
 
 // Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`
 // kommt als String und muss zum engen `Interval`-Union narrowed werden.
@@ -124,4 +124,8 @@ export async function deleteIncome(id: number): Promise<void> {
 
 export async function setIncomeActive(id: number, active: boolean): Promise<void> {
   await invoke("set_income_active", { id, active });
+}
+
+export async function listPriceHistory(subscriptionId: number): Promise<PriceHistoryEntry[]> {
+  return invoke<PriceHistoryEntry[]>("list_price_history", { subscriptionId });
 }
