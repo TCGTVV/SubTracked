@@ -30,7 +30,15 @@ const sampleSubs: Subscription[] = [
 ];
 
 const sampleAccounts: Account[] = [
-  { id: 1, name: "Hauptkonto", note: null, currency: "EUR", balanceCents: 0, minBufferCents: 0 },
+  {
+    id: 1,
+    name: "Hauptkonto",
+    note: null,
+    currency: "EUR",
+    balanceCents: 0,
+    minBufferCents: 0,
+    balanceUpdatedAt: null,
+  },
 ];
 
 describe("useSubscriptions", () => {

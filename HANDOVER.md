@@ -9,6 +9,28 @@
 
 ---
 
+## 2026-06-10 — Claude: Preisänderungs-Historie
+
+### Was passierte
+
+- **Preisänderungs-Historie pro Abo** implementiert:
+  - **Migration `0006_subscription_price_history.sql`**: neue Tabelle `subscription_price_history` (id, subscription_id → subscriptions, amount_cents, currency, changed_at); Backfill-INSERT für alle bestehenden Abos mit `datetime('now')`.
+  - **Rust `db.rs`**: neues `PriceHistoryEntry`-Struct (`#[derive(Serialize, sqlx::FromRow)]`).
+  - **Rust `commands.rs`**: `add_subscription` schreibt nach dem INSERT eine Erstzeile in die History-Tabelle. `update_subscription_in_db` holt jetzt `(account_id, amount_cents, currency)` in einer kombinierten SELECT (statt nur `account_id` via `fetch_current_account_id`); wenn sich `amount_cents` oder `currency` ändert, wird nach dem UPDATE ein neuer History-Eintrag geschrieben. `delete_subscription` löscht History-Rows in der Transaktion (vor dem Sub-DELETE). Neuer Command `list_price_history(subscription_id) → Vec<PriceHistoryEntry>` (`ORDER BY changed_at DESC`).
+  - **Rust `lib.rs`**: `list_price_history` im `generate_handler!` registriert.
+  - **TypeScript `types.ts`**: `PriceHistoryEntry`-Interface (`id, subscriptionId, amountCents, currency, changedAt`).
+  - **TypeScript `db.ts`**: `listPriceHistory(subscriptionId)` ruft den Command.
+  - **`SubscriptionDialog.tsx`**: Im Edit-Mode lädt ein `useEffect` (dep: `subscription`) die History. Bei ≥ 2 Einträgen erscheint ein aufklappbarer `<details>`-Block "Preis-Historie (N Einträge)" mit neuesten Einträgen zuerst; aktuellster erhält "(aktuell)"-Tag.
+  - **`App.css`**: `.price-history`-Styles inkl. Dark-Mode.
+  - **Test-Fixes**: `balanceUpdatedAt: null` in allen Account-Test-Fixtures ergänzt (vom vorherigen Session-Feature fehlend). `SubscriptionDialog.test.tsx` Mock um `listPriceHistory: vi.fn().mockResolvedValue([])` erweitert. `format.ts` `daysSince`: `+ "Z"` → Template-Literal, `isNaN` → `Number.isNaN` (Biome-Fixes).
+  - 171 Tests grün, `tsc --noEmit` clean, Biome clean.
+
+### Offene Punkte
+
+- Rust-Build (cargo fmt + clippy) läuft nur im CI — dort ggf. Fix-Commit nötig, falls fmt meckert.
+
+---
+
 ## 2026-06-10 — Claude: Kontostand-Frische
 
 ### Was passierte

@@ -1,20 +1,30 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addSubscription, updateSubscription } from "../lib/db";
+import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import type { Account, Subscription } from "../types";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 
 vi.mock("../lib/db", () => ({
   addSubscription: vi.fn(),
   updateSubscription: vi.fn(),
+  listPriceHistory: vi.fn().mockResolvedValue([]),
 }));
 
 const mockAddSubscription = vi.mocked(addSubscription);
 const mockUpdateSubscription = vi.mocked(updateSubscription);
+vi.mocked(listPriceHistory);
 
 const accounts: Account[] = [
-  { id: 1, name: "Hauptkonto", note: null, currency: "EUR", balanceCents: 0, minBufferCents: 0 },
+  {
+    id: 1,
+    name: "Hauptkonto",
+    note: null,
+    currency: "EUR",
+    balanceCents: 0,
+    minBufferCents: 0,
+    balanceUpdatedAt: null,
+  },
   {
     id: 2,
     name: "Sparkonto",
@@ -22,6 +32,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 0,
     minBufferCents: 0,
+    balanceUpdatedAt: null,
   },
 ];
 

@@ -23,6 +23,7 @@ const acc = (id: number, name: string, overrides: Partial<Account> = {}): Accoun
   currency: "EUR",
   balanceCents: 0,
   minBufferCents: 0,
+  balanceUpdatedAt: null,
   ...overrides,
 });
 

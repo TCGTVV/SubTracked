@@ -54,6 +54,7 @@ pub fn run() {
             commands::update_income,
             commands::delete_income,
             commands::set_income_active,
+            commands::list_price_history,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei

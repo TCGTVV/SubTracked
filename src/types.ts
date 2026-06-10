@@ -34,3 +34,12 @@ export interface Subscription {
   active: boolean;
   notify: boolean;
 }
+
+export interface PriceHistoryEntry {
+  id: number;
+  subscriptionId: number;
+  amountCents: number;
+  currency: string;
+  /** SQLite datetime string (UTC), e.g. "2026-06-10 14:23:00". */
+  changedAt: string;
+}

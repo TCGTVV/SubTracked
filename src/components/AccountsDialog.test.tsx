@@ -25,6 +25,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 50000,
     minBufferCents: 10000,
+    balanceUpdatedAt: null,
   },
   {
     id: 2,
@@ -33,6 +34,7 @@ const accounts: Account[] = [
     currency: "EUR",
     balanceCents: 0,
     minBufferCents: 0,
+    balanceUpdatedAt: null,
   },
 ];
 
@@ -155,6 +157,7 @@ describe("AccountsDialog", () => {
         currency: "EURO",
         balanceCents: 1000,
         minBufferCents: 0,
+        balanceUpdatedAt: null,
       },
     ];
     renderDialog(invalidCurrency);
@@ -204,6 +207,7 @@ describe("AccountsDialog", () => {
         currency: "EUR",
         balanceCents: -1500,
         minBufferCents: 0,
+        balanceUpdatedAt: null,
       },
     ];
     renderDialog(overdraft);

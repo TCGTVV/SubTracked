@@ -140,7 +140,7 @@ export function todayISO(): string {
 /** Days elapsed since a SQLite `datetime('now')` string (UTC, format "YYYY-MM-DD HH:MM:SS"). */
 export function daysSince(sqliteDatetime: string | null): number | null {
   if (!sqliteDatetime) return null;
-  const d = new Date(sqliteDatetime.replace(" ", "T") + "Z");
-  if (isNaN(d.getTime())) return null;
+  const d = new Date(`${sqliteDatetime.replace(" ", "T")}Z`);
+  if (Number.isNaN(d.getTime())) return null;
   return Math.floor((Date.now() - d.getTime()) / 86_400_000);
 }
