@@ -25,9 +25,15 @@
   - **Test-Fixes**: `balanceUpdatedAt: null` in allen Account-Test-Fixtures ergänzt (vom vorherigen Session-Feature fehlend). `SubscriptionDialog.test.tsx` Mock um `listPriceHistory: vi.fn().mockResolvedValue([])` erweitert. `format.ts` `daysSince`: `+ "Z"` → Template-Literal, `isNaN` → `Number.isNaN` (Biome-Fixes).
   - 171 Tests grün, `tsc --noEmit` clean, Biome clean.
 
+### CI-Fixes nach Push
+
+- **`d0feba1` fix: rustfmt line break in update_subscription_in_db** — `cargo fmt` wollte `let current: Option<(Option<i64>, i64, String)> =\n        sqlx::query_as("...")\n            .chain()` (Umbruch nach `=`, 8-Space-Indent für query_as, 12-Space für Chain), nicht `let ... = sqlx::query_as(\n    "...",\n)\n.bind()`. Muster: sobald `let x: T = sqlx::query_as("...")` die 100-Zeichen-Grenze überschreitet, bricht rustfmt nach `=` um — kurze Typen (≤ 99 Zeichen Gesamtlänge) bleiben auf einer Zeile.
+- **`9c6a1b9` fix: remove dead fetch_current_account_id after refactor** — `cargo clippy` meldete `function fetch_current_account_id is never used`. Der Helper war bei der Umstellung auf die kombinierte `(account_id, amount_cents, currency)`-Query nicht mitgelöscht worden.
+
 ### Offene Punkte
 
-- Rust-Build (cargo fmt + clippy) läuft nur im CI — dort ggf. Fix-Commit nötig, falls fmt meckert.
+- Keine. CI auf `9c6a1b9` grün.
+- Nächste Kandidaten: **Tauri-CSP härten** (Security-Fund vor Public Release), **GitHub-Actions-Matrix-Build** (unblocked v0.1.0).
 
 ---
 
