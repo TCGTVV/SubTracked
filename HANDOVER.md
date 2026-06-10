@@ -9,6 +9,41 @@
 
 ---
 
+## 2026-06-10 — Codex: `/code-review high` nachgeholt + Backup-Fixes
+
+### Was passierte
+
+- **Pflicht-Review aus dem obersten HANDOVER nachgeholt:** Multi-Agent-Code-Review "high" fuer den Backup/Restore-Block gestartet (Agent "Pascal"). Ergebnis: keine Critical/High-Blocker; zwei Medium-Funde und ein Low-Hardening-Hinweis.
+- **Medium-Fund 1 gefixt:** `export_backup` schreibt Backup-JSON nicht mehr direkt per `std::fs::write`, sondern ueber eine temp-Datei im Zielordner, `write_all` + `sync_all` + `rename`. Damit wird ein bestehendes gutes Backup nicht schon beim ersten Schreibfehler durch Truncate beschaedigt. Neuer Test `export_write_replaces_existing_file_via_temp_path`.
+- **Medium-Fund 2 gefixt:** `validate_backup` prueft jetzt vor jeder DB-Mutation auch IDs, interne FK-Bezuege, `exportedAt`, `balance_updated_at`, Preis-Historie (`amount/currency/changed_at/subscription_id`) und Reminder (`subscription_id/due_date/sent_at` + UNIQUE-Key). Neuer Test `invalid_history_or_reminder_rows_fail_before_touching_data`.
+- **Low-Fund behandelt:** Rohe Pfadstrings in `export_backup`/`import_backup` bleiben funktional bestehen, sind aber als Hardening-ToDo in [BACKLOG.md](BACKLOG.md) erfasst.
+- **Serena-Rust-Smoke-Test erledigt:** Projekt ist aktiv, `get_symbols_overview` auf `src-tauri/src/commands.rs` kam sauber zurueck. Rust-symbolische Navigation kann kuenftig genutzt werden.
+
+### Status am Sitzungsende
+
+- Branch `main`; Review-Fixes werden mit diesem HANDOVER-Update committet und auf `origin/main` gepusht.
+- Review-Funde sind behandelt: Mediums gefixt, Low im Backlog.
+
+### Verifikation
+
+- `cargo fmt --check` ✓
+- `cargo test` ✓ (**52** Tests)
+- `cargo clippy --all-targets -- -D warnings` ✓
+- **Runtime-Verifikation durch User nachgetragen:** Backup-Export/Import-Flow geprüft; Ergebnis: passt alles, keine Auffälligkeiten gemeldet.
+
+### Offen / Nächster Schritt
+
+- Kein offener Pflichtpunkt aus dem Backup/Restore-Review.
+
+### Gotchas / Stolperfallen
+
+- `write_backup_json_atomic` nutzt `rename` nach erfolgreichem Tempfile-Write. Parent-Directory-Fsync ist best effort, damit ein erfolgreich ersetztes Backup nicht wegen Directory-Sync-Besonderheiten nachtraeglich als Fehler gemeldet wird.
+- Die Backup-Zeitstempel im DB-Inhalt sind SQLite-`datetime('now')`-Strings (`YYYY-MM-DD HH:MM:SS`), nicht RFC3339. Nur das Backup-Metafeld `exportedAt` ist RFC3339.
+
+### Geänderte/neue Memories
+
+- Keine.
+
 ## 2026-06-10 — Claude: Backup/Export & Restore (JSON)
 
 ### Was passierte

@@ -5,8 +5,17 @@
 //! (`collect_backup`/`restore_backup`) ist von der Datei-Schicht und vom Tauri-State
 //! getrennt — analog zum `update_subscription_in_db`-Seam in `commands.rs`.
 
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use std::{
+    collections::HashSet,
+    ffi::OsString,
+    fs::{self, File},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tauri::State;
 
 use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription};
@@ -99,6 +108,57 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     })
 }
 
+fn validate_row_id(seen_ids: &mut HashSet<i64>, id: i64, label: &str) -> Result<(), String> {
+    if id <= 0 {
+        return Err(format!("{label}: ID muss groesser als 0 sein."));
+    }
+    if !seen_ids.insert(id) {
+        return Err(format!("{label}: ID {id} kommt mehrfach im Backup vor."));
+    }
+    Ok(())
+}
+
+fn validate_existing_id(
+    existing_ids: &HashSet<i64>,
+    id: i64,
+    label: &str,
+    referenced_label: &str,
+) -> Result<(), String> {
+    if !existing_ids.contains(&id) {
+        return Err(format!(
+            "{label}: {referenced_label} mit ID {id} existiert nicht im Backup."
+        ));
+    }
+    Ok(())
+}
+
+fn validate_sqlite_datetime(label: &str, value: &str) -> Result<(), String> {
+    let bytes = value.as_bytes();
+    let strict = bytes.len() == 19
+        && bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes[10] == b' '
+        && bytes[13] == b':'
+        && bytes[16] == b':';
+    if !strict {
+        return Err(format!(
+            "{label}: Ungueltiger Zeitpunkt: {value}. Erwartet: YYYY-MM-DD HH:MM:SS."
+        ));
+    }
+    NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
+        .map(|_| ())
+        .map_err(|_| {
+            format!("{label}: Ungueltiger Zeitpunkt: {value}. Erwartet: YYYY-MM-DD HH:MM:SS.")
+        })
+}
+
+fn validate_optional_sqlite_datetime(label: &str, value: Option<&str>) -> Result<(), String> {
+    if let Some(value) = value {
+        validate_sqlite_datetime(label, value)?;
+    }
+    Ok(())
+}
+
 /// Prüft Format-Metadaten und jede Zeile gegen dieselben Validatoren wie die
 /// regulären Commands. Läuft VOR jeder DB-Mutation, damit ein ungültiges Backup
 /// den Bestand nicht anrührt.
@@ -115,11 +175,26 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             backup.schema_version
         ));
     }
+    chrono::DateTime::parse_from_rfc3339(&backup.exported_at)
+        .map_err(|_| "Backup-Zeitstempel ist ungueltig.".to_string())?;
+
+    let mut account_ids = HashSet::new();
+    let mut subscription_ids = HashSet::new();
+    let mut income_ids = HashSet::new();
+    let mut price_history_ids = HashSet::new();
+    let mut reminder_ids = HashSet::new();
+    let mut reminder_keys = HashSet::new();
+
     for a in &backup.accounts {
+        let label = format!("Konto \"{}\"", a.name);
+        validate_row_id(&mut account_ids, a.id, &label)?;
         validate_account_fields(&a.name, &a.currency, a.balance_cents, a.min_buffer_cents)
             .map_err(|e| format!("Konto \"{}\": {e}", a.name))?;
+        validate_optional_sqlite_datetime(&label, a.balance_updated_at.as_deref())?;
     }
     for s in &backup.subscriptions {
+        let label = format!("Abo \"{}\"", s.name);
+        validate_row_id(&mut subscription_ids, s.id, &label)?;
         validate_subscription_fields(
             &s.name,
             s.amount_cents,
@@ -129,14 +204,42 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             s.lead_days,
         )
         .map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
+        if let Some(account_id) = s.account_id {
+            validate_existing_id(&account_ids, account_id, &label, "Konto")?;
+        }
     }
     for i in &backup.incomes {
         let label = || format!("Einnahme \"{}\"", i.name);
+        validate_row_id(&mut income_ids, i.id, &label())?;
         validate_name(&i.name).map_err(|e| format!("{}: {e}", label()))?;
         validate_amount_cents(i.amount_cents).map_err(|e| format!("{}: {e}", label()))?;
         validate_currency(&i.currency).map_err(|e| format!("{}: {e}", label()))?;
         validate_interval(&i.interval).map_err(|e| format!("{}: {e}", label()))?;
         validate_anchor_date(&i.anchor_date).map_err(|e| format!("{}: {e}", label()))?;
+        if let Some(account_id) = i.account_id {
+            validate_existing_id(&account_ids, account_id, &label(), "Konto")?;
+        }
+    }
+    for p in &backup.price_history {
+        let label = format!("Preis-Historie #{}", p.id);
+        validate_row_id(&mut price_history_ids, p.id, &label)?;
+        validate_existing_id(&subscription_ids, p.subscription_id, &label, "Abo")?;
+        validate_amount_cents(p.amount_cents).map_err(|e| format!("{label}: {e}"))?;
+        validate_currency(&p.currency).map_err(|e| format!("{label}: {e}"))?;
+        validate_sqlite_datetime(&label, &p.changed_at)?;
+    }
+    for r in &backup.reminders {
+        let label = format!("Reminder #{}", r.id);
+        validate_row_id(&mut reminder_ids, r.id, &label)?;
+        validate_existing_id(&subscription_ids, r.subscription_id, &label, "Abo")?;
+        validate_anchor_date(&r.due_date).map_err(|e| format!("{label}: {e}"))?;
+        validate_sqlite_datetime(&label, &r.sent_at)?;
+        if !reminder_keys.insert((r.subscription_id, r.due_date.clone())) {
+            return Err(format!(
+                "{label}: Reminder fuer Abo {} und Faelligkeit {} kommt mehrfach vor.",
+                r.subscription_id, r.due_date
+            ));
+        }
     }
     Ok(())
 }
@@ -255,11 +358,65 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
     Ok(())
 }
 
+fn temp_backup_path(target: &Path) -> Result<PathBuf, String> {
+    let parent = target
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let file_name = target
+        .file_name()
+        .ok_or_else(|| "Ungueltiger Backup-Pfad.".to_string())?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let mut tmp_name = OsString::from(".");
+    tmp_name.push(file_name);
+    tmp_name.push(format!(".tmp-{}-{nonce}", std::process::id()));
+    Ok(parent.join(tmp_name))
+}
+
+fn write_temp_and_replace(tmp_path: &Path, target: &Path, contents: &[u8]) -> io::Result<()> {
+    let mut file = File::options()
+        .write(true)
+        .create_new(true)
+        .open(tmp_path)?;
+    file.write_all(contents)?;
+    file.sync_all()?;
+    drop(file);
+
+    fs::rename(tmp_path, target)?;
+    let _ = sync_parent_dir(target);
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_parent_dir(target: &Path) -> io::Result<()> {
+    if let Some(parent) = target.parent().filter(|p| !p.as_os_str().is_empty()) {
+        File::open(parent)?.sync_all()?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_parent_dir(_target: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+fn write_backup_json_atomic(path: &str, contents: &str) -> Result<(), String> {
+    let target = Path::new(path);
+    let tmp_path = temp_backup_path(target)?;
+    write_temp_and_replace(&tmp_path, target, contents.as_bytes()).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        format!("Konnte Backup nicht schreiben: {e}")
+    })
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn export_backup(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let backup = collect_backup(&state.db).await?;
     let json = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| format!("Konnte Backup nicht schreiben: {e}"))?;
+    write_backup_json_atomic(&path, &json)?;
     Ok(())
 }
 
@@ -276,6 +433,17 @@ pub async fn import_backup(state: State<'_, AppState>, path: String) -> Result<(
 mod tests {
     use super::*;
     use sqlx::sqlite::SqlitePoolOptions;
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let dir =
+            std::env::temp_dir().join(format!("subtracked-{name}-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        dir
+    }
 
     async fn test_pool() -> SqlitePool {
         let pool = SqlitePoolOptions::new()
@@ -395,6 +563,36 @@ mod tests {
         assert_eq!(after.accounts.len(), 1);
     }
 
+    /// Historie/Reminder werden ebenfalls vor der Transaktion validiert.
+    #[tokio::test]
+    async fn invalid_history_or_reminder_rows_fail_before_touching_data() {
+        let target = test_pool().await;
+        seed(&target).await;
+        let original = collect_backup(&target).await.unwrap();
+
+        let mut backup = collect_backup(&target).await.unwrap();
+        backup.price_history[0].currency = "BTC".into();
+        let err = restore_backup(&target, &backup).await.unwrap_err();
+        assert!(
+            err.contains("Preis-Historie") && err.contains("BTC"),
+            "Fehlertext: {err}"
+        );
+        let after = collect_backup(&target).await.unwrap();
+        assert_eq!(after.price_history, original.price_history);
+        assert_eq!(after.reminders, original.reminders);
+
+        let mut backup = collect_backup(&target).await.unwrap();
+        backup.reminders[0].due_date = "not-a-date".into();
+        let err = restore_backup(&target, &backup).await.unwrap_err();
+        assert!(
+            err.contains("Reminder") && err.contains("not-a-date"),
+            "Fehlertext: {err}"
+        );
+        let after = collect_backup(&target).await.unwrap();
+        assert_eq!(after.price_history, original.price_history);
+        assert_eq!(after.reminders, original.reminders);
+    }
+
     /// Falsche App-Kennung bzw. unbekannte Format-Version werden abgewiesen.
     #[tokio::test]
     async fn wrong_app_or_version_is_rejected() {
@@ -407,5 +605,18 @@ mod tests {
         backup.app = BACKUP_APP.into();
         backup.schema_version = 999;
         assert!(restore_backup(&db, &backup).await.is_err());
+    }
+
+    #[test]
+    fn export_write_replaces_existing_file_via_temp_path() {
+        let dir = unique_test_dir("atomic-export");
+        let path = dir.join("backup.json");
+        std::fs::write(&path, "alt").unwrap();
+
+        write_backup_json_atomic(path.to_str().unwrap(), "{\"ok\":true}").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"ok\":true}");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
