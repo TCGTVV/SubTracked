@@ -1,8 +1,9 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getReminderStatus, sendTestNotification } from "../lib/db";
+import { exportBackup, getReminderStatus, importBackup, sendTestNotification } from "../lib/db";
 import { SettingsDialog } from "./SettingsDialog";
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
@@ -11,16 +12,27 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
   disable: vi.fn(),
 }));
 
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  save: vi.fn(),
+  open: vi.fn(),
+}));
+
 vi.mock("../lib/db", () => ({
   getReminderStatus: vi.fn(),
   sendTestNotification: vi.fn(),
+  exportBackup: vi.fn(),
+  importBackup: vi.fn(),
 }));
 
 const mockIsEnabled = vi.mocked(isEnabled);
 const mockEnable = vi.mocked(enable);
 const mockDisable = vi.mocked(disable);
+const mockSave = vi.mocked(save);
+const mockOpen = vi.mocked(open);
 const mockGetReminderStatus = vi.mocked(getReminderStatus);
 const mockSendTestNotification = vi.mocked(sendTestNotification);
+const mockExportBackup = vi.mocked(exportBackup);
+const mockImportBackup = vi.mocked(importBackup);
 
 const defaultStatus = {
   lastCheckAt: null,
@@ -28,9 +40,11 @@ const defaultStatus = {
   lastSent: null,
 };
 
-function renderDialog(openSeq = 0) {
+function renderDialog(openSeq = 0, onDataReplaced?: () => void | Promise<void>) {
   const ref = createRef<HTMLDialogElement>();
-  const result = render(<SettingsDialog ref={ref} openSeq={openSeq} />);
+  const result = render(
+    <SettingsDialog ref={ref} openSeq={openSeq} onDataReplaced={onDataReplaced} />,
+  );
   ref.current?.setAttribute("open", "");
   return { ...result, ref };
 }
@@ -40,8 +54,12 @@ describe("SettingsDialog", () => {
     mockIsEnabled.mockReset();
     mockEnable.mockReset();
     mockDisable.mockReset();
+    mockSave.mockReset();
+    mockOpen.mockReset();
     mockGetReminderStatus.mockReset();
     mockSendTestNotification.mockReset();
+    mockExportBackup.mockReset();
+    mockImportBackup.mockReset();
     mockGetReminderStatus.mockResolvedValue(defaultStatus);
   });
 
@@ -210,5 +228,64 @@ describe("SettingsDialog", () => {
     await waitFor(() => {
       expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("exportiert ein Backup an den im Dialog gewählten Pfad", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockSave.mockResolvedValue("/home/user/subtracked-backup.json");
+    mockExportBackup.mockResolvedValue(undefined);
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Backup exportieren" }));
+
+    await waitFor(() => {
+      expect(mockExportBackup).toHaveBeenCalledWith("/home/user/subtracked-backup.json");
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(/Backup gespeichert/);
+  });
+
+  it("exportiert nicht, wenn der Speichern-Dialog abgebrochen wird", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockSave.mockResolvedValue(null);
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Backup exportieren" }));
+
+    await waitFor(() => {
+      expect(mockSave).toHaveBeenCalledOnce();
+    });
+    expect(mockExportBackup).not.toHaveBeenCalled();
+  });
+
+  it("importiert erst nach Bestätigung und lädt danach die Daten neu", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    mockOpen.mockResolvedValue("/home/user/subtracked-backup.json");
+    mockImportBackup.mockResolvedValue(undefined);
+    const onDataReplaced = vi.fn();
+    renderDialog(0, onDataReplaced);
+
+    // Erster Klick zeigt nur den Bestätigungs-Schritt — noch kein Import.
+    fireEvent.click(screen.getByRole("button", { name: "Backup importieren" }));
+    expect(screen.getByText(/Wirklich importieren\?/)).toBeInTheDocument();
+    expect(mockOpen).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ja, ersetzen" }));
+    await waitFor(() => {
+      expect(mockImportBackup).toHaveBeenCalledWith("/home/user/subtracked-backup.json");
+    });
+    expect(onDataReplaced).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(/importiert/);
+  });
+
+  it("bricht den Import ab, ohne Daten anzurühren", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Backup importieren" }));
+    fireEvent.click(screen.getByRole("button", { name: "Abbrechen" }));
+
+    expect(screen.queryByText(/Wirklich importieren\?/)).not.toBeInTheDocument();
+    expect(mockOpen).not.toHaveBeenCalled();
+    expect(mockImportBackup).not.toHaveBeenCalled();
   });
 });

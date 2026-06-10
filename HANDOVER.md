@@ -9,6 +9,47 @@
 
 ---
 
+## 2026-06-10 — Claude: Backup/Export & Restore (JSON)
+
+### Was passierte
+
+- **Vollständiges JSON-Backup/Restore** implementiert (BACKLOG-Vertrauensfeature, vor echten Nutzern). Vorher in den anderen Backlog-Optionen abgewogen; User wählte Backup/Export als nächsten Schritt. UI-Redesign bleibt bewusst späterer eigener Track (vor Installern nicht nötig).
+- **Neues Modul [backup.rs](src-tauri/src/backup.rs):**
+  - `collect_backup(&SqlitePool)` / `restore_backup(&SqlitePool, &BackupFile)` als testbarer Seam (ohne Tauri-State), dünne Commands `export_backup`/`import_backup` darüber (std::fs + serde_json).
+  - `BackupFile` = `schemaVersion`/`app`/`exportedAt` + alle fünf Tabellen (accounts, subscriptions, incomes, subscription_price_history, reminders). Neues `ReminderRow`-Struct.
+  - **Restore = Ersetzen** (User-Entscheidung, kein Merge): eine Transaktion, DELETE Kinder→Eltern, INSERT Eltern→Kinder **mit erhaltenen IDs** (FK-Verknüpfungen bleiben). Jede Zeile wird VOR der Transaktion via `validation.rs` geprüft → ungültiges Backup rührt den Bestand nicht an.
+- **db.rs:** `PriceHistoryEntry` um `Deserialize` ergänzt; `PartialEq` auf Subscription/Account/Income/PriceHistoryEntry (für exakte Roundtrip-Asserts).
+- **lib.rs:** `tauri_plugin_dialog::init()` registriert, `mod backup`, beide Commands im `generate_handler!`. **capabilities/default.json:** `dialog:default` ergänzt (kein `fs:`-Permission — Datei-I/O läuft im nativen Command, nicht im Webview).
+- **Frontend:** `exportBackup`/`importBackup` in [db.ts](src/lib/db.ts); [SettingsDialog.tsx](src/components/SettingsDialog.tsx) Sektion „Daten / Backup" mit Export-Button (`save`-Dialog) und Import mit **zweistufigem Inline-Confirm** (kein `window.confirm`) → `open`-Dialog → `importBackup` → `onDataReplaced()` (= `reloadAll` aus App.tsx, da Restore alles ersetzt). CSS `.setting-confirm-box` + `button.danger` in App.css.
+- **Deps:** `tauri-plugin-dialog` (Cargo) + `@tauri-apps/plugin-dialog@2.7.1` (npm).
+
+### Status am Sitzungsende
+
+- Branch `main`, alles committet (dieser Doku-Commit ist der letzte). Vorherige Session-Commits (CSP/Matrix/Node24) bereits auf `origin/main`.
+- Checks lokal grün: `cargo fmt`/`clippy`/`cargo test` (**50** Tests, inkl. 4 neue Backup-Tests), `pnpm lint`/`test:run` (**175** Tests, inkl. 4 neue SettingsDialog-Tests)/`build`.
+
+### OFFEN — bitte in der nächsten Session zuerst
+
+- **`/code-review high` wurde NICHT gelaufen** (User hatte wenig Tokens, bewusst vertagt). Der Block ist nicht-trivial (Rust-Transaktion, neue Commands, Plugin/Capability, UI) → laut AGENTS.md vor dem „fertig" ein `/code-review high` über den Backup-Diff nachholen.
+- **Runtime-Verifikation steht aus:** `pnpm tauri dev` → Backup exportieren (JSON-Datei prüfen) → Daten ändern → importieren → Bestätigung → Daten zurück + UI lädt neu. DevTools-Konsole auf CSP-Verstöße prüfen (Dialog läuft über IPC, sollte unter `connect-src ipc:` ohne CSP-Änderung gehen — am Lauf bestätigen).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Restore statt Merge:** klares Backup/Restore-Modell, vorhersagbar; Merge (ID-Remap/Dedup) ist für v1 unverhältnismäßig (User-Entscheidung, mit Bestätigungs-Dialog abgesichert).
+- **Datei-I/O im Rust-Command, nur `dialog:default` im Webview:** der Webview bekommt bewusst keine FS-Rechte; das native Command schreibt an den vom Dialog gewählten Pfad. Enger als `plugin-fs`.
+- **IDs beim Restore erhalten:** sonst bräche die FK-Kette (Konto↔Abo, Abo↔Historie/Reminder).
+
+### Gotchas / Stolperfallen
+
+- **sqlx 0.9 lehnt dynamisches Query-SQL ab:** `sqlx::query(&format!(...))` (`&String`) kompiliert nicht — `SqlSafeStr` ist nur für `&'static str`. Lösung: statische SQL-Literale (die DELETE-Schleife iteriert über ein Array von Literalen). Bei dynamischem SQL sonst `AssertSqlSafe` nötig.
+- **SettingsDialog-Test-Mock:** `vi.mock("../lib/db")` UND neuer `vi.mock("@tauri-apps/plugin-dialog")` müssen die neuen Symbole (`exportBackup`/`importBackup`/`save`/`open`) enthalten — vollständige Mock-Ersetzung (bekanntes Muster).
+
+### Geänderte/neue Memories
+
+- Keine.
+
+---
+
 ## 2026-06-10 — Claude: CSP-Runtime-Test bestätigt + Release-Matrix-Build
 
 ### Was passierte

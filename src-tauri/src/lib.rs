@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod currencies;
 mod db;
@@ -36,6 +37,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::list_subscriptions,
             commands::list_accounts,
@@ -55,6 +57,8 @@ pub fn run() {
             commands::delete_income,
             commands::set_income_active,
             commands::list_price_history,
+            backup::export_backup,
+            backup::import_backup,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei

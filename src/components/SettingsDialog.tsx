@@ -1,12 +1,21 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { type Ref, useCallback, useEffect, useId, useState } from "react";
-import { getReminderStatus, type ReminderStatus, sendTestNotification } from "../lib/db";
+import {
+  exportBackup,
+  getReminderStatus,
+  importBackup,
+  type ReminderStatus,
+  sendTestNotification,
+} from "../lib/db";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
   openSeq?: number;
+  /** Wird nach erfolgreichem Import aufgerufen, damit die App ihre Daten neu lädt. */
+  onDataReplaced?: () => void | Promise<void>;
 }
 
 function formatDateTime(iso: string): string {
@@ -26,7 +35,7 @@ function formatInterval(secs: number): string {
   return `${minutes} Minuten`;
 }
 
-export function SettingsDialog({ ref, openSeq = 0 }: Props) {
+export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
   const autostartId = useId();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
@@ -36,6 +45,11 @@ export function SettingsDialog({ ref, openSeq = 0 }: Props) {
   const [reminderError, setReminderError] = useState<string | null>(null);
   const [testNotificationSent, setTestNotificationSent] = useState(false);
   const [testNotificationPending, setTestNotificationPending] = useState(false);
+
+  const [backupPending, setBackupPending] = useState(false);
+  const [backupMessage, setBackupMessage] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const [confirmingImport, setConfirmingImport] = useState(false);
 
   const loadReminderStatus = useCallback(async () => {
     try {
@@ -94,6 +108,46 @@ export function SettingsDialog({ ref, openSeq = 0 }: Props) {
       setReminderError(e instanceof Error ? e.message : String(e));
     } finally {
       setTestNotificationPending(false);
+    }
+  }
+
+  async function handleExport() {
+    setBackupPending(true);
+    setBackupMessage(null);
+    setBackupError(null);
+    try {
+      const path = await save({
+        defaultPath: `subtracked-backup-${format(new Date(), "yyyy-MM-dd")}.json`,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return; // Dialog abgebrochen
+      await exportBackup(path);
+      setBackupMessage(`✓ Backup gespeichert: ${path}`);
+    } catch (e) {
+      setBackupError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBackupPending(false);
+    }
+  }
+
+  async function handleImportConfirmed() {
+    setBackupPending(true);
+    setBackupMessage(null);
+    setBackupError(null);
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (typeof selected !== "string") return; // Dialog abgebrochen
+      await importBackup(selected);
+      setConfirmingImport(false);
+      setBackupMessage("✓ Backup importiert — Daten wurden wiederhergestellt.");
+      await onDataReplaced?.();
+    } catch (e) {
+      setBackupError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBackupPending(false);
     }
   }
 
@@ -182,6 +236,70 @@ export function SettingsDialog({ ref, openSeq = 0 }: Props) {
               Aktualisieren
             </button>
           </div>
+        </div>
+
+        <div className="setting-row">
+          <h3 className="setting-subheading">Daten / Backup</h3>
+          <p className="setting-hint">
+            Alle Daten liegen nur lokal auf diesem Gerät. Ein Backup sichert Konten, Abos, Einnahmen
+            und Verlauf als JSON-Datei. Beim Import wird der gesamte aktuelle Bestand durch das
+            Backup <strong>ersetzt</strong>.
+          </p>
+          <div className="setting-action-row">
+            <button type="button" onClick={() => void handleExport()} disabled={backupPending}>
+              {backupPending ? "Arbeite …" : "Backup exportieren"}
+            </button>
+            {!confirmingImport && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBackupMessage(null);
+                  setBackupError(null);
+                  setConfirmingImport(true);
+                }}
+                disabled={backupPending}
+              >
+                Backup importieren
+              </button>
+            )}
+          </div>
+
+          {confirmingImport && (
+            <div className="setting-confirm-box" role="alertdialog" aria-label="Import bestätigen">
+              <p>
+                <strong>Wirklich importieren?</strong> Alle aktuellen Konten, Abos und Einnahmen
+                gehen verloren und werden durch das Backup ersetzt.
+              </p>
+              <div className="setting-action-row">
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => void handleImportConfirmed()}
+                  disabled={backupPending}
+                >
+                  {backupPending ? "Stelle wieder her …" : "Ja, ersetzen"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingImport(false)}
+                  disabled={backupPending}
+                >
+                  Abbrechen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {backupMessage && (
+            <span className="setting-confirm" role="status">
+              {backupMessage}
+            </span>
+          )}
+          {backupError && (
+            <p className="error" role="alert">
+              Fehler: {backupError}
+            </p>
+          )}
         </div>
 
         {(error || reminderError) && (

@@ -129,3 +129,15 @@ export async function setIncomeActive(id: number, active: boolean): Promise<void
 export async function listPriceHistory(subscriptionId: number): Promise<PriceHistoryEntry[]> {
   return invoke<PriceHistoryEntry[]>("list_price_history", { subscriptionId });
 }
+
+// --- Backup / Restore ------------------------------------------------------
+
+/** Schreibt ein vollständiges JSON-Backup an den (vom Datei-Dialog gewählten) Pfad. */
+export async function exportBackup(path: string): Promise<void> {
+  await invoke("export_backup", { path });
+}
+
+/** Stellt den Datenbestand aus der Backup-Datei wieder her (ersetzt alles). */
+export async function importBackup(path: string): Promise<void> {
+  await invoke("import_backup", { path });
+}
