@@ -826,3 +826,124 @@ select:focus-visible {
     color: #aaa;
   }
 }
+
+/* ── StatusCard ────────────────────────────────────── */
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+}
+
+.status-card-ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.status-card-warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.status-card-danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.status-card-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-card-ok {
+    background: #052e16;
+    border-color: #166534;
+    color: #86efac;
+  }
+
+  .status-card-warn {
+    background: #1c1400;
+    border-color: #92400e;
+    color: #fde68a;
+  }
+
+  .status-card-danger {
+    background: #1c0000;
+    border-color: #991b1b;
+    color: #fca5a5;
+  }
+}
+
+/* ── Income rows (coverage + upcoming) ────────────── */
+.coverage-row-income {
+  color: #166534;
+}
+
+.coverage-row-income .coverage-row-amount {
+  color: #166534;
+  font-weight: 600;
+}
+
+.coverage-inflow {
+  color: #16a34a;
+  margin-right: 0.5rem;
+}
+
+.coverage-outflow {
+  color: inherit;
+}
+
+.upcoming-row-income .upcoming-amount {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.income-amount {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.income-list-section {
+  margin-top: 1.5rem;
+}
+
+.income-list-section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  .coverage-row-income {
+    color: #86efac;
+  }
+
+  .coverage-row-income .coverage-row-amount {
+    color: #86efac;
+  }
+
+  .coverage-inflow {
+    color: #4ade80;
+  }
+
+  .upcoming-row-income .upcoming-amount {
+    color: #4ade80;
+  }
+
+  .income-amount {
+    color: #4ade80;
+  }
+
+  .income-list-section h2 {
+    color: #4ade80;
+  }
+}

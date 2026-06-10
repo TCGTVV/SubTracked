@@ -2,7 +2,7 @@ use serde::Serialize;
 use tauri::State;
 use tauri_plugin_notification::NotificationExt;
 
-use crate::db::{Account, AppState, NewSubscription, ReminderState, Subscription};
+use crate::db::{Account, AppState, Income, NewIncome, NewSubscription, ReminderState, Subscription};
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_subscription_fields,
 };
@@ -262,6 +262,138 @@ pub async fn set_subscription_active(
     active: bool,
 ) -> Result<(), String> {
     sqlx::query("UPDATE subscriptions SET active = ? WHERE id = ?")
+        .bind(active)
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_incomes(
+    state: State<'_, AppState>,
+    only_active: Option<bool>,
+) -> Result<Vec<Income>, String> {
+    let only_active = only_active.unwrap_or(false);
+    let sql = if only_active {
+        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active \
+         FROM incomes WHERE active = 1 ORDER BY name"
+    } else {
+        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active \
+         FROM incomes ORDER BY name"
+    };
+    sqlx::query_as::<_, Income>(sql)
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn add_income(
+    state: State<'_, AppState>,
+    income: NewIncome,
+) -> Result<i64, String> {
+    use crate::validation::{validate_anchor_date, validate_currency, validate_interval, validate_name, validate_amount_cents};
+    validate_name(&income.name)?;
+    validate_amount_cents(income.amount_cents)?;
+    validate_currency(&income.currency)?;
+    validate_interval(&income.interval)?;
+    validate_anchor_date(&income.anchor_date)?;
+    if let Some(account_id) = income.account_id {
+        validate_account_exists(&state.db, account_id).await?;
+    }
+    let active = income.active.unwrap_or(true);
+    let result = sqlx::query(
+        "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active) \
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(&income.name)
+    .bind(income.amount_cents)
+    .bind(&income.currency)
+    .bind(income.account_id)
+    .bind(&income.interval)
+    .bind(&income.anchor_date)
+    .bind(active)
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(result.last_insert_rowid())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn update_income(
+    state: State<'_, AppState>,
+    income: Income,
+) -> Result<(), String> {
+    use crate::validation::{validate_anchor_date, validate_currency, validate_interval, validate_name, validate_amount_cents};
+    validate_name(&income.name)?;
+    validate_amount_cents(income.amount_cents)?;
+    validate_currency(&income.currency)?;
+    validate_interval(&income.interval)?;
+    validate_anchor_date(&income.anchor_date)?;
+    let current: Option<(Option<i64>,)> =
+        sqlx::query_as("SELECT account_id FROM incomes WHERE id = ?")
+            .bind(income.id)
+            .fetch_optional(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+    let current_account_id = current.map(|(id,)| id).flatten();
+    if current_account_id != income.account_id {
+        if let Some(new_id) = income.account_id {
+            validate_account_exists(&state.db, new_id).await?;
+        }
+        sqlx::query(
+            "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
+             interval = ?, anchor_date = ?, active = ? WHERE id = ?",
+        )
+        .bind(&income.name)
+        .bind(income.amount_cents)
+        .bind(&income.currency)
+        .bind(income.account_id)
+        .bind(&income.interval)
+        .bind(&income.anchor_date)
+        .bind(income.active)
+        .bind(income.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    } else {
+        sqlx::query(
+            "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, \
+             interval = ?, anchor_date = ?, active = ? WHERE id = ?",
+        )
+        .bind(&income.name)
+        .bind(income.amount_cents)
+        .bind(&income.currency)
+        .bind(&income.interval)
+        .bind(&income.anchor_date)
+        .bind(income.active)
+        .bind(income.id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_income(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    sqlx::query("DELETE FROM incomes WHERE id = ?")
+        .bind(id)
+        .execute(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn set_income_active(
+    state: State<'_, AppState>,
+    id: i64,
+    active: bool,
+) -> Result<(), String> {
+    sqlx::query("UPDATE incomes SET active = ? WHERE id = ?")
         .bind(active)
         .bind(id)
         .execute(&state.db)

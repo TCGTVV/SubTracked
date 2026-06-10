@@ -74,6 +74,31 @@ pub struct Account {
     pub min_buffer_cents: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Income {
+    pub id: i64,
+    pub name: String,
+    pub amount_cents: i64,
+    pub currency: String,
+    pub account_id: Option<i64>,
+    pub interval: String,
+    pub anchor_date: String,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewIncome {
+    pub name: String,
+    pub amount_cents: i64,
+    pub currency: String,
+    pub account_id: Option<i64>,
+    pub interval: String,
+    pub anchor_date: String,
+    pub active: Option<bool>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewSubscription {

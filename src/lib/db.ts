@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, Interval, Subscription } from "../types";
+import type { Account, Income, Interval, Subscription } from "../types";
 
 // Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`
 // kommt als String und muss zum engen `Interval`-Union narrowed werden.
@@ -97,4 +97,31 @@ export async function getReminderStatus(): Promise<ReminderStatus> {
 
 export async function sendTestNotification(): Promise<void> {
   await invoke("send_test_notification");
+}
+
+type IncomeFromRust = Omit<Income, "interval"> & { interval: string };
+
+function narrowIncome(i: IncomeFromRust): Income {
+  return { ...i, interval: parseInterval(i.interval) };
+}
+
+export async function listIncomes(onlyActive = false): Promise<Income[]> {
+  const rows = await invoke<IncomeFromRust[]>("list_incomes", { onlyActive });
+  return rows.map(narrowIncome);
+}
+
+export async function addIncome(income: Omit<Income, "id">): Promise<number> {
+  return await invoke<number>("add_income", { income });
+}
+
+export async function updateIncome(income: Income): Promise<void> {
+  await invoke("update_income", { income });
+}
+
+export async function deleteIncome(id: number): Promise<void> {
+  await invoke("delete_income", { id });
+}
+
+export async function setIncomeActive(id: number, active: boolean): Promise<void> {
+  await invoke("set_income_active", { id, active });
 }

@@ -2,11 +2,12 @@ import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { type AccountCoverage, computeCoverage, computeMonthlyBaseline } from "../lib/coverage";
 import { formatAmount } from "../lib/format";
-import type { Account, Subscription } from "../types";
+import type { Account, Income, Subscription } from "../types";
 
 interface Props {
   subscriptions: Subscription[];
   accounts: Account[];
+  incomes?: Income[];
   months?: number;
 }
 
@@ -27,11 +28,11 @@ function statusBadge(c: AccountCoverage): { label: string; tone: "ok" | "warn" |
   return null;
 }
 
-export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) {
-  if (subscriptions.length === 0 && accounts.length === 0) return null;
+export function OverviewSection({ subscriptions, accounts, incomes = [], months = 6 }: Props) {
+  if (subscriptions.length === 0 && accounts.length === 0 && incomes.length === 0) return null;
 
   const baseline = computeMonthlyBaseline(subscriptions, accounts);
-  const coverage = computeCoverage(subscriptions, accounts, months);
+  const coverage = computeCoverage(subscriptions, accounts, months, new Date(), incomes);
 
   return (
     <section className="overview">
@@ -63,7 +64,7 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
       </div>
 
       <div className="overview-section">
-        <h2>Anstehende Abflüsse ({months} Monate)</h2>
+        <h2>Cashflow ({months} Monate)</h2>
         {coverage.length === 0 ? (
           <p className="empty">Keine Konten angelegt.</p>
         ) : (
@@ -88,7 +89,16 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
                     </span>
                   )}
                   <span className="coverage-total">
-                    {formatAmount(account.totalOutflowCents, account.currency)}
+                    {account.totalInflowCents > 0 && (
+                      <span className="coverage-inflow">
+                        +{formatAmount(account.totalInflowCents, account.currency)}
+                      </span>
+                    )}
+                    {account.totalOutflowCents > 0 && (
+                      <span className="coverage-outflow">
+                        −{formatAmount(account.totalOutflowCents, account.currency)}
+                      </span>
+                    )}
                   </span>
                 </summary>
 
@@ -112,15 +122,17 @@ export function OverviewSection({ subscriptions, accounts, months = 6 }: Props) 
                   <ul className="coverage-items">
                     {account.items.map((it) => (
                       <li
-                        key={`${it.subscriptionId}-${it.date}`}
-                        className={`coverage-row${it.belowZero ? " coverage-row-danger" : it.belowBuffer ? " coverage-row-warn" : ""}`}
+                        key={`${it.type}-${it.subscriptionId}-${it.date}`}
+                        className={`coverage-row${it.type === "income" ? " coverage-row-income" : it.belowZero ? " coverage-row-danger" : it.belowBuffer ? " coverage-row-warn" : ""}`}
                       >
                         <span className="coverage-row-name">{it.subscription}</span>
                         <span className="coverage-row-date">
                           {format(parseISO(it.date), "dd.MM.yyyy", { locale: de })}
                         </span>
                         <span className="coverage-row-amount">
-                          −{formatAmount(it.cents, account.currency)}
+                          {it.type === "income"
+                            ? `+${formatAmount(it.cents, account.currency)}`
+                            : `−${formatAmount(it.cents, account.currency)}`}
                         </span>
                         {account.accountId != null && (
                           <span className="coverage-row-balance">

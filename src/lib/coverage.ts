@@ -1,9 +1,11 @@
 import { addDays, addMonths, startOfDay } from "date-fns";
-import type { Account, Subscription } from "../types";
+import type { Account, Income, Subscription } from "../types";
 import { parseStrictISODate } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
 export interface CoverageItem {
+  /** "income" for positive cashflow entries, "outflow" for subscriptions. */
+  type: "outflow" | "income";
   subscriptionId: number;
   subscription: string;
   date: string; // ISO YYYY-MM-DD
@@ -20,6 +22,7 @@ export interface AccountCoverage {
   startingBalanceCents: number;
   minBufferCents: number;
   totalOutflowCents: number;
+  totalInflowCents: number;
   finalBalanceCents: number;
   /** Erste Buchung, nach der der Saldo unter den Mindestpuffer fällt (null = nie). */
   firstBelowBufferDate: string | null;
@@ -46,6 +49,7 @@ export function computeCoverage(
   accounts: Account[],
   months = 6,
   now: Date = new Date(),
+  incomes: Income[] = [],
 ): AccountCoverage[] {
   const from = startOfDay(now);
   const until = addMonths(from, months);
@@ -62,6 +66,7 @@ export function computeCoverage(
       startingBalanceCents: a.balanceCents,
       minBufferCents: a.minBufferCents,
       totalOutflowCents: 0,
+      totalInflowCents: 0,
       finalBalanceCents: a.balanceCents,
       firstBelowBufferDate: null,
       firstBelowZeroDate: null,
@@ -89,6 +94,7 @@ export function computeCoverage(
         startingBalanceCents: 0,
         minBufferCents: 0,
         totalOutflowCents: 0,
+        totalInflowCents: 0,
         finalBalanceCents: 0,
         firstBelowBufferDate: null,
         firstBelowZeroDate: null,
@@ -109,10 +115,55 @@ export function computeCoverage(
     if (!anchor) continue;
     for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
       list.push({
+        type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
         date: d.toISOString().slice(0, 10),
         cents: sub.amountCents,
+      });
+    }
+    itemsByBucket.set(key, list);
+  }
+
+  for (const inc of incomes) {
+    if (!inc.active) continue;
+    const account = inc.accountId != null ? accById.get(inc.accountId) : undefined;
+    const key = account ? String(account.id) : `${UNASSIGNED_KEY}:${inc.currency}`;
+
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        accountId: account ? account.id : null,
+        account: account ? account.name : UNASSIGNED_LABEL,
+        currency: account ? account.currency : inc.currency,
+        startingBalanceCents: 0,
+        minBufferCents: 0,
+        totalOutflowCents: 0,
+        totalInflowCents: 0,
+        finalBalanceCents: 0,
+        firstBelowBufferDate: null,
+        firstBelowZeroDate: null,
+        foreignCurrencySubsCount: 0,
+        items: [],
+      };
+      buckets.set(key, bucket);
+    }
+
+    if (account && inc.currency !== account.currency) {
+      bucket.foreignCurrencySubsCount += 1;
+      continue;
+    }
+
+    const list = itemsByBucket.get(key) ?? [];
+    const anchor = parseStrictISODate(inc.anchorDate);
+    if (!anchor) continue;
+    for (const d of dueDatesWithin(anchor, inc.interval, from, until)) {
+      list.push({
+        type: "income",
+        subscriptionId: inc.id,
+        subscription: inc.name,
+        date: d.toISOString().slice(0, 10),
+        cents: inc.amountCents,
       });
     }
     itemsByBucket.set(key, list);
@@ -125,20 +176,25 @@ export function computeCoverage(
 
     let running = bucket.startingBalanceCents;
     for (const it of raw) {
-      running -= it.cents;
+      if (it.type === "income") {
+        running += it.cents;
+        bucket.totalInflowCents += it.cents;
+      } else {
+        running -= it.cents;
+        bucket.totalOutflowCents += it.cents;
+      }
       const belowZero = running < 0;
       const belowBuffer = running < bucket.minBufferCents;
       if (belowZero && bucket.firstBelowZeroDate === null) bucket.firstBelowZeroDate = it.date;
       if (belowBuffer && bucket.firstBelowBufferDate === null)
         bucket.firstBelowBufferDate = it.date;
       bucket.items.push({ ...it, balanceAfterCents: running, belowBuffer, belowZero });
-      bucket.totalOutflowCents += it.cents;
     }
     bucket.finalBalanceCents = running;
   }
 
   return [...buckets.values()].sort((a, b) => {
-    // Konten mit anstehenden Abfluessen oder Warnungen zuerst, sonst nach Saldo absteigend.
+    // Konten mit anstehenden Buchungen oder Warnungen zuerst, sonst nach Saldo absteigend.
     const aActive = a.items.length > 0 ? 1 : 0;
     const bActive = b.items.length > 0 ? 1 : 0;
     if (aActive !== bActive) return bActive - aActive;
@@ -181,6 +237,7 @@ export function computeMonthlyBaseline(
 }
 
 export interface UpcomingItem {
+  type: "outflow" | "income";
   subscriptionId: number;
   subscription: string;
   /** ISO YYYY-MM-DD */
@@ -202,6 +259,7 @@ export function computeUpcoming(
   accounts: Account[],
   days = 30,
   now: Date = new Date(),
+  incomes: Income[] = [],
 ): UpcomingItem[] {
   const from = startOfDay(now);
   const until = addDays(from, days);
@@ -215,6 +273,7 @@ export function computeUpcoming(
     if (!anchor) continue;
     for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
       items.push({
+        type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
         date: d.toISOString().slice(0, 10),
@@ -222,6 +281,26 @@ export function computeUpcoming(
         currency: sub.currency,
         accountName,
         notify: sub.notify,
+      });
+    }
+  }
+
+  for (const inc of incomes) {
+    if (!inc.active) continue;
+    const accountName =
+      inc.accountId != null ? (accName.get(inc.accountId) ?? "(unbekanntes Konto)") : null;
+    const anchor = parseStrictISODate(inc.anchorDate);
+    if (!anchor) continue;
+    for (const d of dueDatesWithin(anchor, inc.interval, from, until)) {
+      items.push({
+        type: "income",
+        subscriptionId: inc.id,
+        subscription: inc.name,
+        date: d.toISOString().slice(0, 10),
+        cents: inc.amountCents,
+        currency: inc.currency,
+        accountName,
+        notify: false,
       });
     }
   }

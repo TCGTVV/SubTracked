@@ -2,16 +2,17 @@ import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { computeUpcoming } from "../lib/coverage";
 import { formatAmount } from "../lib/format";
-import type { Account, Subscription } from "../types";
+import type { Account, Income, Subscription } from "../types";
 
 interface Props {
   subscriptions: Subscription[];
   accounts: Account[];
+  incomes?: Income[];
   days?: number;
 }
 
-export function UpcomingSection({ subscriptions, accounts, days = 30 }: Props) {
-  const items = computeUpcoming(subscriptions, accounts, days);
+export function UpcomingSection({ subscriptions, accounts, incomes = [], days = 30 }: Props) {
+  const items = computeUpcoming(subscriptions, accounts, days, new Date(), incomes);
 
   return (
     <section className="upcoming">
@@ -21,13 +22,16 @@ export function UpcomingSection({ subscriptions, accounts, days = 30 }: Props) {
       ) : (
         <ul className="upcoming-list">
           {items.map((it) => (
-            <li key={`${it.subscriptionId}-${it.date}`} className="upcoming-row">
+            <li
+              key={`${it.type}-${it.subscriptionId}-${it.date}`}
+              className={`upcoming-row${it.type === "income" ? " upcoming-row-income" : ""}`}
+            >
               <span className="upcoming-date">
                 {format(parseISO(it.date), "dd.MM.", { locale: de })}
               </span>
               <span className="upcoming-name">
                 {it.subscription}
-                {!it.notify && (
+                {it.type === "outflow" && !it.notify && (
                   <span className="upcoming-muted" title="Erinnerungen für dieses Abo aus">
                     {" "}
                     · stumm
@@ -35,7 +39,10 @@ export function UpcomingSection({ subscriptions, accounts, days = 30 }: Props) {
                 )}
               </span>
               <span className="upcoming-account">{it.accountName ?? "(kein Konto)"}</span>
-              <span className="upcoming-amount">{formatAmount(it.cents, it.currency)}</span>
+              <span className="upcoming-amount">
+                {it.type === "income" ? "+" : "−"}
+                {formatAmount(it.cents, it.currency)}
+              </span>
             </li>
           ))}
         </ul>

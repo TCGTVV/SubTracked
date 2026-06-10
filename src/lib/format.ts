@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import currenciesJson from "../../tests/fixtures/currencies.json";
-import type { Subscription } from "../types";
+import type { Interval } from "../types";
 import { nextDueDate } from "./recurrence";
 
 // Single Source of Truth fuer die Waehrungs-Whitelist: tests/fixtures/currencies.json.
@@ -123,7 +123,10 @@ export function formatAmount(cents: number, currency: string): string {
   }).format(value)} ${currency || "?"}`;
 }
 
-export function formatNextDue(sub: Subscription, now: Date = new Date()): string {
+export function formatNextDue(
+  sub: { anchorDate: string; interval: Interval },
+  now: Date = new Date(),
+): string {
   const anchor = parseStrictISODate(sub.anchorDate);
   if (!anchor) return "Ungültiges Datum";
   const due = nextDueDate(anchor, sub.interval, now);
