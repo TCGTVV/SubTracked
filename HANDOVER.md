@@ -54,7 +54,7 @@
 ### Offen / Nächster Schritt
 
 - **v0.1.0 ist jetzt build-technisch unblocked**, aber noch durch zwei BACKLOG-Punkte gated: **Windows/macOS Smoke-Test** (Zeile 91) und **manuelle Pre-Release-Smoke-Checkliste** (Zeile 92). Die CI-Drafts beweisen „baut & paketiert", nicht „läuft auf Win/mac".
-- **Kurzfristig (Frist 2026-06-16):** Actions auf Node-24-taugliche Versionen heben (`checkout@v5`/`setup-node@v5` + passende `pnpm/action-setup`), betrifft `checks.yml` **und** `release.yml`.
+- ~~Kurzfristig: Actions auf Node-24-taugliche Versionen heben~~ — **noch in dieser Session erledigt:** checkout/setup-node/pnpm-action-setup von `@v4` → `@v6` (node24) in `checks.yml` + `release.yml` gebumpt, YAML valide; `checks.yml` verifiziert sich beim Push automatisch.
 - **Danach:** Release-Page + README-Download-Pfad (Zeile 83, jetzt unblocked), dann Updater (signierte Builds + `latest.json`).
 
 ---
