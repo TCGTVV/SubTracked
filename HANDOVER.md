@@ -13,27 +13,54 @@
 
 ### Was passierte
 
-- **Preisänderungs-Historie pro Abo** implementiert:
+- **Preisänderungs-Historie pro Abo** implementiert (`eb747d5`):
   - **Migration `0006_subscription_price_history.sql`**: neue Tabelle `subscription_price_history` (id, subscription_id → subscriptions, amount_cents, currency, changed_at); Backfill-INSERT für alle bestehenden Abos mit `datetime('now')`.
   - **Rust `db.rs`**: neues `PriceHistoryEntry`-Struct (`#[derive(Serialize, sqlx::FromRow)]`).
-  - **Rust `commands.rs`**: `add_subscription` schreibt nach dem INSERT eine Erstzeile in die History-Tabelle. `update_subscription_in_db` holt jetzt `(account_id, amount_cents, currency)` in einer kombinierten SELECT (statt nur `account_id` via `fetch_current_account_id`); wenn sich `amount_cents` oder `currency` ändert, wird nach dem UPDATE ein neuer History-Eintrag geschrieben. `delete_subscription` löscht History-Rows in der Transaktion (vor dem Sub-DELETE). Neuer Command `list_price_history(subscription_id) → Vec<PriceHistoryEntry>` (`ORDER BY changed_at DESC`).
+  - **Rust `commands.rs`**: `add_subscription` schreibt nach dem INSERT eine Erstzeile in die History-Tabelle. `update_subscription_in_db` holt jetzt `(account_id, amount_cents, currency)` in einer kombinierten SELECT (statt nur `account_id` via dem nun gelöschten `fetch_current_account_id`-Helper); wenn sich `amount_cents` oder `currency` ändert, wird nach dem UPDATE ein neuer History-Eintrag geschrieben. `delete_subscription` löscht History-Rows in der Transaktion (vor dem Sub-DELETE). Neuer Command `list_price_history(subscription_id) → Vec<PriceHistoryEntry>` (`ORDER BY changed_at DESC`).
   - **Rust `lib.rs`**: `list_price_history` im `generate_handler!` registriert.
   - **TypeScript `types.ts`**: `PriceHistoryEntry`-Interface (`id, subscriptionId, amountCents, currency, changedAt`).
-  - **TypeScript `db.ts`**: `listPriceHistory(subscriptionId)` ruft den Command.
-  - **`SubscriptionDialog.tsx`**: Im Edit-Mode lädt ein `useEffect` (dep: `subscription`) die History. Bei ≥ 2 Einträgen erscheint ein aufklappbarer `<details>`-Block "Preis-Historie (N Einträge)" mit neuesten Einträgen zuerst; aktuellster erhält "(aktuell)"-Tag.
-  - **`App.css`**: `.price-history`-Styles inkl. Dark-Mode.
-  - **Test-Fixes**: `balanceUpdatedAt: null` in allen Account-Test-Fixtures ergänzt (vom vorherigen Session-Feature fehlend). `SubscriptionDialog.test.tsx` Mock um `listPriceHistory: vi.fn().mockResolvedValue([])` erweitert. `format.ts` `daysSince`: `+ "Z"` → Template-Literal, `isNaN` → `Number.isNaN` (Biome-Fixes).
+  - **TypeScript `db.ts`**: `listPriceHistory(subscriptionId)` ruft den Command; Import von `PriceHistoryEntry` ergänzt.
+  - **`SubscriptionDialog.tsx`**: Im Edit-Mode lädt ein `useEffect` (dep: `subscription`) die History via `listPriceHistory`. Bei ≥ 2 Einträgen erscheint ein aufklappbarer `<details>`-Block "Preis-Historie (N Einträge)" — neueste zuerst, aktuellster mit "(aktuell)"-Tag.
+  - **`App.css`**: `.price-history`-Styles (Border, Summary-Color, Flex-Row) inkl. Dark-Mode-Override.
+  - **Test-Fixes**: `balanceUpdatedAt: null` in allen Account-Test-Fixtures ergänzt (von `balanceUpdatedAt`-Feature der Vorsession fehlend); `SubscriptionDialog.test.tsx` Mock um `listPriceHistory: vi.fn().mockResolvedValue([])` erweitert; `format.ts` `daysSince`: `+ "Z"` → Template-Literal, `isNaN` → `Number.isNaN` (beide Biome-Pflicht).
   - 171 Tests grün, `tsc --noEmit` clean, Biome clean.
-
-### CI-Fixes nach Push
-
-- **`d0feba1` fix: rustfmt line break in update_subscription_in_db** — `cargo fmt` wollte `let current: Option<(Option<i64>, i64, String)> =\n        sqlx::query_as("...")\n            .chain()` (Umbruch nach `=`, 8-Space-Indent für query_as, 12-Space für Chain), nicht `let ... = sqlx::query_as(\n    "...",\n)\n.bind()`. Muster: sobald `let x: T = sqlx::query_as("...")` die 100-Zeichen-Grenze überschreitet, bricht rustfmt nach `=` um — kurze Typen (≤ 99 Zeichen Gesamtlänge) bleiben auf einer Zeile.
+- **`d0feba1` fix: rustfmt line break in update_subscription_in_db** — `cargo fmt` wollte Umbruch nach `=`, nicht nach `query_as(`. Muster: sobald `let x: T = sqlx::query_as("...")` die 100-Zeichen-Grenze überschreitet, bricht rustfmt nach `=` um — und der Chain-Indent wandert auf 12 Spaces.
 - **`9c6a1b9` fix: remove dead fetch_current_account_id after refactor** — `cargo clippy` meldete `function fetch_current_account_id is never used`. Der Helper war bei der Umstellung auf die kombinierte `(account_id, amount_cents, currency)`-Query nicht mitgelöscht worden.
 
-### Offene Punkte
+### Status am Sitzungsende
 
-- Keine. CI auf `9c6a1b9` grün.
-- Nächste Kandidaten: **Tauri-CSP härten** (Security-Fund vor Public Release), **GitHub-Actions-Matrix-Build** (unblocked v0.1.0).
+- Branch: `main`, HEAD `49bf6f8`, up to date mit `origin/main`.
+- Working Tree: clean, nichts offen.
+- Build: CI auf `49bf6f8` grün (fmt ✓, clippy ✓, vitest 171/171 ✓, cargo test ✓).
+- App-Startbarkeit: nicht lokal verifiziert (kein Tauri-Dev-Build möglich in dieser Umgebung), aber Kompilierung und alle Tests laufen sauber durch.
+
+### Nächster Schritt
+
+- **Tauri-CSP härten** (BACKLOG Architektur-Sektion): `csp: null` in `tauri.conf.json` durch restriktive Policy ersetzen — sinnvoll vor jedem Public Release. Konkret: `tauri.conf.json` → `app.security.csp`, im Dev-Modus testen, dann mit `pnpm tauri build --no-bundle` verifizieren.
+- Alternativ: **GitHub-Actions-Matrix-Build** (BACKLOG Distribution) — unblocked `v0.1.0`, `tauri-action` für Win/Linux/macOS.
+
+### Wichtige Entscheidungen + Begründung
+
+- **History nur bei echter Preisänderung schreiben** (nicht bei jeder Bearbeitung): Ein Name-/Intervall-Edit erzeugt keinen neuen Eintrag. Begründung: Die History soll Preiserhöhungen nachvollziehbar machen, keine Audit-Log-Kopie jeder Speicherung sein. Technisch: `current_amount_cents != sub.amount_cents || current_currency != sub.currency` als Bedingung.
+- **History-Section nur ab ≥ 2 Einträgen anzeigen**: Ein einzelner Eintrag = der aktuelle Stand, das ist keine "Historie". Begründung: UI-Rauschen vermeiden — wenn der Preis nie geändert wurde, ist die Section irrelevant.
+- **Kein separates History-Modal, sondern `<details>` im bestehenden Dialog**: Hält das UI einfach; ein Extra-Dialog wäre unverhältnismäßiger Aufwand für ein optionales Feature.
+- **`useEffect`-Dep ist `subscription` (ganzes Objekt), nicht `subscription?.id`**: Biome verlangt konsistente Deps — `subscription` wird im Effect-Body referenziert (`!subscription`-Check), daher ist `subscription` die korrekte Dep.
+
+### Gotchas / Stolperfallen
+
+- **rustfmt-Schwelle bei 100 Zeichen** (zweites Mal in Folge): Sobald `let x: LangerTyp = sqlx::query_as("langer String")` ≥ 100 Zeichen, bricht rustfmt zwingend nach `=` um — der Rest wandert auf 8-Space-Indent, die Method-Chain auf 12 Spaces. Kurze Typen/Queries bleiben auf einer Zeile. Beim Schreiben immer mental nachzählen oder CI als Korrektiv akzeptieren und sofort fixen.
+- **Dead-Code nach Refactor**: `fetch_current_account_id` wurde nicht mitgelöscht als der Aufruf durch die kombinierte Query ersetzt wurde. Clippy findet das zuverlässig — trotzdem beim Refactoring Helper-Funktionen immer auf verbleibende Aufrufer prüfen.
+- **Test-Fixtures bei Interface-Erweiterungen**: Jedes Mal wenn ein Interface ein neues Required-Feld bekommt (hier `balanceUpdatedAt` in `Account`), müssen alle Test-Fixtures nachgezogen werden. `tsc --noEmit` findet das — Biome und Vitest nicht.
+- **Mock in `SubscriptionDialog.test.tsx` muss alle importierten Symbole aus `../lib/db` abdecken**: `vi.mock("../lib/db", () => ({...}))` ist eine vollständige Ersetzung — neu hinzugefügte Imports (`listPriceHistory`) müssen explizit ins Mock-Objekt, sonst `No "X" export is defined`-Laufzeitfehler in Vitest.
+
+### Geänderte/neue Memories
+
+- Keine Serena-Memories geändert in dieser Session. Die rustfmt-Schwellen-Regel und das Mock-Pattern sind bereits in `conventions.md` oder implizit im HANDOVER-Verlauf dokumentiert.
+
+### Offen / nicht geklärt
+
+- Keine inhaltlichen Fragezeichen. Feature ist vollständig und CI grün.
+- **Tauri-CSP** und **Matrix-Build** sind die nächsten sinnvollen Schritte vor `v0.1.0` (beide im BACKLOG offen).
 
 ---
 
