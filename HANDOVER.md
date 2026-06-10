@@ -9,6 +9,48 @@
 
 ---
 
+## 2026-06-10 — Hermes: README-Außendarstellung geschärft
+
+### Was passierte
+
+- User wollte die README gemäß Review-Empfehlungen jetzt schon polieren, aber ohne Screenshot (kommt später).
+- `README.md` wurde überarbeitet, ohne Produktversprechen künstlich aufzublasen:
+  - Einstieg/Hook geschärft: SubTracked zeigt nicht nur Abo-Kosten, sondern wann Konten durch Abbuchungen knapp werden.
+  - Neuer Abschnitt `Warum?` mit der Kernfrage „Ist mein Konto zum Abbuchungszeitpunkt noch gedeckt?“.
+  - Neuer Abschnitt `Lokal-first` mit klarer Anti-Cloud-/Anti-Account-Linie.
+  - `Status` positiver und ehrlicher formuliert: frühe funktionale Version, Linux aktiv genutzt, Windows/macOS noch nicht abgenommen, Installer geplant.
+  - Neue kurze `Roadmap` mit Release-Builds, wiederkehrenden Einnahmen, Top-Statuskarte, Backup/Import/Export und UI-Polish.
+  - Kein Screenshot-Platzhalter eingebaut, weil der User den Screenshot später selbst nachreichen möchte.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Geändert vor Commit:
+  - `README.md`
+  - `HANDOVER.md` (dieser Eintrag)
+- Keine Code-Änderungen.
+
+### Verifikation
+
+- README-Diff wurde geprüft.
+- Keine Tests wegen reiner Dokumentationsänderung notwendig; Pre-Commit kann Biome/Vitest trotzdem laufen lassen.
+
+### Nächster Schritt
+
+- Screenshot/GIF nachreichen, sobald die UI dafür stabil genug ist.
+- Danach sinnvoll: Release-Build-Matrix oder Produktnutzen-Block (wiederkehrende Einnahmen + Top-Statuskarte).
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Kein Screenshot eingebunden.
+- Noch keine Entscheidung, ob als nächstes Release-Reife oder Produktnutzen gebaut wird.
+
+---
+
 ## 2026-06-10 — Hermes: Externes Review in Backlog eingepflegt
 
 ### Was passierte

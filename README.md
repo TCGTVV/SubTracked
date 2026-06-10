@@ -4,15 +4,23 @@
 
 # SubTracked
 
-Liquiditäts-Radar für wiederkehrende Zahlungen. Pflegt deine Abos, schreibt deine Konten in die Zukunft fort und warnt früh, wenn das Geld eng wird. Native Desktop-App, im Tray leise im Hintergrund.
+**SubTracked zeigt dir nicht nur, was deine Abos kosten — sondern wann dein Konto durch kommende Abbuchungen knapp wird.**
 
-Im Eigenbedarf gebaut: lokal, eigene Daten, kein Account, kein SaaS — Tabellen-Tracking ersetzt durch einen Client, dem man die Pflege nicht jedes Mal antrainieren muss.
+Ein lokaler Liquiditäts-Radar für wiederkehrende Zahlungen: SubTracked pflegt deine Abos, schreibt deine Konten in die Zukunft fort und warnt früh, wenn ein Saldo unter den Mindestpuffer oder ins Minus fällt. Native Desktop-App, leise im Tray, ohne Account und ohne Cloud.
+
+## Warum?
+
+Tabellen reichen für eine Liste von Abos. Sie werden aber schnell mühsam, sobald die eigentliche Frage lautet:
+
+> Ist mein Konto zum Abbuchungszeitpunkt noch gedeckt?
+
+SubTracked ist für genau diesen Blick gebaut: Was geht demnächst ab, von welchem Konto, und wo wird es eng? Die Daten bleiben lokal auf deinem Rechner — keine Synchronisierung mit einem Server, kein SaaS, kein Tracking.
 
 ## Funktionen
 
 ### Konten + Deckung
 
-- **Konten mit Saldo und Mindestpuffer**: pro Konto Währung, aktueller Stand und optionaler Sicherheitsbetrag. Saldo wird ab heute mit den anstehenden Abbuchungen fortgeschrieben.
+- **Konten mit Saldo und Mindestpuffer**: pro Konto Währung, aktueller Stand und optionaler Sicherheitsbetrag. Der Saldo wird ab heute mit den anstehenden Abbuchungen fortgeschrieben.
 - **Deckungswarnung**: orange Markierung sobald der Forecast unter den Mindestpuffer fällt, rot sobald er unter null geht. Pro Buchung sieht man den Saldo danach.
 - **Saubere Mehrwährungs-Sicht**: jedes Konto rechnet in seiner eigenen Währung, fremde Abos werden ehrlich als „N Abos in anderer Währung werden hier nicht berücksichtigt" markiert statt heimlich umgerechnet.
 
@@ -35,6 +43,37 @@ Im Eigenbedarf gebaut: lokal, eigene Daten, kein Account, kein SaaS — Tabellen
 - **Autostart beim Login** über die Einstellungen aktivierbar.
 - **Stündlicher Reminder-Loop** im Rust-Hauptprozess — unabhängig vom Webview-Lifecycle, läuft auch wenn das Fenster versteckt ist.
 
+## Lokal-first
+
+SubTracked ist bewusst als lokale Desktop-App gebaut:
+
+- keine Registrierung
+- kein Account
+- keine Cloud-Datenbank
+- keine Server-Synchronisierung
+- SQLite-Datenbank im lokalen App-Verzeichnis
+- native Notifications über das Betriebssystem
+
+Das passt zur Domäne: Abo- und Kontodaten sind private Finanzdaten. Die App soll dir helfen, sie im Blick zu behalten, ohne sie irgendwo hochzuladen.
+
+## Status
+
+Frühe, funktionale Version für lokale Nutzung (Stand 2026-06-10). Entwickelt und aktiv genutzt auf Linux (KDE/Cachyos). Windows und macOS sollten technisch funktionieren, sind aber noch nicht abgenommen.
+
+Noch keine getaggte Version und keine vorgefertigten Installer — aktuell wird aus dem Quellcode gebaut. Release-Builds für Linux, Windows und macOS sind als nächster Schritt geplant.
+
+## Roadmap
+
+Die nächsten sinnvollen Schritte:
+
+- **Release-Builds** für Linux, Windows und macOS über GitHub Actions.
+- **Wiederkehrende Einnahmen**, damit aus der Abo-Übersicht ein vollständiger Cashflow-Forecast wird.
+- **Top-Statuskarte**: auf einen Blick sehen, ob alles gedeckt ist oder wann es knapp wird.
+- **Backup / Import / Export**, passend zur lokalen Datenhaltung.
+- **UI-Polish und besseres Onboarding**, damit der erste Start schneller zum Nutzen führt.
+
+Details stehen in [BACKLOG.md](./BACKLOG.md).
+
 ## Tech
 
 - **[Tauri 2](https://tauri.app/)** (Rust-Kern, System-WebView)
@@ -43,10 +82,6 @@ Im Eigenbedarf gebaut: lokal, eigene Daten, kein Account, kein SaaS — Tabellen
 - **Reminder-Loop** in Rust mit `tokio` + `chrono`, sendet native OS-Notifications über [`tauri-plugin-notification`](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/notification)
 - **Biome** für Lint + Format
 - **Vitest** (Frontend) + **`cargo test`** (Rust) für Tests, **Lefthook** als Pre-Commit-Gate, GitHub Actions als CI
-
-## Status
-
-Funktional komplett für den Eigenbedarf (Stand 2026-06-07). Entwickelt und genutzt auf Linux (KDE/Cachyos). Windows und macOS sollten technisch funktionieren, sind aber nicht getestet. Noch keine getaggte Version, keine vorgefertigten Installer — siehe Quellbau unten.
 
 ## Aus Source bauen
 
