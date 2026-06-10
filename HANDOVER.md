@@ -9,6 +9,56 @@
 
 ---
 
+## 2026-06-10 — Claude: CSP-Runtime-Test bestätigt + Release-Matrix-Build
+
+### Was passierte
+
+- **Session-Start:** Lokaler Stand war 17 Commits hinter `origin/main`; per Fast-Forward auf `120f6f3` gezogen, dann obersten HANDOVER-Eintrag gelesen. Serena war von Beginn an aktiv (symbolische Tools).
+- **Offenen Pflicht-Punkt der Vorsession erledigt — CSP-Runtime-Test:** Anders als beim Vor-Agenten war hier die Toolchain (`pnpm`/`cargo`) vorhanden.
+  - **Dev-Lauf** (`pnpm tauri dev`, = `devCsp`): App startet, alle Operationen ok, Konsole leer.
+  - **Entscheidender Test:** `pnpm tauri build --debug --no-bundle` → Debug-Binary mit **strikter Production-`csp` + offenen DevTools**. User hat Konto/Abo/Einnahme angelegt und bearbeitet; **Konsole blieb leer, IPC funktioniert** (`connect-src 'self' ipc: http://ipc.localhost`). Damit ist die CSP real bestätigt, nicht nur schema-validiert.
+- **Release-Matrix-Build implementiert** ([.github/workflows/release.yml](.github/workflows/release.yml), Commit `6768f1d`): Tag-getriggert (`v*`), `tauri-apps/tauri-action@v0`, Matrix macOS arm64 + macOS x86_64 + ubuntu-22.04 + windows-latest, **Draft**-Release. Linux-Deps wie `checks.yml` + `patchelf`. Bewusst **unsigniert / ohne `latest.json`** (Updater-Signierung gehört zum Updater-Schritt ab v0.1.0).
+- **Windows-Fix** (Commit `2b2bb14`): Erster CI-Lauf scheiterte nur auf Windows — `package.json` `tauri`-Script hatte den Unix-Env-Prefix `WEBKIT_DISABLE_DMABUF_RENDERER=1`, den Windows-`cmd` als Befehlsnamen missversteht. Entfernt (`"tauri": "tauri"`), weil der Wayland-DMABUF-Workaround ohnehin cfg(linux)-gated in `lib.rs::run()` sitzt und für Dev- wie Release-Binary greift (diese Session beidseitig live gesehen) — der Prefix war redundant.
+- **BACKLOG**: Matrix-Build als `[x]` markiert; neuer Punkt „GitHub-Actions auf Node-24-fähige Versionen heben" (Frist 2026-06-16) aufgenommen.
+
+### Status am Sitzungsende
+
+- Branch `main`, HEAD = dieser Doku-Commit; Working Tree clean. `6768f1d` + `2b2bb14` bereits auf `origin/main`.
+- **Keine** Wegwerf-Tags/Releases mehr auf GitHub (ci1/ci2 + Drafts gelöscht; `gh release list` leer, keine `v0.0.0`-Tags remote).
+- App-Startbarkeit (Linux/Wayland): in dieser Session live verifiziert (Dev **und** strikter Prod-Build).
+
+### Verifikation
+
+- Lokal: `pnpm build` ✓, `cargo check` ✓, voller `pnpm tauri build` → `.deb`/`.rpm` ✓ (AppImage scheitert lokal an `fuse2`, bekannt).
+- Lefthook pre-commit bei jedem Commit grün: Biome 51 Files, Vitest 171/171.
+- **CI Matrix (Wegwerf-Tag `v0.0.0-ci2` auf dem Fix-Commit): alle 4 Plattformen grün.** Assets: `.msi` + `-setup.exe` (Win), `.dmg` + `.app.tar.gz` (macOS ×2), `.deb` + `.rpm` + `.AppImage` (Linux). AppImage baut auf CI durch (FUSE vorhanden).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Matrix-Build jetzt unsigniert, ohne `latest.json`:** BACKLOG ordnet den Updater explizit „ab v0.1.0, nicht früher" ein. Den Signatur-Keypair jetzt zu erzeugen/als Secret zu hinterlegen wäre verfrüht; Signierung wird ein sauberer Zusatzschritt beim Updater. (User-Entscheidung.)
+- **Trigger = Tag `v*` → Draft-Release:** Sicherer erster Release-Pfad — Assets prüfen, dann manuell veröffentlichen. (User-Entscheidung.)
+- **Windows-Workaround in `lib.rs` statt im npm-Script:** Der cfg(linux)-Set-Var ist cross-platform-sicher (no-op auf Win/mac, no-op auf X11) und dedupliziert den Workaround.
+
+### Gotchas / Stolperfallen
+
+- **`pnpm tauri dev` nutzt `devCsp`, nicht die strikte `csp`.** Ein CSP-Konsolen-Check im Dev-Modus testet die gelockerte Policy. Die strikte Production-Policy wird nur in einem **Build** aktiv — der entscheidende Test ist `tauri build --debug` (Prod-`csp` **+** DevTools; Release-Builds haben keine DevTools).
+- **`tauri-action` ist `@v0`** (neuestes Release `action-v0.6.2`, März 2026), **nicht `@v1`** — eine WebFetch-Zusammenfassung behauptete fälschlich `v1`. Action-Versionen immer gegen die echten Repo-Tags prüfen (`gh api .../releases/latest`).
+- **`pkill -f "<muster>"` matcht die eigene Shell-Zeile** (das Muster steht im Kommando selbst) → Selbstabschuss, Exit 144. Stattdessen `pgrep -x <name> | xargs -r kill`.
+- **`gh release list`/`delete` gibt sporadisch HTTP 401**, obwohl `gh api user`/`repos` mit demselben Token sofort funktionieren. Retry hilft; wenn `--cleanup-tag` am 401 scheitert, Remote-Tag separat via `git push origin :refs/tags/<tag>` löschen.
+- **Das Bash-Tool behält das Arbeitsverzeichnis zwischen Aufrufen** — ein früheres `cd src-tauri` wirkt nach. Bei `pnpm`-Aufrufen auf das cwd achten (absolute Pfade oder zurück ins Repo-Root).
+
+### Geänderte/neue Memories
+
+- Keine. Die Gotchas oben sind tooling-/umgebungsspezifisch und hier dokumentiert; eine Auto-Memory würde nur duplizieren.
+
+### Offen / Nächster Schritt
+
+- **v0.1.0 ist jetzt build-technisch unblocked**, aber noch durch zwei BACKLOG-Punkte gated: **Windows/macOS Smoke-Test** (Zeile 91) und **manuelle Pre-Release-Smoke-Checkliste** (Zeile 92). Die CI-Drafts beweisen „baut & paketiert", nicht „läuft auf Win/mac".
+- **Kurzfristig (Frist 2026-06-16):** Actions auf Node-24-taugliche Versionen heben (`checkout@v5`/`setup-node@v5` + passende `pnpm/action-setup`), betrifft `checks.yml` **und** `release.yml`.
+- **Danach:** Release-Page + README-Download-Pfad (Zeile 83, jetzt unblocked), dann Updater (signierte Builds + `latest.json`).
+
+---
+
 ## 2026-06-10 — Claude: Tauri-CSP gehärtet
 
 ### Was passierte
