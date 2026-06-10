@@ -243,13 +243,12 @@ pub(crate) async fn update_subscription_in_db(
         &sub.anchor_date,
         sub.lead_days,
     )?;
-    let current: Option<(Option<i64>, i64, String)> = sqlx::query_as(
-        "SELECT account_id, amount_cents, currency FROM subscriptions WHERE id = ?",
-    )
-    .bind(sub.id)
-    .fetch_optional(db)
-    .await
-    .map_err(|e| e.to_string())?;
+    let current: Option<(Option<i64>, i64, String)> =
+        sqlx::query_as("SELECT account_id, amount_cents, currency FROM subscriptions WHERE id = ?")
+            .bind(sub.id)
+            .fetch_optional(db)
+            .await
+            .map_err(|e| e.to_string())?;
     let (current_account_id, current_amount_cents, current_currency) =
         current.unwrap_or((None, sub.amount_cents, sub.currency.clone()));
     let account_id_changed = current_account_id != sub.account_id;
