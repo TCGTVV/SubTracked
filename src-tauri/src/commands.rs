@@ -340,7 +340,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
             .fetch_optional(&state.db)
             .await
             .map_err(|e| e.to_string())?;
-    let current_account_id = current.map(|(id,)| id).flatten();
+    let current_account_id = current.and_then(|(id,)| id);
     if current_account_id != income.account_id {
         if let Some(new_id) = income.account_id {
             validate_account_exists(&state.db, new_id).await?;
