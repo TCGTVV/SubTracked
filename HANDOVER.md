@@ -9,6 +9,75 @@
 
 ---
 
+## 2026-06-10 — Hermes: Externes Review in Backlog eingepflegt
+
+### Was passierte
+
+- User bat um eine ehrliche Bewertung des GitHub-Projekts aus technischer und Nutzersicht.
+- Repo wurde in `/tmp/SubTracked-review` geklont und geprüft.
+- Verifikation im Review-Kontext:
+  - `pnpm lint` ✓
+  - `pnpm test:run` ✓ — 171 Tests / 13 Files
+  - `pnpm build` ✓
+  - Rust-Checks konnten in der Hermes-Umgebung nicht laufen, weil `cargo`/`rustc` dort nicht installiert waren.
+- Auf User-Wunsch wurden die offenen Empfehlungen aus dem Review in `BACKLOG.md` einsortiert, statt als Sammelblock angehängt.
+
+### Backlog-Ergänzungen
+
+- `📈 Produktnutzen / Prognose`:
+  - Wiederkehrende Einnahmen als zweiter Cashflow-Typ.
+  - Top-Statuskarte als primärer Arbeitsmodus.
+  - Kontostand-Frische sichtbar machen.
+- `🚀 Distribution & Setup`:
+  - Release-Page und README-Download-Pfad für normale Nutzer.
+  - README-/GitHub-Polish um stärkeren Produkt-Hook und lokale-first Linie ergänzt.
+  - Manuelle Pre-Release-Smoke-Checkliste dokumentieren.
+- `📐 Tests & Qualität`:
+  - `cargo test` als eigenen CI-Step ergänzen.
+  - E2E-Item um Konto/Saldo/Puffer-Flows erweitert.
+- `🏛️ Architektur (Diskussion)`:
+  - Tauri-CSP härten statt `csp: null`.
+  - Produktions-`unwrap`/`expect` auditieren.
+  - DB-Constraints als zweite Verteidigungslinie nachziehen.
+  - TS/Rust-Command-Typen generieren oder contract-testen.
+- `🌱 Später`:
+  - UI-Redesign um Status-/Risiko-Priorisierung ergänzt.
+  - Settings um Datenbank-/Backup-Ordner ergänzt.
+  - Empty-State konkreter auf geführten Einstieg geschärft.
+  - Import/Export als lokale-first Vertrauensfeature priorisiert.
+
+### Status am Sitzungsende
+
+- Branch: `main`.
+- Geändert vor Commit:
+  - `BACKLOG.md`
+  - `HANDOVER.md` (dieser Eintrag)
+- Keine Code-Änderungen.
+
+### Verifikation
+
+- Nach dem Backlog-Patch geprüft:
+  - `git diff -- BACKLOG.md`
+  - `git diff --stat`
+  - Stichwort-Check auf alle neuen Review-Empfehlungen.
+- Keine Tests nach dem reinen Doku-/Backlog-Patch erneut gelaufen.
+
+### Nächster Schritt
+
+- Wenn Produktnutzen Priorität hat: **Wiederkehrende Einnahmen + Top-Statuskarte** als nächsten großen Block starten.
+- Wenn Release-Reife Priorität hat: **Matrix-Build + README-Download-Pfad + Smoke-Checkliste** als nächsten Block starten.
+- Kleiner Qualitäts-Quick-Win: `cargo test` in CI ergänzen.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+### Offen / nicht geklärt
+
+- Keine Entscheidung getroffen, welcher neue Backlog-Punkt als nächstes umgesetzt wird.
+
+---
+
 ## 2026-06-09 — Codex: Tagesabschluss, nächste Backlog-Entscheidung vertagt
 
 ### Was passierte
