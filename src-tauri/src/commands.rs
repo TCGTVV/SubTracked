@@ -2,7 +2,9 @@ use serde::Serialize;
 use tauri::State;
 use tauri_plugin_notification::NotificationExt;
 
-use crate::db::{Account, AppState, Income, NewIncome, NewSubscription, ReminderState, Subscription};
+use crate::db::{
+    Account, AppState, Income, NewIncome, NewSubscription, ReminderState, Subscription,
+};
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_subscription_fields,
 };
@@ -290,11 +292,11 @@ pub async fn list_incomes(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn add_income(
-    state: State<'_, AppState>,
-    income: NewIncome,
-) -> Result<i64, String> {
-    use crate::validation::{validate_anchor_date, validate_currency, validate_interval, validate_name, validate_amount_cents};
+pub async fn add_income(state: State<'_, AppState>, income: NewIncome) -> Result<i64, String> {
+    use crate::validation::{
+        validate_amount_cents, validate_anchor_date, validate_currency, validate_interval,
+        validate_name,
+    };
     validate_name(&income.name)?;
     validate_amount_cents(income.amount_cents)?;
     validate_currency(&income.currency)?;
@@ -322,11 +324,11 @@ pub async fn add_income(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn update_income(
-    state: State<'_, AppState>,
-    income: Income,
-) -> Result<(), String> {
-    use crate::validation::{validate_anchor_date, validate_currency, validate_interval, validate_name, validate_amount_cents};
+pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result<(), String> {
+    use crate::validation::{
+        validate_amount_cents, validate_anchor_date, validate_currency, validate_interval,
+        validate_name,
+    };
     validate_name(&income.name)?;
     validate_amount_cents(income.amount_cents)?;
     validate_currency(&income.currency)?;
