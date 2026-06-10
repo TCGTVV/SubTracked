@@ -48,6 +48,12 @@
 
 - Keine.
 
+### Tooling-Änderung: Serena jetzt auch für Rust
+
+- **Entscheidung überdacht und geändert:** Serena war bisher bewusst nur auf TypeScript konfiguriert. Grund war vermutlich die damalige Single-Language-Beschränkung — Serena unterstützt inzwischen **mehrere Sprachen gleichzeitig**. Da die Rust-Seite substanziell gewachsen ist (`commands.rs` ~690 Zeilen + `db`/`validation`/`reminders`/`recurrence`/`lib`/`backup`/`currencies`) und diese Session mehrere große `.rs`-Dateien komplett gelesen wurden, ist symbolische Navigation jetzt ein echter Token-Hebel.
+- **Gemacht:** In [.serena/project.yml](.serena/project.yml) `languages:` um `rust` ergänzt (TypeScript bleibt erste/Default-Sprache). `rust-analyzer` ist bereits installiert (`/usr/lib/rustup/bin/rust-analyzer`), kein Setup nötig.
+- **Nächste Session — verifizieren:** Beim ersten Mal eine symbolische Abfrage auf einer `.rs`-Datei testen (z. B. `get_symbols_overview` auf `commands.rs`). Wenn sie sauber zurückkommt, ab dann Rust ebenfalls symbolisch lesen statt ganze Dateien. **Vorbehalte:** rust-analyzer indexiert beim Session-Start (erste Abfrage langsamer, mehr Speicher); Makro-Stellen (`generate_handler!`, Derive-Makros) löst ra evtl. unsauber auf — für Alltags-Navigation aber tragfähig. Falls die Onboarding-Zeit/Stabilität stört, `rust` wieder entfernen.
+
 ---
 
 ## 2026-06-10 — Claude: CSP-Runtime-Test bestätigt + Release-Matrix-Build
