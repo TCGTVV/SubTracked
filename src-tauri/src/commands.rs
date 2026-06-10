@@ -129,12 +129,11 @@ pub async fn update_account(state: State<'_, AppState>, account: Account) -> Res
         account.balance_cents,
         account.min_buffer_cents,
     )?;
-    let current: Option<(i64,)> =
-        sqlx::query_as("SELECT balance_cents FROM accounts WHERE id = ?")
-            .bind(account.id)
-            .fetch_optional(&state.db)
-            .await
-            .map_err(|e| e.to_string())?;
+    let current: Option<(i64,)> = sqlx::query_as("SELECT balance_cents FROM accounts WHERE id = ?")
+        .bind(account.id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| e.to_string())?;
     let balance_changed = current.map(|(b,)| b) != Some(account.balance_cents);
     if balance_changed {
         sqlx::query(
