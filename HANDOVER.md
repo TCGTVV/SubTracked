@@ -9,6 +9,49 @@
 
 ---
 
+## 2026-06-10 — Claude: Tauri-CSP gehärtet
+
+### Was passierte
+
+- **Content Security Policy gesetzt** in `src-tauri/tauri.conf.json` (`app.security`): `csp: null` ersetzt durch eine restriktive Production-`csp` plus eine separate, gelockerte `devCsp` für den Vite-Dev-Modus. BACKLOG-Punkt "Tauri-CSP härten" abgehakt.
+- **Production-`csp`:** `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'`.
+- **`devCsp`:** wie Prod, aber `script-src`/`style-src` zusätzlich `'unsafe-inline'` und `connect-src` zusätzlich `ws://localhost:1420 http://localhost:1420`.
+- **Faktenbasis vor dem Schreiben erhoben** (nicht geraten): App lädt keine externen URLs/CDNs/Fonts (nur System-Font-Stack), `grep` ergab **0** Inline-`style={{}}`, kein `fetch`/`WebSocket`/`<img src>`. Vorhandenes `dist/index.html` bestätigt: Vite bündelt JS **und** CSS als externe Dateien (`<script src>` + `<link rel=stylesheet>`), kein Inline-Code/-Style → Prod braucht kein `'unsafe-inline'`.
+- **Tauri-Spezifika verifiziert** (offizielle v2-Doku + Schema): Tauri hängt Nonces/Hashes für seine **eigenen** gebündelten Skripte automatisch an (daher reicht `script-src 'self'` für die App-JS); IPC braucht `connect-src ipc: http://ipc.localhost`. `csp` **und** `devCsp` als gültige `Security`-Felder gegen das gepinnte CLI-Schema `@tauri-apps/cli@2.11.2` (`node_modules/.../config.schema.json`) bestätigt. JSON ist valide (`python3 -c json.load`).
+
+### Status am Sitzungsende
+
+- Branch: `main`, Working Tree vor Commit clean bis auf diese Änderung.
+- Build: **nicht lokal verifizierbar** — `pnpm` und `cargo` sind in dieser Umgebung nicht im PATH (nur `node`/`npm`). Kein Tauri-Dev/-Build möglich, daher auch kein Lint/Test-Lauf für Rust. Die Änderung betrifft ausschließlich `tauri.conf.json` + Doku, keine TS/Rust-Quellen.
+- App-Startbarkeit: **nicht verifiziert** (siehe Nächster Schritt).
+
+### Nächster Schritt
+
+- **PFLICHT-Runtime-Test auf einer Maschine mit Toolchain:** `pnpm tauri dev` starten und die App bedienen (Abos/Konten anlegen, bearbeiten, löschen, Preis-Historie aufklappen) + DevTools-Konsole auf CSP-Verletzungen prüfen. Danach `pnpm tauri build` (oder `--no-bundle`) für den Production-Pfad mit der strikten `csp`. Falls eine Direktive wider Erwarten etwas blockt, zeigt die Konsole die genaue Direktive — dann gezielt nachziehen. **Erst nach diesem Test ist die CSP als bestätigt zu betrachten.**
+- Danach offen für `v0.1.0`: GitHub-Actions-Matrix-Build (`tauri-action`, Win/Linux/macOS).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Separates `devCsp` statt einer einzigen permissiven Policy:** Production bleibt strikt (`'self'`), nur der Dev-Modus bekommt `'unsafe-inline'` + `ws:`. Begründung: Die Härtung ist der ganze Zweck der Aufgabe — eine global permissive Policy würde ein künftiges XSS im ausgelieferten Build nicht eindämmen. Vite braucht die Lockerung nur im Dev (React-Refresh-Preamble ist ein Inline-Script, Style-Injection per JS, HMR-WebSocket).
+- **`script-src 'self'` ohne manuelle Nonces/Hashes:** Tauri injiziert Nonces für seine eigenen Skripte automatisch zur Compile-Zeit; die App-JS ist eine externe `'self'`-Datei. Manuelle Nonce-Pflege wäre redundant und fehleranfällig.
+- **`asset:`/`http://asset.localhost` bewusst weggelassen:** Das Asset-Protokoll wird nicht genutzt (kein `convertFileSrc`, keine `asset://`-URLs). Weglassen hält die Policy enger; bei künftiger Asset-Nutzung gezielt ergänzen.
+
+### Gotchas / Stolperfallen
+
+- **Keine lokale Runtime-Verifikation möglich** (kein `pnpm`/`cargo`): CSP-Fehler äußern sich erst zur Laufzeit im echten WebView, nicht in den vier CI-Checks (Biome/Vitest/cargo fmt/clippy fassen `tauri.conf.json`-CSP nicht an). Der Runtime-Test ist daher kein optionaler Schritt.
+- **`devCsp` fehlt auf der CSP-Doku-Seite** (`v2.tauri.app/security/csp`), existiert aber real im Schema und im Config-Reference. Verifikation lief über das gepinnte lokale CLI-Schema, nicht nur über die Prosa-Doku.
+- **Tauri-Verhalten ohne `devCsp`:** Wäre `devCsp` weggelassen, würde die strikte `csp` auch im Dev gelten und Vite-HMR brechen. Beide Felder müssen gesetzt bleiben.
+
+### Geänderte/neue Memories
+
+- Keine Serena- oder Auto-Memories geändert. Die CSP-Entscheidung ist projektspezifisch und vollständig in BACKLOG + diesem HANDOVER-Eintrag dokumentiert; eine Memory würde nur duplizieren.
+
+### Offen / nicht geklärt
+
+- **Runtime-Test der CSP** (s. o.) ist der einzige offene Punkt dieser Aufgabe — alles andere ist fertig und schema-validiert.
+
+---
+
 ## 2026-06-10 — Claude: Preisänderungs-Historie
 
 ### Was passierte
