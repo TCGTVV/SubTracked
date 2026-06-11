@@ -9,6 +9,43 @@
 
 ---
 
+## 2026-06-11 — Codex: README-Download-Pfad + Release-Page vorbereitet
+
+> Session-Fokus: BACKLOG 84/91 vor `v0.1.0` erledigt — normale Nutzer sehen jetzt klar, was sie herunterladen sollen und was bei unsignierten Builds zu erwarten ist.
+
+### Was passierte
+
+- **README aktualisiert:** [README.md](README.md) beschreibt jetzt den aktuellen Stand (Smoke-Tests Windows/macOS/Linux, Installer über GitHub Releases), aktuelle Features (zweiwöchentliches Intervall, Einnahmen, einmalige Einnahmen, Preis-Historie, Backup/Restore) und hat einen neuen **Download**-Abschnitt mit OS-/Asset-Matrix.
+- **Unsigned-Build-Hinweise ergänzt:** README erklärt Gatekeeper/SmartScreen für `v0.1.0` als erwartete Warnung und nennt die konkreten Startpfade (macOS Rechtsklick → Öffnen, Windows „Weitere Informationen" → „Trotzdem ausführen").
+- **Release-Page-Vorlage:** [RELEASE.md](RELEASE.md) hat jetzt eine normale-nutzer-taugliche Release-Body-Vorlage plus Asset-Matrix. Die `.app.tar.gz`-Assets sind ausdrücklich als Updater-/Automationspfad markiert; normale macOS-Nutzer nehmen `.dmg`.
+- **GitHub Actions Release-Body:** [.github/workflows/release.yml](.github/workflows/release.yml) erzeugt Draft-Releases nicht mehr mit Einzeiler, sondern mit Download-Matrix, Unsigned-Hinweis und Feature-Kurzliste.
+- **BACKLOG:** Punkte „Release-Page und README-Download-Pfad" und „README-/GitHub-Polish bei v0.1.0" abgehakt. Kein gefälschter Screenshot eingebaut; echter Screenshot/GIF bleibt optionaler späterer Feinschliff aus einem laufenden Tauri-Fenster oder dem v0.1.0-Draft.
+
+### Status am Sitzungsende
+
+- Branch `main`; Doku-/Workflow-Änderungen werden in dieser Session committet und gepusht.
+
+### Verifikation
+
+- `ruby -e "require 'yaml'; YAML.load_file('.github/workflows/release.yml')"` ✓
+- `pnpm lint` ✓
+- Keine Code-/Rust-Änderungen → cargo/Vitest nicht erneut nötig.
+
+### Nächster Schritt
+
+- `v0.1.0` taggen (BACKLOG 81), CI-Draft prüfen, Asset-Namen gegen README/Release-Body checken, dann Draft veröffentlichen.
+
+### Gotchas / Stolperfallen
+
+- Release-Body und README nennen aktuell bewusst die `0.1.0`-Asset-Namen. Für spätere Releases vor dem Taggen prüfen, ob die Namen/Versionen angepasst oder automatisiert werden sollen.
+- Builds sind weiterhin unsigniert; das ist im README/Release-Body sichtbar dokumentiert, aber Support-Fragen dazu sind trotzdem wahrscheinlich.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+---
+
 ## 2026-06-11 — Codex: Produktnutzen-Block (Preisgraph, biweekly, einmalige Einnahmen)
 
 > Session-Fokus: die drei offenen Produktnutzen-Themen aus dem User-Test 2026-06-11 vor dem v0.1.0-Release umgesetzt.

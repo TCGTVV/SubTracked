@@ -26,10 +26,17 @@ SubTracked ist für genau diesen Blick gebaut: Was geht demnächst ab, von welch
 
 ### Abos
 
-- **Verwalten** mit Name, Betrag, Konto, Intervall (monatlich / quartalsweise / jährlich) und erster Fälligkeit. Toleranter Betrags-Parser (akzeptiert `12,99`, `12.99`, `1.234,56`).
+- **Verwalten** mit Name, Betrag, Konto, Intervall (monatlich / zweiwöchentlich / quartalsweise / jährlich) und erster Fälligkeit. Toleranter Betrags-Parser (akzeptiert `12,99`, `12.99`, `1.234,56`).
 - **Demnächst (30 Tage)**: kompakte Liste aller Fälligkeiten im nächsten Monat — der tägliche Arbeitsmodus.
 - **Filter und Sortierung** für die Abo-Liste (nach Konto, Währung, Erinnerungs-Status; sortierbar nach Name, Fälligkeit, Betrag).
 - **Archivieren statt Löschen**: gekündigte oder pausierte Abos verschwinden aus dem Forecast, lassen sich aber jederzeit reaktivieren.
+- **Preis-Historie**: Betragsänderungen werden gespeichert und im Bearbeiten-Dialog als Liste plus kleiner Verlaufsgrafik sichtbar.
+
+### Einnahmen + Backup
+
+- **Wiederkehrende Einnahmen** fließen in den Cashflow-Forecast ein, damit nicht nur Abbuchungen, sondern auch Gehalt und andere Zuflüsse berücksichtigt werden.
+- **Einmalige Einnahmen** wie Bonus, Erstattung oder Verkaufserlös können genau an einem Datum eingeplant werden.
+- **JSON-Backup / Restore** über die Einstellungen: vollständiger lokaler Datenexport inklusive Konten, Abos, Einnahmen, Preis-Historie und Reminder-Metadaten.
 
 ### Erinnerungen
 
@@ -58,19 +65,40 @@ Das passt zur Domäne: Abo- und Kontodaten sind private Finanzdaten. Die App sol
 
 ## Status
 
-Frühe, funktionale Version für lokale Nutzung (Stand 2026-06-10). Entwickelt und aktiv genutzt auf Linux (KDE/Cachyos). Windows und macOS sollten technisch funktionieren, sind aber noch nicht abgenommen.
+Frühe, funktionale Version für lokale Nutzung (Stand 2026-06-11). Entwickelt und aktiv genutzt auf Linux (KDE/Cachyos). Windows und macOS wurden vor `v0.1.0` per Smoke-Test geprüft.
 
-Noch keine getaggte Version und keine vorgefertigten Installer — aktuell wird aus dem Quellcode gebaut. Release-Builds für Linux, Windows und macOS sind als nächster Schritt geplant.
+Die erste echte Release-Version ist `v0.1.0`. Die Installer werden über GitHub Actions für Linux, Windows und macOS gebaut und als GitHub-Release veröffentlicht.
+
+## Download
+
+Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen.
+
+| System | Empfohlener Download | Hinweis |
+| --- | --- | --- |
+| **Windows** | `SubTracked_0.1.0_x64_en-US.msi` | Alternativ `SubTracked_0.1.0_x64-setup.exe`. |
+| **macOS Apple Silicon** | `SubTracked_0.1.0_aarch64.dmg` | Für Macs mit M1/M2/M3/M4. |
+| **macOS Intel** | `SubTracked_0.1.0_x64.dmg` | Für ältere Intel-Macs. |
+| **Linux Debian/Ubuntu** | `SubTracked_0.1.0_amd64.deb` | Für Debian-, Ubuntu- und verwandte Systeme. |
+| **Linux Fedora/openSUSE/RHEL** | `SubTracked-0.1.0-1.x86_64.rpm` | Für RPM-basierte Distributionen. |
+| **Linux universell** | `SubTracked_0.1.0_amd64.AppImage` | Kann ohne Installation gestartet werden. |
+
+### Hinweis zu unsignierten Builds
+
+`v0.1.0` ist noch nicht code-signiert. macOS Gatekeeper und Windows SmartScreen können beim ersten Start warnen. Das ist bei dieser frühen Version erwartet:
+
+- **macOS:** `.dmg` öffnen, App nach `Applications` ziehen, dann im Finder per Rechtsklick → **Öffnen** starten.
+- **Windows:** SmartScreen → **Weitere Informationen** → **Trotzdem ausführen**.
+
+Die App speichert ihre Daten lokal in einer SQLite-Datenbank im App-Verzeichnis deines Betriebssystems. Backups kannst du jederzeit über die Einstellungen exportieren.
 
 ## Roadmap
 
 Die nächsten sinnvollen Schritte:
 
-- **Release-Builds** für Linux, Windows und macOS über GitHub Actions.
-- **Wiederkehrende Einnahmen**, damit aus der Abo-Übersicht ein vollständiger Cashflow-Forecast wird.
-- **Top-Statuskarte**: auf einen Blick sehen, ob alles gedeckt ist oder wann es knapp wird.
-- **Backup / Import / Export**, passend zur lokalen Datenhaltung.
+- **Updater** für spätere Versionen, sobald die Release-Pipeline stabil signiert ist.
+- **Mehr Komfort in den Einstellungen**, z.B. App-Version, Log-Ordner und Datenbank-/Backup-Pfade.
 - **UI-Polish und besseres Onboarding**, damit der erste Start schneller zum Nutzen führt.
+- **Weitere Auswertungen**, z.B. Kategorien, Kündigungsfristen oder zusätzliche Exportformate.
 
 Details stehen in [BACKLOG.md](./BACKLOG.md).
 
