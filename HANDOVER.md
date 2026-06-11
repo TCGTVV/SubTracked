@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-06-11 — Claude: MacBook-Dev-Umgebung aufgesetzt — LAUFENDE SESSION
+## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon — LAUFENDE SESSION
 
 > **Hinweis:** Session-Start-Eintrag (Setup auf dem MacBook). Wird am **Ende der Session unten erweitert** (inhaltliche Arbeit). Nicht durch neuen Eintrag ersetzen.
 
@@ -23,6 +23,17 @@
 - **Serena:** TS + Rust war bereits in `.serena/project.yml` aktiviert (Vor-Session). rust-analyzer jetzt installiert → Rust-LSP greift nach VSC-Neustart voll. Serena-Pfade relativ zum Root → Rust unter `src-tauri/src/...`.
 - **Volle CI-Parität lokal grün auf macOS:** `pnpm lint` (Biome) ✓ · `pnpm test:run` (**175/175** Vitest) ✓ · `cargo fmt --check` ✓ · `cargo clippy --all-targets -- -D warnings` ✓ · `cargo test` ✓.
 - **Code-Fix (Cross-Platform-clippy):** `TRAY_FOCUS_RAISE_DELAY` in `src-tauri/src/lib.rs` wird nur im `#[cfg(target_os = "linux")]`-Block (Tray-Focus-Raise) genutzt, ihre **Definition** war ungeguarded → auf macOS toter Code, `clippy -D warnings` brach **lokal**. CI (Linux) war/ist zu Recht grün. Fix: Definition mit demselben `#[cfg(target_os = "linux")]` versehen → sauber auf beiden Plattformen, Linux-Verhalten unverändert. `StdDuration`-Import bleibt via `REMINDER_INTERVAL`/`TRAY_FOCUS_RETRY_DELAY` genutzt.
+
+### Arbeit 1: App-Icon aus SubTracked-Logo (macOS-Squircle-Hybrid)
+
+- **Ausgangslage:** App zeigte das Default-Tauri-Icon (User-Test-Befund). Quelle waren drei Logo-Dateien in `assets/`:
+  - `logo.png` (1200×670): **echte** Transparenz, aber niedrig aufgelöst.
+  - `logo2.png`/`logo3.png` (2752×1536): höher aufgelöst, aber das Transparenz-**Schachbrett war als opakes Grau eingebrannt** (keine echte Alpha). → per **Chroma-Key** (niedrige Sättigung + hell = Hintergrund → Alpha 0) entfernt, dann die linke Bildmarke (Kalender + Wiederholungs-Pfeil + Münzstapel) via Spalten-Alpha-Profil isoliert.
+- **macOS-Squircle nach Apple-Grid:** 824er Rounded-Square in 1024er Canvas (≈10 % Rand), Eckenradius ≈184, 4×-Supersampling für glatte Kanten, dezenter vertikaler Teal-Gradient.
+- **User-Entscheidung (aus 3 gerenderten Varianten):** **Hybrid** — teal Squircle, Kalender/Pfeil **weiß**, Münzen bleiben **orange** (Markenakzent). Farbtrennung per Hue: warm (R>B) = orange behalten, kühl = teal→weiß. Vereint nativen macOS-Look mit der orangen Brand-Farbe.
+- **`assets/icon-source.png`** = kanonische 1024×1024-Quelle (committet) → Regenerierung jederzeit via `pnpm tauri icon assets/icon-source.png`.
+- **16 Desktop-Icons** in `src-tauri/icons/` regeneriert (32/128/128@2x, `.icns`, `.ico`, alle Windows-`Square*Logo`, `StoreLogo`, `icon.png`). Die von `tauri icon` zusätzlich erzeugten `ios/`+`android/`-Ordner und das nicht referenzierte `64x64.png` **entfernt** (reines Desktop-Projekt).
+- **Verifikation:** Quell- und generierte PNGs visuell geprüft (auch klein @128 sauber lesbar). **Noch nicht im laufenden Build gesehen** — das Dock-/Fenster-Icon erscheint beim nächsten `pnpm tauri dev`/`build`. Tool: Pillow 11.3.0 (kein ImageMagick nötig).
 
 ### Status (Setup-Phase)
 
