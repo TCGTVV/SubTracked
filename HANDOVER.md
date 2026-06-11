@@ -9,9 +9,9 @@
 
 ---
 
-## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs + Header — LAUFENDE SESSION
+## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs + Header
 
-> **Hinweis:** Session-Start-Eintrag (Setup auf dem MacBook). Wird am **Ende der Session unten erweitert** (inhaltliche Arbeit). Nicht durch neuen Eintrag ersetzen.
+> Session auf dem MacBook: Toolchain aufgesetzt, App-Icon gebaut, die komplette UX-Bug-Welle aus dem User-Test 2026-06-11 abgearbeitet (BACKLOG 16/17/18/43/44/45).
 
 ### Was passierte (Setup)
 
@@ -44,7 +44,7 @@ Drei UX-Bug-Punkte aus dem User-Test (BACKLOG 🐛) adressiert — als gemeinsam
 - **Auto-Close nach Speichern (BACKLOG 17) war im aktuellen Code bereits behoben** — beide Dialoge rufen nach Erfolg `onSaved()`, App schließt via `handleSubSaved`/`handleIncomeSaved` ([App.tsx:327](src/App.tsx#L327)/[:334](src/App.tsx#L334)). User-Test lief auf älterem Build; nichts „repariert", nur verifiziert.
 - **Bonus — IncomeDialog visuell angeglichen (BACKLOG 44):** IncomeDialog war faktisch **ungestylt** — `className="sub-dialog"` (existiert nicht im CSS → keine Card/Border/max-width), `dialog-actions` (existiert nicht → Buttons nicht rechtsbündig), `<form>` ohne `form`-Klasse (kein Padding). Da die Action-Row ohnehin angefasst wurde, gleich mitgezogen: `dialog` + `form` + `form-actions` → strukturell deckungsgleich mit SubscriptionDialog.
 - **Verifikation:** `pnpm lint` ✓ · `tsc --noEmit` ✓ · `pnpm test:run` **175/175** ✓ · **User hat es manuell durchgeklickt und bestätigt** (Backdrop schließt, Buttons konsistent, IncomeDialog gleich). Backdrop-Klick ist in jsdom nicht testbar → manuelle Prüfung war hier das Gate.
-- **BACKLOG:** Punkte 16, 17, 18, 44, 45 (App-Icon) abgehakt. **Offen bleibt 43** (Header-Button-Reihenfolge umsortieren).
+- **BACKLOG:** Punkte 16, 17, 18, 44, 45 (App-Icon) abgehakt (43 folgt in Arbeit 3).
 
 ### Arbeit 3: Header-Button-Reihenfolge (BACKLOG 43)
 
@@ -54,16 +54,19 @@ Drei UX-Bug-Punkte aus dem User-Test (BACKLOG 🐛) adressiert — als gemeinsam
 - Verifikation: Serena-Diagnosen leer, `pnpm lint` ✓, `tsc --noEmit` ✓, `pnpm test:run` **175/175** ✓.
 - **Damit ist die komplette UX-Bug-Welle aus dem User-Test 2026-06-11 abgearbeitet** (BACKLOG 16/17/18/43/44/45 alle abgehakt).
 
-### Status (Setup-Phase)
+### Status am Sitzungsende
 
-- Branch `main`, committet + gepusht: `src-tauri/src/lib.rs` (cfg-Guard), `HANDOVER.md` (dieser Eintrag). (`.serena/project.yml` brauchte nichts — Rust war remote schon ergänzt.)
-- Lokaler Merge-Hinweis: Beim Push war origin/main bereits voraus (Backup-Feature, Release-Matrix, HANDOVER-Archivierung). Lokaler Setup-Commit verworfen, auf origin/main rebased, nur der weiterhin gültige lib.rs-Fix neu aufgesetzt.
+- Branch `main`, **alles committet + gepusht, Working Tree clean.**
+- Commits dieser Session (auf `origin/main`): `efcc7d9` (Toolchain-Setup + lib.rs cfg-Guard + HANDOVER), `d2ea972` (App-Icon), `4e40abe` (Dialog-Backdrop + Button-Reihenfolge + IncomeDialog), `7b24010` (Header-Reihenfolge), plus der Finalisierungs-Commit dieses Eintrags.
+- **Alle Gates grün:** biome, `tsc --noEmit`, 175 Vitest; Rust (`cargo fmt`/`clippy -D warnings`/`test`) lokal lauffähig und grün. lefthook-pre-commit läuft vollständig durch — **kein `--no-verify` mehr nötig**.
+- **Umgebung:** Toolchain lokal installiert (Rust 1.96.0 unter `~/.cargo/bin`, pnpm 11.3.0 via corepack), Serena TS+Rust aktiv (Rust-LSP nach VSC-Neustart verifiziert).
+- Merge-Hinweis (Setup): Beim ersten Push war `origin/main` voraus (Backup-Feature, Release-Matrix, HANDOVER-Archivierung) — lokaler Setup-Commit verworfen, auf `origin/main` rebased, nur der gültige lib.rs-Fix neu aufgesetzt. `.serena/project.yml` brauchte nichts (Rust remote schon ergänzt).
+- **Nicht im echten Build gesehen:** das neue App-Icon (Dock/Fenster) erscheint beim nächsten `pnpm tauri dev`/`build`. Die Dialog- und Header-Änderungen hat der **User manuell durchgeklickt und bestätigt**.
 
 ### Nächster Schritt
 
 - **Komplette UX-Bug-Welle aus dem User-Test 2026-06-11 erledigt:** App-Icon, Dialog-Backdrop-Klick, Auto-Close (war schon ok), Button-Reihenfolge, IncomeDialog angeglichen, Header-Reihenfolge (BACKLOG 16/17/18/43/44/45 alle abgehakt).
 - **Nächster Block Richtung v0.1.0:** Tag `v0.1.0` (BACKLOG 81) → Draft-Release über die bestehende CI-Matrix → Release-Page + README-Download-Pfad (84) → Updater (85). Optionale Produktnutzen-Restposten: Preis-Historie-Graph (71), biweekly-Intervall (72), Einmal-Einnahmen-Diskussion (73).
-- Diesen Eintrag am Session-Ende weiter ergänzen.
 
 ### Gotchas / Stolperfallen
 
