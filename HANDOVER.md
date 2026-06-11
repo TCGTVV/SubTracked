@@ -9,9 +9,28 @@
 
 ---
 
-## 2026-06-11 — Claude: HANDOVER-Archivierung + RELEASE.md + Smoke-Test-Vorbereitung
+## 2026-06-11 — Claude: Smoke-Test Windows + macOS grün, v0.1.0 unblocked
 
-> **In-Flight-Hinweis (zuletzt 2026-06-11 vor dem User-Reboot):** macOS-Smoke-Test in dieser Session **abgeschlossen — alle relevanten Sektionen grün**. Windows-Smoke-Test steht **noch aus**, weil User aus Cachyos in Windows rebooten muss; läuft daher mit hoher Wahrscheinlichkeit in einer **neuen Agent-Session**. Tag `v0.0.0-smoketest` + Draft-Release bleiben **bewusst aktiv**, damit der Windows-Lauf das `.msi` von der Release-Page laden kann. Nächster Agent: siehe „Smoke-Test-Lauf — Windows" weiter unten — dort steht, was zu tun ist und wie Tag/Draft hinterher aufzuräumen sind.
+### Was passierte
+
+- **Windows-Smoke-Test grün:** User hat nach dem Reboot aus Cachyos in Windows den kompletten Lauf nach [RELEASE.md](RELEASE.md) durchgespielt — **alles funktioniert**. Damit sind macOS (Vor-Session) und Windows beide abgenommen.
+- **BACKLOG Punkt 92** (Windows/macOS Smoke-Test) auf `[x]` gesetzt mit Verweis auf beide OS-Läufe.
+- **Cleanup:** `gh release delete v0.0.0-smoketest --cleanup-tag` löscht Draft-Release + Remote-Tag in einem Schritt. Lokaler Tag via `git tag -d v0.0.0-smoketest` entfernt.
+- v0.1.0 ist damit **release-technisch unblocked** — die nächsten BACKLOG-Schritte sind 81 (v0.1.0-Tag), 84 (Release-Page + README-Download-Pfad), 85 (Updater).
+
+### Status am Sitzungsende
+
+- Branch `main`, dieser Doku-Commit ist der letzte. Working Tree clean.
+- Keine Wegwerf-Tags/Releases mehr auf GitHub (`gh release list` leer, kein `v0.0.0-smoketest` mehr).
+- App-Startbarkeit: Linux/macOS/Windows alle real verifiziert. Linux dauerhafte Nutzung beim User.
+
+### Nächster Schritt
+
+- **v0.1.0-Block:** Tag `v0.1.0` setzen (BACKLOG 81) → CI produziert Draft-Release über die etablierte Matrix → Assets prüfen → Release-Page + README-Download-Pfad bauen (84) → Updater (85, dann signierte Builds + `latest.json`).
+
+---
+
+## 2026-06-11 — Claude: HANDOVER-Archivierung + RELEASE.md + Smoke-Test-Vorbereitung
 
 ### Was passierte
 
