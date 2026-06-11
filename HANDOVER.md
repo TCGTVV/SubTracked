@@ -11,7 +11,7 @@
 
 ## 2026-06-11 — Claude: HANDOVER-Archivierung + RELEASE.md + Smoke-Test-Vorbereitung
 
-> **In-Flight-Hinweis:** Dieser Eintrag wird in derselben Session noch um die **Smoke-Test-Ergebnisse** (macOS direkt am Macbook, Windows nach Reboot) erweitert. Der „Status am Sitzungsende"-Block unten ist daher Zwischenstand, nicht final — bitte vor dem nächsten Session-Start prüfen, ob ein zweiter Block „Smoke-Test-Lauf" oder ein finaler Statusnachzug ergänzt wurde.
+> **In-Flight-Hinweis (zuletzt 2026-06-11 vor dem User-Reboot):** macOS-Smoke-Test in dieser Session **abgeschlossen — alle relevanten Sektionen grün**. Windows-Smoke-Test steht **noch aus**, weil User aus Cachyos in Windows rebooten muss; läuft daher mit hoher Wahrscheinlichkeit in einer **neuen Agent-Session**. Tag `v0.0.0-smoketest` + Draft-Release bleiben **bewusst aktiv**, damit der Windows-Lauf das `.msi` von der Release-Page laden kann. Nächster Agent: siehe „Smoke-Test-Lauf — Windows" weiter unten — dort steht, was zu tun ist und wie Tag/Draft hinterher aufzuräumen sind.
 
 ### Was passierte
 
@@ -20,24 +20,24 @@
 - **BACKLOG:** Punkt 93 („Manuelle Pre-Release-Smoke-Checkliste dokumentieren") als `[x]` abgehakt mit Verweis auf RELEASE.md; Punkt 92 („Windows/macOS Smoke-Test") bleibt offen, aber mit RELEASE.md-Verweis ergänzt.
 - **Serena heute aktiv** (TS + Rust, wie in Vor-Session konfiguriert) — `replace_content` für BACKLOG- und HANDOVER-Edits, `get_symbols_overview`/Rust-Smoke nicht nötig diese Session.
 
-### Status am Sitzungsende
+### Status am Sitzungsende (vor User-Reboot zu Windows)
 
-- Branch `main`, Working Tree clean **nach Commit** (dieser Doku-Commit ist der letzte).
-- HANDOVER.md = 20 Einträge, HANDOVER-archive.md neu.
-- RELEASE.md existiert, Smoke-Checkliste **selbst noch nicht durchgeführt** — auf User vertagt.
-- **Kein Release-Tag gepusht.**
+- Branch `main`, neueste HEAD-Hashes: `ea94c8c` (In-Flight-Hinweis), davor `10eb6ef` (Archivierung + RELEASE.md + BACKLOG). Beide auf `origin/main`. Working Tree dirty mit diesem fortgesetzten HANDOVER-Update + RELEASE.md-Finder-Hinweis — Commit folgt direkt.
+- **Wegwerf-Tag `v0.0.0-smoketest` ist gesetzt + gepusht.** CI-Run [27331473990](https://github.com/TCGTVV/SubTracked/actions/runs/27331473990) ist in **8m05s grün** auf allen 4 Plattformen durchgelaufen. Draft-Release „SubTracked v0.0.0-smoketest" liegt auf GitHub mit allen 9 Assets (siehe Verifikation unten). **Tag + Draft bleiben aktiv**, bis der Windows-Lauf fertig ist.
+- HANDOVER.md = 20 Einträge, HANDOVER-archive.md gepusht (41 Einträge).
+- **macOS-Smoke-Test komplett, Sektionen 1–8 grün** (Sektion 9 Autostart bewusst übersprungen, optional + reboot-pflichtig). Details im Block „Smoke-Test-Lauf — macOS" weiter unten.
+- **Windows-Smoke-Test steht noch aus** — User reboten direkt nach diesem Commit.
 
 ### Verifikation
 
 - `grep -c "^## 2026" HANDOVER.md` → 20, `... HANDOVER-archive.md` → 41 (20 + 41 = 61 ✓).
-- Keine Code-Änderungen → keine cargo-/pnpm-Checks nötig.
+- Keine Code-Änderungen diese Session → cargo-Checks nicht relevant. Lefthook bei beiden Commits grün (Biome 51 Files, Vitest 175/175).
+- CI release.yml v0.0.0-smoketest **success** in 8m05s. Draft-Assets: `SubTracked_0.1.0_aarch64.dmg`, `SubTracked_0.1.0_x64.dmg`, `SubTracked_aarch64.app.tar.gz`, `SubTracked_x64.app.tar.gz`, `SubTracked_0.1.0_x64_en-US.msi`, `SubTracked_0.1.0_x64-setup.exe`, `SubTracked_0.1.0_amd64.deb`, `SubTracked-0.1.0-1.x86_64.rpm`, `SubTracked_0.1.0_amd64.AppImage` — alle 9 wie erwartet.
 
 ### Offen / Nächster Schritt
 
-- **Smoke-Test durchführen** (User-Hardware): macOS direkt auf Macbook, Windows nach Reboot auf Cachyos-PC.
-- **Davor:** Wegwerf-Tag (Vorschlag: `v0.0.0-smoketest`) auf `main` setzen + pushen → CI ([release.yml](.github/workflows/release.yml)) baut Draft-Release mit allen Installern (.dmg ×2, .msi/.exe, .deb/.rpm/.AppImage). Pattern wie `v0.0.0-ci1/ci2` aus 2026-06-10 — nach dem Test wieder löschen (`gh release delete <tag> --cleanup-tag`).
-- **Asset-Pfad für Windows:** User lädt die `.msi` aus dem Draft-Release direkt auf dem Windows-System nach dem Reboot (Internet vorhanden) — kein USB-Transfer nötig.
-- **Nach erfolgreichem Test:** BACKLOG-Punkt 92 abhaken; danach v0.1.0-Tag (BACKLOG 81), Release-Page + README-Download-Pfad (84), Updater (85).
+- **Windows-Smoke-Test nach User-Reboot** — Details im Block „Smoke-Test-Lauf — Windows" weiter unten. Falls neuer Agent: dort ist die komplette Übergabe.
+- **Nach erfolgreichem Windows-Test:** BACKLOG-Punkt 92 (Windows/macOS Smoke-Test) abhaken; Tag + Draft-Release aufräumen mit `gh release delete v0.0.0-smoketest --cleanup-tag`. Danach v0.1.0-Tag (BACKLOG 81), Release-Page + README-Download-Pfad (84), Updater (85).
 
 ### Wichtige Entscheidungen + Begründung
 
@@ -56,6 +56,34 @@
 ### Geänderte/neue Memories
 
 - Keine. Die Archivierung selbst ist Hygiene und nicht memory-würdig; die Smoke-Checkliste lebt in RELEASE.md (durable Doku, kein Memory).
+
+### Smoke-Test-Lauf — macOS (abgeschlossen, alle relevanten Sektionen grün)
+
+- **CI-Build:** Tag `v0.0.0-smoketest` gepusht (Commit `ea94c8c`), Workflow-Run [27331473990](https://github.com/TCGTVV/SubTracked/actions/runs/27331473990) **success in 8m05s**, Draft-Release „SubTracked v0.0.0-smoketest" mit 9 Assets erzeugt.
+- **macOS-Lauf (User am Macbook):** Sektionen **1–8 alle grün** — Installer + Gatekeeper-Hürde, Erststart, Tray, CRUD/Konto/Abo/Einnahme, Edit + Preis-Historie, Backup-Roundtrip, Notification + Settings, Tray-Lifecycle + Persistenz nach Restart, DB-Pfad. Sektion **9 (Autostart)** bewusst übersprungen — optional + reboot-pflichtig, kann separat nachgezogen werden.
+- **Auflösung Sektion 8 (DB-Pfad-Verwirrung):** Der Pfad `~/Library/Application Support/com.tcgtvv.subtracked/` existiert tatsächlich (heute 09:53 vom App-Start frisch erzeugt — verifiziert per `ls -la ~/Library/Application\ Support/`). Verwirrung kam vermutlich daher, dass `~/Library` im macOS-Finder per Default versteckt ist; die Erstsuche fand das Verzeichnis dort nicht. Nebenbei: DB heißt `subtracker.db` (von „Tracker"), nicht `subtracked.db` — beim ersten `mdfind` war ein Tippfehler drin, was die Suche zusätzlich verschleierte.
+- **Konsequenz im Code:** Keine. [lib.rs:96-101](src-tauri/src/lib.rs#L96-L101) ist korrekt — `app.path().app_config_dir()` + `create_dir_all` + `subtracker.db` löst auf macOS sauber auf den dokumentierten Pfad auf.
+- **Konsequenz in der Doku:** RELEASE.md Sektion 8 hat einen Hinweis bekommen, dass `~/Library` im Finder versteckt ist (Cmd+Shift+G oder Terminal) und dass die DB `subtracker.db` heißt (Artefakt vs. App-Name „SubTracked"). Soll dem nächsten Tester den gleichen Footgun ersparen.
+
+### Smoke-Test-Lauf — Windows (ausstehend, nächster Pflicht-Schritt — vermutlich neue Agent-Session)
+
+> **Übergabe an den nächsten Agent:** Der User rebootet jetzt aus Cachyos in Windows und führt dort den Smoke-Test durch. Möglich, dass das in einer neuen Claude-Session ankommt. Dieser Block ist self-contained, damit du sofort weißt, wo wir stehen.
+
+- **Aktiver Tag:** `v0.0.0-smoketest` bewusst nicht gelöscht. Draft-Release liegt unter https://github.com/TCGTVV/SubTracked/releases/tag/v0.0.0-smoketest mit allen 9 Assets. Windows-Asset: `SubTracked_0.1.0_x64_en-US.msi`.
+- **Anleitung für den User:** [RELEASE.md](RELEASE.md) Sektion **0** (Windows-Teil, SmartScreen: „Weitere Informationen" → „Trotzdem ausführen") und Sektionen **1–8**. Windows-DB-Pfad in Sektion 8: `%APPDATA%\com.tcgtvv.subtracked\subtracker.db` — schnellster Check: Explorer in die Adressleiste `%APPDATA%` tippen, dann zum `com.tcgtvv.subtracked`-Subdir.
+- **Erwartete Stolperfallen (Hypothesen, noch nicht beobachtet):**
+  - SmartScreen-Hürde ist OS-bedingt, kein Bug — wenn der User das als Defekt meldet, auf RELEASE.md Sektion 0 verweisen.
+  - Tray-Icon-Verhalten unter Windows: 2026-06-07 wurde der Tray-Aufpopp-Bug **nur auf Linux/KDE Plasma** gefixt (siehe BACKLOG „Aus dem System Tray heraus kann man das Fenster nicht aufpoppen lassen"). Auf Windows war das nie ein Problem — gut möglich, dass es trotzdem geht; falls nicht, ist das ein **neuer** Bug und neu im BACKLOG aufzunehmen.
+  - DB-Pfad sollte unter Windows ohne Versteckt-Footgun finden lassen (`%APPDATA%` ist sichtbar, aber `AppData/Roaming/...` wird im Explorer per Default ausgeblendet — sichtbar machen oder direkt via Adressleiste).
+- **Was zu tun ist, wenn alles grün:**
+  1. Im HANDOVER-Top-Eintrag den Status-Block + diesen Windows-Block aktualisieren (von „ausstehend" → „abgeschlossen, grün"). In-Flight-Hinweis entfernen.
+  2. BACKLOG.md Punkt 92 (Windows/macOS Smoke-Test) auf `[x]` setzen mit kurzer Notiz „Beide OS am 2026-06-11 grün durchgespielt mit Tag `v0.0.0-smoketest`".
+  3. Cleanup: `gh release delete v0.0.0-smoketest --cleanup-tag` (löscht Draft + Remote-Tag in einem Schwung). Lokalen Tag falls vorhanden mit `git tag -d v0.0.0-smoketest`. Falls `--cleanup-tag` an 401 scheitert: `git push origin :refs/tags/v0.0.0-smoketest` separat.
+  4. Doku-Commit + Push. Damit ist v0.1.0 blocking-frei (modulo BACKLOG-Punkte 81 = Tag, 84 = Release-Page/README, 85 = Updater).
+- **Was zu tun ist, wenn Windows-Test fehlschlägt:**
+  - Symptom in den HANDOVER-Eintrag oben aufnehmen mit OS-Version, Sektion-Nummer aus RELEASE.md, Schritt, Erwartung vs. Beobachtung. Verlinkter Tag bleibt, damit das `.msi` reproduzierbar bleibt.
+  - Backlog-Entry für den Bug anlegen unter „🐛 Bugs", BACKLOG-Punkt 92 NICHT abhaken.
+  - Mit dem User klären, ob direkt gefixt wird oder ob Windows-Support für v0.1.0 zurückgestellt wird (Linux + macOS sind dann grün, das wäre eine bewusste Scope-Entscheidung — kein Default).
 
 ---
 
