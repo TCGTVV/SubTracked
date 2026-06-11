@@ -164,8 +164,22 @@ function App() {
           Fehler: {error}
         </p>
       )}
-      {!loading && !error && subs.length === 0 && (
-        <p className="empty">Noch keine Abos angelegt.</p>
+      {!loading && !error && subs.length === 0 && accounts.length === 0 && incomes.length === 0 && (
+        <section className="empty-state" aria-labelledby="empty-title">
+          <h2 id="empty-title">Noch keine Daten</h2>
+          <p>Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow.</p>
+          <div className="empty-state-actions">
+            <button type="button" onClick={openAccounts}>
+              Konto anlegen
+            </button>
+            <button type="button" onClick={startNew}>
+              Erstes Abo
+            </button>
+            <button type="button" onClick={startNewIncome}>
+              Einnahme hinzufügen
+            </button>
+          </div>
+        </section>
       )}
 
       {!loading && !error && (activeSubs.length > 0 || incomes.some((i) => i.active)) && (

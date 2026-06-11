@@ -49,6 +49,30 @@ h2 {
   text-align: center;
 }
 
+.empty-state {
+  margin: 2rem 0;
+  padding: 1.25rem;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.45);
+}
+
+.empty-state h2 {
+  margin: 0 0 0.35rem;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #666;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+
 .error {
   color: #c00;
 }
@@ -903,7 +927,8 @@ button.danger:hover:not(:disabled) {
   border-color: #a93226;
 }
 
-.reminder-status {
+.reminder-status,
+.app-info {
   display: grid;
   grid-template-columns: max-content 1fr;
   gap: 0.25rem 0.75rem;
@@ -912,17 +937,46 @@ button.danger:hover:not(:disabled) {
   font-size: 0.9rem;
 }
 
-.reminder-status dt {
+.reminder-status dt,
+.app-info dt {
   color: #666;
   font-weight: 400;
 }
 
-.reminder-status dd {
+.reminder-status dd,
+.app-info dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
 
+.app-info dd {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.app-info code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+}
+
+.app-info button {
+  padding: 0.25em 0.7em;
+  font-size: 0.78rem;
+}
+
 @media (prefers-color-scheme: dark) {
+  .empty-state {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .empty-state p {
+    color: #aaa;
+  }
+
   .setting-hint {
     color: #aaa;
   }
@@ -935,7 +989,8 @@ button.danger:hover:not(:disabled) {
     color: #4ade80;
   }
 
-  .reminder-status dt {
+  .reminder-status dt,
+  .app-info dt {
     color: #aaa;
   }
 }

@@ -40,6 +40,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            commands::get_app_info,
             commands::list_subscriptions,
             commands::list_accounts,
             commands::add_subscription,
@@ -65,10 +66,9 @@ pub fn run() {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei
             // im app_log_dir (~/.local/share/com.tcgtvv.subtracked/logs auf Linux),
             // damit sich Fehler aus dem installierten Binary nachvollziehen lassen.
-            let log_dir = app
-                .path()
-                .app_log_dir()
-                .expect("failed to resolve app log dir");
+            let log_dir = app.path().app_log_dir().map_err(|e| {
+                std::io::Error::other(format!("failed to resolve app log dir: {e}"))
+            })?;
             std::fs::create_dir_all(&log_dir)?;
             let file_appender = tracing_appender::rolling::Builder::new()
                 .rotation(Rotation::DAILY)
@@ -94,10 +94,9 @@ pub fn run() {
                 .init();
             tracing::info!(log_dir = %log_dir.display(), "SubTracked startet");
 
-            let config_dir = app
-                .path()
-                .app_config_dir()
-                .expect("failed to resolve app config dir");
+            let config_dir = app.path().app_config_dir().map_err(|e| {
+                std::io::Error::other(format!("failed to resolve app config dir: {e}"))
+            })?;
             std::fs::create_dir_all(&config_dir)?;
             let db_path = config_dir.join("subtracker.db");
             let pool = tauri::async_runtime::block_on(async move {
@@ -143,8 +142,7 @@ pub fn run() {
             let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-            TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -161,8 +159,15 @@ pub fn run() {
                     {
                         show_main_window(tray.app_handle());
                     }
-                })
-                .build(app)?;
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            } else {
+                tracing::warn!(
+                    "Kein Default-Window-Icon gefunden; Tray wird ohne explizites Icon gebaut."
+                );
+            }
+            tray_builder.build(app)?;
 
             Ok(())
         })
@@ -173,7 +178,7 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .unwrap_or_else(|e| eprintln!("error while running tauri application: {e}"));
 }
 
 fn show_main_window(app: &tauri::AppHandle) {
