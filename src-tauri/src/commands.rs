@@ -1,14 +1,25 @@
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::db::{
-    Account, AppState, Income, NewIncome, NewSubscription, PriceHistoryEntry, ReminderState,
-    Subscription,
+    Account, AppInfo, AppState, Income, NewIncome, NewSubscription, PriceHistoryEntry,
+    ReminderState, Subscription,
 };
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_subscription_fields,
 };
+
+#[tauri::command]
+pub fn get_app_info(app: AppHandle) -> Result<AppInfo, String> {
+    let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    Ok(AppInfo {
+        version: app.package_info().version.to_string(),
+        config_dir: config_dir.display().to_string(),
+        log_dir: log_dir.display().to_string(),
+    })
+}
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_subscriptions(

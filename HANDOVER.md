@@ -9,6 +9,51 @@
 
 ---
 
+## 2026-06-11 — Codex: v0.1.0-Qualitätsrunde (unwrap, Settings, Empty-State)
+
+> Session-Fokus: die drei vor Release noch sinnvollen Qualitäts-Items umgesetzt: Production-`unwrap`/`expect` auditieren, Settings-Support minimal ausbauen, Empty-State nützlicher machen.
+
+### Was passierte
+
+- **Production-`unwrap`/`expect` audit:** [src-tauri/src/lib.rs](src-tauri/src/lib.rs) propagiert `app_log_dir()`/`app_config_dir()`-Fehler jetzt mit Kontext statt `expect`, setzt das Tray-Icon defensiv nur wenn `default_window_icon()` vorhanden ist (sonst Warnlog), und gibt finale Tauri-`run`-Fehler per `eprintln!` aus statt per `expect` zu panicken. Test-`unwrap`/`expect` bleiben bewusst unverändert.
+- **Settings-Support:** neuer Tauri-Command `get_app_info` liefert App-Version, Datenordner und Log-Ordner. [SettingsDialog.tsx](src/components/SettingsDialog.tsx) zeigt diese im Abschnitt „App / Support" und kann die Pfade in die Zwischenablage kopieren. `tauri-plugin-opener` wurde nicht wieder eingeführt; Pfade kopieren reicht als v0.1.0-Minimum und passt zum früheren Entfernen des Plugins.
+- **Empty-State:** [App.tsx](src/App.tsx) zeigt bei komplett leerem Datenbestand nicht mehr nur „Noch keine Abos", sondern einen kompakten Arbeitszustand mit CTAs „Konto anlegen", „Erstes Abo" und „Einnahme hinzufügen".
+- **Tests:** SettingsDialog-Tests decken App-Info-Anzeige und Kopieren des Datenordners ab.
+- **BACKLOG:** Punkte „Produktions-`unwrap`/`expect` auditieren", „Settings-Dialog ausbauen" und „Empty-State nützlicher machen" abgehakt.
+
+### Status am Sitzungsende
+
+- Branch `main`, Working Tree **dirty** mit diesem Qualitätsblock + BACKLOG/HANDOVER-Update.
+- Noch **nicht committet/gepusht**.
+- **Code ist nicht reviewed:** Für diesen Block lief kein `/code-review high`. Nach Projektkonvention wäre das wegen Rust-Startup + neuem Tauri-Command + UI vor Commit vorgesehen, falls nicht bewusst übersteuert.
+
+### Verifikation
+
+- `pnpm build` ✓
+- `pnpm lint` ✓
+- `pnpm test:run` ✓ — 13 Files / 185 Tests
+- `cargo fmt --check` ✓
+- `cargo test` ✓ — 53 Tests
+- `cargo clippy --all-targets -- -D warnings` ✓
+- `pnpm tauri dev` ✓ — Vite ready, Rust kompiliert, App-Binary gestartet; danach manuell mit Ctrl-C beendet (`ELIFECYCLE` beim Stoppen erwartet).
+
+### Nächster Schritt
+
+- Vor Commit idealerweise `/code-review high`; danach Commit + Push.
+- **Danach kann der erste echte Release starten:** Sobald dieser Block committet und gepusht ist (oder bewusst ausgelassen wird), ist aus der v0.1.0-Vorbereitung nur noch BACKLOG 81 übrig: `v0.1.0` taggen, CI-Draft prüfen, Asset-Namen gegen README/Release-Body checken, Smoke-Check nach [RELEASE.md](RELEASE.md), Draft veröffentlichen.
+
+### Gotchas / Stolperfallen
+
+- `get_app_info` ist bewusst read-only und gibt nur Strings zurück; kein neuer Dateisystemzugriff im Webview.
+- Pfad-Kopieren nutzt `navigator.clipboard`; wenn Clipboard vom WebView/OS verweigert wird, erscheint die normale Fehlerzeile im Settings-Dialog.
+- Das bekannte macOS-Shell-Geräusch `compinit: ... _brew_services` erschien bei Cargo-Kommandos, beeinflusste die Checks aber nicht.
+
+### Geänderte/neue Memories
+
+- Keine.
+
+---
+
 ## 2026-06-11 — Codex: README-Download-Pfad + Release-Page vorbereitet
 
 > Session-Fokus: BACKLOG 84/91 vor `v0.1.0` erledigt — normale Nutzer sehen jetzt klar, was sie herunterladen sollen und was bei unsignierten Builds zu erwarten ist.

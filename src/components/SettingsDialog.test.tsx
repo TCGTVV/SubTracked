@@ -3,7 +3,13 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { exportBackup, getReminderStatus, importBackup, sendTestNotification } from "../lib/db";
+import {
+  exportBackup,
+  getAppInfo,
+  getReminderStatus,
+  importBackup,
+  sendTestNotification,
+} from "../lib/db";
 import { SettingsDialog } from "./SettingsDialog";
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
@@ -19,6 +25,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 
 vi.mock("../lib/db", () => ({
   getReminderStatus: vi.fn(),
+  getAppInfo: vi.fn(),
   sendTestNotification: vi.fn(),
   exportBackup: vi.fn(),
   importBackup: vi.fn(),
@@ -30,6 +37,7 @@ const mockDisable = vi.mocked(disable);
 const mockSave = vi.mocked(save);
 const mockOpen = vi.mocked(open);
 const mockGetReminderStatus = vi.mocked(getReminderStatus);
+const mockGetAppInfo = vi.mocked(getAppInfo);
 const mockSendTestNotification = vi.mocked(sendTestNotification);
 const mockExportBackup = vi.mocked(exportBackup);
 const mockImportBackup = vi.mocked(importBackup);
@@ -38,6 +46,12 @@ const defaultStatus = {
   lastCheckAt: null,
   intervalSecs: 3600,
   lastSent: null,
+};
+
+const defaultAppInfo = {
+  version: "0.1.0",
+  configDir: "/home/user/.config/com.tcgtvv.subtracked",
+  logDir: "/home/user/.local/share/com.tcgtvv.subtracked/logs",
 };
 
 function renderDialog(openSeq = 0, onDataReplaced?: () => void | Promise<void>) {
@@ -57,10 +71,17 @@ describe("SettingsDialog", () => {
     mockSave.mockReset();
     mockOpen.mockReset();
     mockGetReminderStatus.mockReset();
+    mockGetAppInfo.mockReset();
     mockSendTestNotification.mockReset();
     mockExportBackup.mockReset();
     mockImportBackup.mockReset();
     mockGetReminderStatus.mockResolvedValue(defaultStatus);
+    mockGetAppInfo.mockResolvedValue(defaultAppInfo);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    });
   });
 
   it("zeigt die Checkbox initial deaktiviert, bis isEnabled aufgelöst hat", async () => {
@@ -228,6 +249,33 @@ describe("SettingsDialog", () => {
     await waitFor(() => {
       expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("zeigt App-Version und lokale Support-Pfade", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+
+    await waitFor(() => {
+      expect(screen.getByText("0.1.0")).toBeInTheDocument();
+    });
+    expect(screen.getByText(defaultAppInfo.configDir)).toBeInTheDocument();
+    expect(screen.getByText(defaultAppInfo.logDir)).toBeInTheDocument();
+  });
+
+  it("kopiert den Datenordner in die Zwischenablage", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+    await waitFor(() => {
+      expect(screen.getByText(defaultAppInfo.configDir)).toBeInTheDocument();
+    });
+
+    const configRow = screen.getByText("Datenordner").nextSibling as HTMLElement;
+    fireEvent.click(configRow.querySelector("button") as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(defaultAppInfo.configDir);
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(/kopiert/);
   });
 
   it("exportiert ein Backup an den im Dialog gewählten Pfad", async () => {

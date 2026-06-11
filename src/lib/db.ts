@@ -1,6 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Account, Income, Interval, PriceHistoryEntry, Subscription } from "../types";
 
+export interface AppInfo {
+  version: string;
+  configDir: string;
+  logDir: string;
+}
+
+export async function getAppInfo(): Promise<AppInfo> {
+  return invoke<AppInfo>("get_app_info");
+}
+
 // Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`
 // kommt als String und muss zum engen `Interval`-Union narrowed werden.
 type SubFromRust = Omit<Subscription, "interval"> & { interval: string };

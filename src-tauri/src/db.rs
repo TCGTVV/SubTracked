@@ -128,3 +128,11 @@ pub struct PriceHistoryEntry {
     pub currency: String,
     pub changed_at: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub version: String,
+    pub config_dir: String,
+    pub log_dir: String,
+}

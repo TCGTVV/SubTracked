@@ -4,7 +4,9 @@ import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { type Ref, useCallback, useEffect, useId, useState } from "react";
 import {
+  type AppInfo,
   exportBackup,
+  getAppInfo,
   getReminderStatus,
   importBackup,
   type ReminderStatus,
@@ -46,6 +48,9 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
   const [reminderError, setReminderError] = useState<string | null>(null);
   const [testNotificationSent, setTestNotificationSent] = useState(false);
   const [testNotificationPending, setTestNotificationPending] = useState(false);
+  const [appInfo, setAppInfo] = useState<AppInfo | null>(null);
+  const [appInfoError, setAppInfoError] = useState<string | null>(null);
+  const [copiedPath, setCopiedPath] = useState<"config" | "log" | null>(null);
 
   const [backupPending, setBackupPending] = useState(false);
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
@@ -58,6 +63,15 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
       setReminderError(null);
     } catch (e) {
       setReminderError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const loadAppInfo = useCallback(async () => {
+    try {
+      setAppInfo(await getAppInfo());
+      setAppInfoError(null);
+    } catch (e) {
+      setAppInfoError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -75,10 +89,11 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
       }
     })();
     void loadReminderStatus();
+    void loadAppInfo();
     return () => {
       cancelled = true;
     };
-  }, [loadReminderStatus]);
+  }, [loadAppInfo, loadReminderStatus]);
 
   useEffect(() => {
     if (openSeq > 0) void loadReminderStatus();
@@ -149,6 +164,17 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
       setBackupError(e instanceof Error ? e.message : String(e));
     } finally {
       setBackupPending(false);
+    }
+  }
+
+  async function copyPath(kind: "config" | "log", path: string) {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopiedPath(kind);
+      setAppInfoError(null);
+    } catch (e) {
+      setCopiedPath(null);
+      setAppInfoError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -241,6 +267,34 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
         </div>
 
         <div className="setting-row">
+          <h3 className="setting-subheading">App / Support</h3>
+          {appInfo ? (
+            <dl className="app-info">
+              <dt>Version</dt>
+              <dd>{appInfo.version}</dd>
+              <dt>Datenordner</dt>
+              <dd>
+                <code>{appInfo.configDir}</code>
+                <button type="button" onClick={() => void copyPath("config", appInfo.configDir)}>
+                  Kopieren
+                </button>
+                {copiedPath === "config" && <span role="status">kopiert</span>}
+              </dd>
+              <dt>Log-Ordner</dt>
+              <dd>
+                <code>{appInfo.logDir}</code>
+                <button type="button" onClick={() => void copyPath("log", appInfo.logDir)}>
+                  Kopieren
+                </button>
+                {copiedPath === "log" && <span role="status">kopiert</span>}
+              </dd>
+            </dl>
+          ) : (
+            <p className="setting-hint">Lade …</p>
+          )}
+        </div>
+
+        <div className="setting-row">
           <h3 className="setting-subheading">Daten / Backup</h3>
           <p className="setting-hint">
             Alle Daten liegen nur lokal auf diesem Gerät. Ein Backup sichert Konten, Abos, Einnahmen
@@ -304,9 +358,9 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
           )}
         </div>
 
-        {(error || reminderError) && (
+        {(error || reminderError || appInfoError) && (
           <p className="error" role="alert">
-            Fehler: {error ?? reminderError}
+            Fehler: {error ?? reminderError ?? appInfoError}
           </p>
         )}
 
