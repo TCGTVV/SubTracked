@@ -11,6 +11,8 @@
 
 ## 2026-06-11 — Claude: HANDOVER-Archivierung + RELEASE.md + Smoke-Test-Vorbereitung
 
+> **In-Flight-Hinweis:** Dieser Eintrag wird in derselben Session noch um die **Smoke-Test-Ergebnisse** (macOS direkt am Macbook, Windows nach Reboot) erweitert. Der „Status am Sitzungsende"-Block unten ist daher Zwischenstand, nicht final — bitte vor dem nächsten Session-Start prüfen, ob ein zweiter Block „Smoke-Test-Lauf" oder ein finaler Statusnachzug ergänzt wurde.
+
 ### Was passierte
 
 - **HANDOVER-Hygiene:** HANDOVER.md war auf **61 Einträge / 3453 Zeilen / 315 KB** angewachsen — gezieltes Lesen lief in den 256-KB-Read-Limit. Die ältesten **41 Einträge** (alle vor 2026-06-08-Codex-Backup-Review-Cluster) nach neuer `HANDOVER-archive.md` verschoben (`sed -n` extrahieren, `sed -d` löschen). Resultat: HANDOVER.md jetzt 20 Einträge / 1118 Zeilen, Archiv 41 Einträge / 2339 Zeilen. Schnittkanten geprüft (Trenner intakt).
