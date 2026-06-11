@@ -22,6 +22,7 @@ use tracing_subscriber::prelude::*;
 
 pub const REMINDER_INTERVAL: StdDuration = StdDuration::from_secs(60 * 60);
 const TRAY_FOCUS_RETRY_DELAY: StdDuration = StdDuration::from_millis(80);
+#[cfg(target_os = "linux")]
 const TRAY_FOCUS_RAISE_DELAY: StdDuration = StdDuration::from_millis(40);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
