@@ -16,7 +16,12 @@
 - **Windows-Smoke-Test grün:** User hat nach dem Reboot aus Cachyos in Windows den kompletten Lauf nach [RELEASE.md](RELEASE.md) durchgespielt — **alles funktioniert**. Damit sind macOS (Vor-Session) und Windows beide abgenommen.
 - **BACKLOG Punkt 92** (Windows/macOS Smoke-Test) auf `[x]` gesetzt mit Verweis auf beide OS-Läufe.
 - **Cleanup:** `gh release delete v0.0.0-smoketest --cleanup-tag` löscht Draft-Release + Remote-Tag in einem Schritt. Lokaler Tag via `git tag -d v0.0.0-smoketest` entfernt.
-- v0.1.0 ist damit **release-technisch unblocked** — die nächsten BACKLOG-Schritte sind 81 (v0.1.0-Tag), 84 (Release-Page + README-Download-Pfad), 85 (Updater).
+- v0.1.0 ist **release-technisch unblocked** (Smoke-Tests grün, CI-Matrix grün, Cleanup erledigt) — aber siehe nächster Punkt: User-Test fördert UX-Bugs zutage, die vor dem v0.1.0-Tag besser noch dran sind.
+- **User-Test-Feedback eingepflegt** (Commit `177ec90`): User hat parallel einen echten externen Tester durchgespielt. Neun Punkte ins BACKLOG einsortiert, alle mit Tag `(User-Test 2026-06-11)`:
+  - **🐛 Bugs (drei UX-Patzer, sollten v0.1.0-Blocker sein):** Modal-Backdrop-Click schließt Dialoge nicht (alle vier Dialoge); Abo/Einnahme-Dialog schließt nach erfolgreichem Speichern nicht automatisch; Speichern/Schließen-Button-Reihenfolge zwischen Dialogen inkonsistent (Verwechslungsgefahr).
+  - **🔨 Jetzt (Oberfläche):** Header-Button-Reihenfolge umsortieren auf Abo → Einnahme → Konto → Einstellungen; IncomeDialog visuell an Subscription/Accounts angleichen; App-Icon mit SubTracked-Logo statt Default-Tauri-Logo (`pnpm tauri icon assets/logo.png` generiert alle Plattform-Varianten in einem Rutsch).
+  - **📈 Produktnutzen:** Preis-Historie als Graph (eigenes SVG reicht für eine Handvoll Datenpunkte); zweiwöchentliches Intervall (Subset von „Variable Intervalle", aber explizit vorgezogen); offene Diskussion „einmalige Einnahmen — sinnvoll? eigenes Flag oder Disziplin?".
+- **Kontext-Übergang:** User wechselt nach diesem Commit aufs MacBook. Nächster Agent kann mit der UX-Bug-Welle direkt loslegen.
 
 ### Status am Sitzungsende
 
@@ -26,7 +31,13 @@
 
 ### Nächster Schritt
 
-- **v0.1.0-Block:** Tag `v0.1.0` setzen (BACKLOG 81) → CI produziert Draft-Release über die etablierte Matrix → Assets prüfen → Release-Page + README-Download-Pfad bauen (84) → Updater (85, dann signierte Builds + `latest.json`).
+- **Empfohlene Reihenfolge auf dem MacBook:**
+  1. **App-Icon erst** (5 min, via `pnpm tauri icon assets/logo.png`) — kleinster Aufwand, größter „sieht professionell aus"-Effekt vor v0.1.0.
+  2. **Drei Dialog-Bugs im Aufwasch** (Backdrop-Click + Auto-Close + Button-Position): alle vier Dialoge gleichzeitig anfassen, eine gemeinsame Wrapper-Komponente / Convention etablieren. DRY statt vier separate Fixes.
+  3. **IncomeDialog visuell angleichen** — zieht thematisch direkt am Aufwasch oben mit, sobald Dialog-Konvention steht.
+  4. **Header-Button-Reihenfolge** umsortieren (kleines `App.tsx`-Diff).
+- **Danach v0.1.0-Block:** Tag `v0.1.0` setzen (BACKLOG 81) → CI produziert Draft-Release über die etablierte Matrix → Assets prüfen → Release-Page + README-Download-Pfad bauen (84) → Updater (85, dann signierte Builds + `latest.json`).
+- **Backlog-Restposten** (kein v0.1.0-Blocker): Preis-Historie-Graph, biweekly-Intervall, Einmal-Einnahmen-Diskussion — siehe 📈 Produktnutzen in BACKLOG.
 
 ---
 
