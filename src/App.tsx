@@ -138,17 +138,17 @@ function App() {
       <header className="header">
         <h1>SubTracked</h1>
         <div className="header-actions">
-          <button type="button" onClick={openSettings}>
-            Einstellungen
-          </button>
-          <button type="button" onClick={openAccounts}>
-            Konten
-          </button>
           <button type="button" onClick={startNew}>
             Neues Abo
           </button>
           <button type="button" onClick={startNewIncome}>
             Neue Einnahme
+          </button>
+          <button type="button" onClick={openAccounts}>
+            Konten
+          </button>
+          <button type="button" onClick={openSettings}>
+            Einstellungen
           </button>
         </div>
       </header>
