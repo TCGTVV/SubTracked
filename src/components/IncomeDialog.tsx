@@ -1,5 +1,6 @@
 import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addIncome, updateIncome } from "../lib/db";
+import { closeDialogOnBackdropClick } from "../lib/dialog";
 import {
   CURRENCY_OPTIONS,
   getCurrencySubdivisor,
@@ -130,8 +131,9 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   }
 
   return (
-    <dialog ref={ref} className="sub-dialog">
-      <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
+    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
+      <form onSubmit={(e) => void handleSubmit(e)} className="form" noValidate>
         <h2>{isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}</h2>
 
         <div className="field">
@@ -261,17 +263,12 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
           </p>
         )}
 
-        <div className="dialog-actions">
+        <div className="form-actions">
+          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
+            Abbrechen
+          </button>
           <button type="submit" disabled={submitting}>
             {submitting ? "Speichern …" : "Speichern"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof ref !== "function") ref?.current?.close();
-            }}
-          >
-            Abbrechen
           </button>
         </div>
       </form>

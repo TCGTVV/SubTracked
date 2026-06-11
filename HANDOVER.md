@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon — LAUFENDE SESSION
+## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs — LAUFENDE SESSION
 
 > **Hinweis:** Session-Start-Eintrag (Setup auf dem MacBook). Wird am **Ende der Session unten erweitert** (inhaltliche Arbeit). Nicht durch neuen Eintrag ersetzen.
 
@@ -35,6 +35,17 @@
 - **16 Desktop-Icons** in `src-tauri/icons/` regeneriert (32/128/128@2x, `.icns`, `.ico`, alle Windows-`Square*Logo`, `StoreLogo`, `icon.png`). Die von `tauri icon` zusätzlich erzeugten `ios/`+`android/`-Ordner und das nicht referenzierte `64x64.png` **entfernt** (reines Desktop-Projekt).
 - **Verifikation:** Quell- und generierte PNGs visuell geprüft (auch klein @128 sauber lesbar). **Noch nicht im laufenden Build gesehen** — das Dock-/Fenster-Icon erscheint beim nächsten `pnpm tauri dev`/`build`. Tool: Pillow 11.3.0 (kein ImageMagick nötig).
 
+### Arbeit 2: Dialog-Bugs aus User-Test (gemeinsame Konvention)
+
+Drei UX-Bug-Punkte aus dem User-Test (BACKLOG 🐛) adressiert — als gemeinsame Konvention statt Einzelfixes. **Befund:** Alle vier Dialoge nutzen das native HTML-`<dialog>` (`showModal()` + `::backdrop`).
+
+- **Backdrop-Klick schließt jetzt** (alle vier Dialoge): neue geteilte Util [src/lib/dialog.ts](src/lib/dialog.ts) `closeDialogOnBackdropClick` — schließt nur bei Klick aufs `<dialog>` selbst (`event.target === event.currentTarget`), nicht auf den Inhalt. In Subscription/Income/Accounts/Settings als `onClick` verdrahtet. Native `<dialog>` schließt zusätzlich per **Escape** → die biome-a11y-Regel `useKeyWithClickEvents` ist daher ein False-Positive und pro Zeile mit `// biome-ignore` + Begründung unterdrückt (kein echter Tastatur-Mangel).
+- **Button-Reihenfolge vereinheitlicht:** Konvention `[Abbrechen, Speichern]` (primary rechts, macOS/GTK). IncomeDialog war als einziger gespiegelt → umgestellt.
+- **Auto-Close nach Speichern (BACKLOG 17) war im aktuellen Code bereits behoben** — beide Dialoge rufen nach Erfolg `onSaved()`, App schließt via `handleSubSaved`/`handleIncomeSaved` ([App.tsx:327](src/App.tsx#L327)/[:334](src/App.tsx#L334)). User-Test lief auf älterem Build; nichts „repariert", nur verifiziert.
+- **Bonus — IncomeDialog visuell angeglichen (BACKLOG 44):** IncomeDialog war faktisch **ungestylt** — `className="sub-dialog"` (existiert nicht im CSS → keine Card/Border/max-width), `dialog-actions` (existiert nicht → Buttons nicht rechtsbündig), `<form>` ohne `form`-Klasse (kein Padding). Da die Action-Row ohnehin angefasst wurde, gleich mitgezogen: `dialog` + `form` + `form-actions` → strukturell deckungsgleich mit SubscriptionDialog.
+- **Verifikation:** `pnpm lint` ✓ · `tsc --noEmit` ✓ · `pnpm test:run` **175/175** ✓ · **User hat es manuell durchgeklickt und bestätigt** (Backdrop schließt, Buttons konsistent, IncomeDialog gleich). Backdrop-Klick ist in jsdom nicht testbar → manuelle Prüfung war hier das Gate.
+- **BACKLOG:** Punkte 16, 17, 18, 44, 45 (App-Icon) abgehakt. **Offen bleibt 43** (Header-Button-Reihenfolge umsortieren).
+
 ### Status (Setup-Phase)
 
 - Branch `main`, committet + gepusht: `src-tauri/src/lib.rs` (cfg-Guard), `HANDOVER.md` (dieser Eintrag). (`.serena/project.yml` brauchte nichts — Rust war remote schon ergänzt.)
@@ -42,8 +53,10 @@
 
 ### Nächster Schritt
 
-- Inhaltliche Arbeit: **UX-Bug-Welle** aus dem User-Test (nächster Eintrag) — empfohlene Reihenfolge dort: App-Icon → drei Dialog-Bugs im Aufwasch (Backdrop-Click, Auto-Close, Button-Position) → IncomeDialog angleichen → Header-Reihenfolge.
-- Diesen Eintrag am Session-Ende unten um die geleistete Arbeit erweitern.
+- **Erledigt in dieser Session:** App-Icon, Dialog-Backdrop-Klick, Button-Reihenfolge, IncomeDialog angeglichen (BACKLOG 16/17/18/44/45).
+- **Offen aus der UX-Bug-Welle:** **Header-Button-Reihenfolge** (BACKLOG 43) — `App.tsx`-Header auf Abo → Einnahme → Konto → Einstellungen umsortieren, CSS-Abstände prüfen. Kleiner `App.tsx`-Diff.
+- **Danach Richtung v0.1.0:** Tag `v0.1.0` (BACKLOG 81) → Draft-Release über die Matrix → Release-Page + README-Download-Pfad (84) → Updater (85). Optionale Produktnutzen-Restposten: Preis-Historie-Graph (71), biweekly-Intervall (72).
+- Diesen Eintrag am Session-Ende weiter ergänzen.
 
 ### Gotchas / Stolperfallen
 
