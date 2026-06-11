@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs — LAUFENDE SESSION
+## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs + Header — LAUFENDE SESSION
 
 > **Hinweis:** Session-Start-Eintrag (Setup auf dem MacBook). Wird am **Ende der Session unten erweitert** (inhaltliche Arbeit). Nicht durch neuen Eintrag ersetzen.
 
@@ -46,6 +46,14 @@ Drei UX-Bug-Punkte aus dem User-Test (BACKLOG 🐛) adressiert — als gemeinsam
 - **Verifikation:** `pnpm lint` ✓ · `tsc --noEmit` ✓ · `pnpm test:run` **175/175** ✓ · **User hat es manuell durchgeklickt und bestätigt** (Backdrop schließt, Buttons konsistent, IncomeDialog gleich). Backdrop-Klick ist in jsdom nicht testbar → manuelle Prüfung war hier das Gate.
 - **BACKLOG:** Punkte 16, 17, 18, 44, 45 (App-Icon) abgehakt. **Offen bleibt 43** (Header-Button-Reihenfolge umsortieren).
 
+### Arbeit 3: Header-Button-Reihenfolge (BACKLOG 43)
+
+- `header-actions` in [App.tsx](src/App.tsx) umsortiert: war **Einstellungen → Konten → Neues Abo → Neue Einnahme** (genau verkehrt), jetzt **Neues Abo → Neue Einnahme → Konten → Einstellungen** (primäre Aktion links, Einstellungen rechts).
+- Label „Konten" bewusst beibehalten (der Dialog verwaltet/listet Konten, ist kein reines „Neues Konto").
+- CSS geprüft: `.header-actions` ist nur `display:flex; gap:0.5rem` ohne `:first/last-child`/`margin-auto` → keine Anpassung nötig.
+- Verifikation: Serena-Diagnosen leer, `pnpm lint` ✓, `tsc --noEmit` ✓, `pnpm test:run` **175/175** ✓.
+- **Damit ist die komplette UX-Bug-Welle aus dem User-Test 2026-06-11 abgearbeitet** (BACKLOG 16/17/18/43/44/45 alle abgehakt).
+
 ### Status (Setup-Phase)
 
 - Branch `main`, committet + gepusht: `src-tauri/src/lib.rs` (cfg-Guard), `HANDOVER.md` (dieser Eintrag). (`.serena/project.yml` brauchte nichts — Rust war remote schon ergänzt.)
@@ -53,9 +61,8 @@ Drei UX-Bug-Punkte aus dem User-Test (BACKLOG 🐛) adressiert — als gemeinsam
 
 ### Nächster Schritt
 
-- **Erledigt in dieser Session:** App-Icon, Dialog-Backdrop-Klick, Button-Reihenfolge, IncomeDialog angeglichen (BACKLOG 16/17/18/44/45).
-- **Offen aus der UX-Bug-Welle:** **Header-Button-Reihenfolge** (BACKLOG 43) — `App.tsx`-Header auf Abo → Einnahme → Konto → Einstellungen umsortieren, CSS-Abstände prüfen. Kleiner `App.tsx`-Diff.
-- **Danach Richtung v0.1.0:** Tag `v0.1.0` (BACKLOG 81) → Draft-Release über die Matrix → Release-Page + README-Download-Pfad (84) → Updater (85). Optionale Produktnutzen-Restposten: Preis-Historie-Graph (71), biweekly-Intervall (72).
+- **Komplette UX-Bug-Welle aus dem User-Test 2026-06-11 erledigt:** App-Icon, Dialog-Backdrop-Klick, Auto-Close (war schon ok), Button-Reihenfolge, IncomeDialog angeglichen, Header-Reihenfolge (BACKLOG 16/17/18/43/44/45 alle abgehakt).
+- **Nächster Block Richtung v0.1.0:** Tag `v0.1.0` (BACKLOG 81) → Draft-Release über die bestehende CI-Matrix → Release-Page + README-Download-Pfad (84) → Updater (85). Optionale Produktnutzen-Restposten: Preis-Historie-Graph (71), biweekly-Intervall (72), Einmal-Einnahmen-Diskussion (73).
 - Diesen Eintrag am Session-Ende weiter ergänzen.
 
 ### Gotchas / Stolperfallen
