@@ -88,6 +88,8 @@ Nach dem ersten Start muss die DB an einem dieser Pfade liegen (Tauri nutzt `app
 - [ ] Datei existiert, > 0 Bytes
 - [ ] Daneben liegen `subtracker.db-wal` + `subtracker.db-shm` (SQLite WAL-Mode aktiv)
 
+> **Hinweis macOS:** `~/Library` ist im Finder per Default versteckt — entweder im Finder mit **Cmd+Shift+G** den Pfad direkt eintippen, oder im Terminal mit `ls -la ~/Library/Application\ Support/com.tcgtvv.subtracked/` prüfen. Die DB heißt `subtracker.db` (von „Tracker"), nicht `subtracked.db` — der App-Name ist „SubTracked", die DB-Datei ein historisches Artefakt.
+
 ### 9. Autostart (optional, einmalig pro OS)
 - [ ] Autostart in Settings aktivieren
 - [ ] Rechner / Sitzung neu starten
