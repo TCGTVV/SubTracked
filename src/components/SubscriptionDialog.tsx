@@ -15,6 +15,7 @@ import { DateField } from "./DateField";
 
 const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
   { value: "monthly", label: "Monatlich" },
+  { value: "biweekly", label: "Zweiwöchentlich" },
   { value: "quarterly", label: "Quartalsweise" },
   { value: "yearly", label: "Jährlich" },
 ];
@@ -32,6 +33,61 @@ interface FieldErrors {
   currency?: string;
   anchorDate?: string;
   leadDays?: string;
+}
+
+function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
+  const chronological = [...entries].reverse();
+  const amounts = chronological.map((entry) => entry.amountCents);
+  const min = Math.min(...amounts);
+  const max = Math.max(...amounts);
+  const minEntry = chronological.reduce((best, entry) =>
+    entry.amountCents < best.amountCents ? entry : best,
+  );
+  const maxEntry = chronological.reduce((best, entry) =>
+    entry.amountCents > best.amountCents ? entry : best,
+  );
+  const range = Math.max(max - min, 1);
+  const width = 320;
+  const height = 120;
+  const paddingX = 18;
+  const paddingY = 16;
+  const innerWidth = width - paddingX * 2;
+  const innerHeight = height - paddingY * 2;
+  const xStep = chronological.length > 1 ? innerWidth / (chronological.length - 1) : 0;
+
+  const points = chronological.map((entry, index) => {
+    const x = paddingX + index * xStep;
+    const y = paddingY + innerHeight - ((entry.amountCents - min) / range) * innerHeight;
+    return { entry, x, y };
+  });
+  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+
+  return (
+    <div className="price-history-graph">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img">
+        <title>Preisverlauf</title>
+        <line
+          className="price-history-axis"
+          x1={paddingX}
+          y1={height - paddingY}
+          x2={width - paddingX}
+          y2={height - paddingY}
+        />
+        <polyline className="price-history-line" points={line} />
+        {points.map(({ entry, x, y }) => (
+          <circle key={entry.id} className="price-history-point" cx={x} cy={y} r="3.5">
+            <title>
+              {entry.changedAt.slice(0, 10)}: {formatAmount(entry.amountCents, entry.currency)}
+            </title>
+          </circle>
+        ))}
+      </svg>
+      <div className="price-history-range">
+        <span>{formatAmount(min, minEntry.currency)}</span>
+        <span>{formatAmount(max, maxEntry.currency)}</span>
+      </div>
+    </div>
+  );
 }
 
 function centsToInput(cents: number, currency: string): string {
@@ -345,6 +401,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
         {isEdit && priceHistory.length > 1 && (
           <details className="price-history">
             <summary>Preis-Historie ({priceHistory.length} Einträge)</summary>
+            <PriceHistoryGraph entries={priceHistory} />
             <ul className="price-history-list">
               {priceHistory.map((entry, i) => (
                 <li key={entry.id} className="price-history-row">

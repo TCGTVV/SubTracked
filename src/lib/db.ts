@@ -6,7 +6,7 @@ import type { Account, Income, Interval, PriceHistoryEntry, Subscription } from 
 type SubFromRust = Omit<Subscription, "interval"> & { interval: string };
 
 function parseInterval(s: string): Interval {
-  if (s !== "monthly" && s !== "quarterly" && s !== "yearly") {
+  if (s !== "monthly" && s !== "biweekly" && s !== "quarterly" && s !== "yearly") {
     throw new Error(`Unbekanntes Intervall aus DB: ${s}`);
   }
   return s;

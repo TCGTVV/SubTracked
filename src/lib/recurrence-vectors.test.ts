@@ -19,7 +19,12 @@ interface NextDueVectorRaw {
   expected: string;
 }
 
-const ALLOWED_INTERVALS = ["monthly", "quarterly", "yearly"] as const satisfies readonly Interval[];
+const ALLOWED_INTERVALS = [
+  "monthly",
+  "biweekly",
+  "quarterly",
+  "yearly",
+] as const satisfies readonly Interval[];
 
 function assertInterval(value: string, vectorName: string): Interval {
   if ((ALLOWED_INTERVALS as readonly string[]).includes(value)) {

@@ -330,10 +330,10 @@ pub async fn list_incomes(
 ) -> Result<Vec<Income>, String> {
     let only_active = only_active.unwrap_or(false);
     let sql = if only_active {
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active \
+        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time \
          FROM incomes WHERE active = 1 ORDER BY name"
     } else {
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active \
+        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time \
          FROM incomes ORDER BY name"
     };
     sqlx::query_as::<_, Income>(sql)
@@ -357,9 +357,10 @@ pub async fn add_income(state: State<'_, AppState>, income: NewIncome) -> Result
         validate_account_exists(&state.db, account_id).await?;
     }
     let active = income.active.unwrap_or(true);
+    let one_time = income.one_time.unwrap_or(false);
     let result = sqlx::query(
-        "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active) \
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active, one_time) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&income.name)
     .bind(income.amount_cents)
@@ -368,6 +369,7 @@ pub async fn add_income(state: State<'_, AppState>, income: NewIncome) -> Result
     .bind(&income.interval)
     .bind(&income.anchor_date)
     .bind(active)
+    .bind(one_time)
     .execute(&state.db)
     .await
     .map_err(|e| e.to_string())?;
@@ -398,7 +400,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
         }
         sqlx::query(
             "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
-             interval = ?, anchor_date = ?, active = ? WHERE id = ?",
+             interval = ?, anchor_date = ?, active = ?, one_time = ? WHERE id = ?",
         )
         .bind(&income.name)
         .bind(income.amount_cents)
@@ -407,6 +409,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
         .bind(&income.interval)
         .bind(&income.anchor_date)
         .bind(income.active)
+        .bind(income.one_time)
         .bind(income.id)
         .execute(&state.db)
         .await
@@ -414,7 +417,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
     } else {
         sqlx::query(
             "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, \
-             interval = ?, anchor_date = ?, active = ? WHERE id = ?",
+             interval = ?, anchor_date = ?, active = ?, one_time = ? WHERE id = ?",
         )
         .bind(&income.name)
         .bind(income.amount_cents)
@@ -422,6 +425,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
         .bind(&income.interval)
         .bind(&income.anchor_date)
         .bind(income.active)
+        .bind(income.one_time)
         .bind(income.id)
         .execute(&state.db)
         .await

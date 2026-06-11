@@ -652,6 +652,45 @@ select:focus-visible {
   gap: 0.2rem;
 }
 
+.price-history-graph {
+  margin-top: 0.65rem;
+}
+
+.price-history-graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+}
+
+.price-history-axis {
+  stroke: #d5d9e2;
+  stroke-width: 1;
+}
+
+.price-history-line {
+  fill: none;
+  stroke: #0f766e;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.price-history-point {
+  fill: #fff;
+  stroke: #0f766e;
+  stroke-width: 2;
+}
+
+.price-history-range {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: -0.15rem;
+  color: #777;
+  font-size: 0.78rem;
+}
+
 .price-history-row {
   display: flex;
   justify-content: space-between;
@@ -1032,6 +1071,23 @@ button.danger:hover:not(:disabled) {
   }
 
   .price-history-date {
+    color: #888;
+  }
+
+  .price-history-axis {
+    stroke: #3a3a3a;
+  }
+
+  .price-history-line {
+    stroke: #2dd4bf;
+  }
+
+  .price-history-point {
+    fill: #1f1f1f;
+    stroke: #2dd4bf;
+  }
+
+  .price-history-range {
     color: #888;
   }
 }

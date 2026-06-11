@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Account, Subscription } from "../types";
+import type { Account, Income, Subscription } from "../types";
 import { computeCoverage, computeMonthlyBaseline, computeUpcoming } from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
@@ -24,6 +24,19 @@ const acc = (id: number, name: string, overrides: Partial<Account> = {}): Accoun
   balanceCents: 0,
   minBufferCents: 0,
   balanceUpdatedAt: null,
+  ...overrides,
+});
+
+const income = (overrides: Partial<Income> = {}): Income => ({
+  id: 1,
+  name: "Gehalt",
+  amountCents: 250000,
+  currency: "EUR",
+  accountId: 1,
+  interval: "monthly",
+  anchorDate: "2026-01-30",
+  active: true,
+  oneTime: false,
   ...overrides,
 });
 
@@ -140,6 +153,23 @@ describe("computeCoverage", () => {
     const result = computeCoverage(subs, accounts, 1, NOW);
     expect(result[0]?.currency).toBe("KRW");
   });
+
+  it("rechnet einmalige Einnahmen nur an ihrem Datum ein", () => {
+    const result = computeCoverage([], [acc(1, "Giro")], 3, NOW, [
+      income({ name: "Bonus", amountCents: 50000, anchorDate: "2026-02-10", oneTime: true }),
+    ]);
+    expect(result[0]?.items.map((i) => [i.subscription, i.date, i.type, i.cents])).toEqual([
+      ["Bonus", "2026-02-10", "income", 50000],
+    ]);
+    expect(result[0]?.totalInflowCents).toBe(50000);
+  });
+
+  it("ignoriert vergangene einmalige Einnahmen im Forecast", () => {
+    const result = computeCoverage([], [acc(1, "Giro")], 3, NOW, [
+      income({ name: "Alter Bonus", anchorDate: "2025-12-31", oneTime: true }),
+    ]);
+    expect(result[0]?.items).toHaveLength(0);
+  });
 });
 
 describe("computeMonthlyBaseline", () => {
@@ -151,6 +181,14 @@ describe("computeMonthlyBaseline", () => {
     ];
     const result = computeMonthlyBaseline(subs, [acc(1, "Giro")]);
     expect(result).toEqual([{ account: "Giro", currency: "EUR", monthlyCents: 3000 }]);
+  });
+
+  it("normiert zweiwöchentliche Abos mit 26 Zahlungen pro Jahr", () => {
+    const result = computeMonthlyBaseline(
+      [sub({ interval: "biweekly", amountCents: 1200 })],
+      [acc(1, "Giro")],
+    );
+    expect(result).toEqual([{ account: "Giro", currency: "EUR", monthlyCents: 2600 }]);
   });
 
   it("trennt Buckets pro Währung statt heimlich zu summieren", () => {
@@ -233,5 +271,19 @@ describe("computeUpcoming", () => {
   it("uebertraegt notify, damit der Caller stumme Subs markieren kann", () => {
     const result = computeUpcoming([sub({ notify: false })], [acc(1, "Giro")], 30, NOW);
     expect(result[0]?.notify).toBe(false);
+  });
+
+  it("zeigt einmalige Einnahmen nur im passenden Fenster", () => {
+    const result = computeUpcoming([], [acc(1, "Giro")], 30, NOW, [
+      income({ name: "Bonus", amountCents: 50000, anchorDate: "2026-01-20", oneTime: true }),
+    ]);
+    expect(result.map((i) => [i.subscription, i.date, i.type])).toEqual([
+      ["Bonus", "2026-01-20", "income"],
+    ]);
+
+    const past = computeUpcoming([], [acc(1, "Giro")], 30, NOW, [
+      income({ name: "Alter Bonus", anchorDate: "2025-12-31", oneTime: true }),
+    ]);
+    expect(past).toHaveLength(0);
   });
 });

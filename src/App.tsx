@@ -176,7 +176,7 @@ function App() {
         />
       )}
 
-      {!loading && activeSubs.length > 0 && (
+      {!loading && (activeSubs.length > 0 || incomes.some((i) => i.active)) && (
         <UpcomingSection
           subscriptions={activeSubs}
           accounts={accounts}
@@ -274,7 +274,10 @@ function App() {
                   <span className="sub-name">{income.name}</span>
                   <span className="sub-next">
                     {income.active ? (
-                      <>nächste Fälligkeit: {formatNextDue(income)}</>
+                      <>
+                        {income.oneTime ? "Datum" : "nächste Fälligkeit"}: {formatNextDue(income)}
+                        {income.oneTime && <> · einmalig</>}
+                      </>
                     ) : (
                       <>archiviert</>
                     )}

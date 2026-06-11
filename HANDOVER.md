@@ -9,6 +9,51 @@
 
 ---
 
+## 2026-06-11 — Codex: Produktnutzen-Block (Preisgraph, biweekly, einmalige Einnahmen)
+
+> Session-Fokus: die drei offenen Produktnutzen-Themen aus dem User-Test 2026-06-11 vor dem v0.1.0-Release umgesetzt.
+
+### Was passierte
+
+- **Preis-Historie als Graph:** [SubscriptionDialog.tsx](src/components/SubscriptionDialog.tsx) rendert im bestehenden Preis-Historie-`<details>` jetzt einen kleinen eigenen SVG-Liniengraphen mit Punkten/Tooltips und Min-/Max-Labels. Die bisherige Textliste bleibt darunter erhalten. Keine neue Chart-Abhängigkeit.
+- **Zweiwöchentliches Intervall:** `Interval` in TS + Rust um `biweekly` erweitert. TS (`src/lib/recurrence.ts`) und Rust (`src-tauri/src/recurrence.rs`) rechnen dafür anker-additiv in 14-Tage-Schritten; Monatsintervalle bleiben unverändert anker-additiv über `addMonths`/`checked_add_months`. Gemeinsame Testvektoren in [tests/fixtures/recurrence-vectors.json](tests/fixtures/recurrence-vectors.json) ergänzt.
+- **SQLite-Migration:** neue Migration [0007_biweekly_and_one_time_incomes.sql](src-tauri/migrations/0007_biweekly_and_one_time_incomes.sql) erweitert die `CHECK`-Constraints von `subscriptions.interval` und `incomes.interval` auf `monthly|biweekly|quarterly|yearly` und ergänzt `incomes.one_time INTEGER NOT NULL DEFAULT 0`. Die Migration ist `-- no-transaction`, damit `PRAGMA foreign_keys=OFF` beim Tabellen-Rebuild wirklich greift. Rebuild-Muster: `*_new` erstellen → kopieren → alte Tabelle droppen → neue umbenennen; nicht alte Parent-Tabelle zuerst umbenennen, sonst kann SQLite Child-FKs auf den alten Namen umschreiben.
+- **Einmalige Einnahmen entschieden + umgesetzt:** separates `one_time`-Flag statt „nach Eingang archivieren". `IncomeDialog` hat Checkbox „Einmalige Einnahme"; bei aktivem Haken ist das Intervall disabled und das Datum wird als Buchungsdatum genutzt. `computeCoverage`/`computeUpcoming` zählen einmalige Einnahmen genau einmal im Fenster und ignorieren vergangene einmalige Einnahmen. Upcoming rendert jetzt auch, wenn es nur aktive Einnahmen und keine aktiven Abos gibt.
+- **Backup/Restore:** `Income`/`NewIncome`, Tauri-Commands und Backup-Export/-Import kennen `one_time`. Alte Backup-JSONs ohne Feld bleiben durch `#[serde(default)]` beim `Income.one_time` kompatibel.
+- **Monatliche Baseline:** `biweekly` wird als 26 Zahlungen/Jahr normiert (`amount * 26 / 12`).
+- **BACKLOG:** die drei Produktnutzen-Punkte Preis-Historie-Graph, Zweiwöchentliches Intervall und Einmalige Einnahmen sind abgehakt und mit Umsetzungsnotizen ergänzt.
+
+### Status am Sitzungsende
+
+- Branch `main`; Produktnutzen-Block wird auf ausdrücklichen User-Wunsch in dieser Session committet und gepusht.
+- Kein `/code-review high` gelaufen. Hinweis: Nach Projektkonvention wäre für diese nicht-triviale Änderung (Schema + Recurrence + Forecast + Backup) ein Review vor Commit vorgesehen; User hat danach direkt Commit + Push angefordert.
+
+### Verifikation
+
+- `pnpm build` ✓
+- `pnpm lint` ✓
+- `pnpm test:run` ✓ — 13 Files / 183 Tests
+- `cargo fmt --check` ✓
+- `cargo test` ✓ — 53 Tests
+- `cargo clippy --all-targets -- -D warnings` ✓
+- Frontend-Sichtprüfung: `pnpm dev -- --host 127.0.0.1` startete nach Sandbox-Freigabe auf `http://localhost:1420/`, aber der in-app Browser war in dieser Session nicht verfügbar (`iab` nicht angeboten). Devserver danach wieder gestoppt. `pnpm tauri dev` wurde nicht gestartet.
+
+### Nächster Schritt
+
+- Danach wieder Richtung v0.1.0: Tag `v0.1.0` (BACKLOG 81) → Draft-Release über CI-Matrix → Release-Page + README-Download-Pfad (84) → Updater (85).
+
+### Gotchas / Stolperfallen
+
+- `biweekly` ist kein Monatsintervall. Rust-Validation nutzt deshalb `interval_step`, nicht `months_per_interval`; `months_per_interval` ist nur noch test-only für die alten Monatsfaktoren.
+- Migration 0007 darf nicht naiv auf `ALTER TABLE ... ADD CHECK` reduziert werden — SQLite kann CHECK-Constraints nicht direkt ändern.
+- Einmalige Einnahmen bleiben aktiv, werden aber nach ihrem Datum nicht mehr im Forecast/Upcoming wiederholt. Archivieren bleibt weiterhin als manuelle Listen-Hygiene möglich.
+
+### Geänderte/neue Memories
+
+- Keine. Die Entscheidungen stehen in BACKLOG + HANDOVER; für eine dauerhafte Serena-Memory ist der Block noch zu frisch.
+
+---
+
 ## 2026-06-11 — Claude: MacBook-Dev-Umgebung + App-Icon + Dialog-Bugs + Header
 
 > Session auf dem MacBook: Toolchain aufgesetzt, App-Icon gebaut, die komplette UX-Bug-Welle aus dem User-Test 2026-06-11 abgearbeitet (BACKLOG 16/17/18/43/44/45).

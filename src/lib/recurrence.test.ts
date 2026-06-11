@@ -10,6 +10,7 @@ describe("monthsPer", () => {
     expect(monthsPer.monthly).toBe(1);
     expect(monthsPer.quarterly).toBe(3);
     expect(monthsPer.yearly).toBe(12);
+    expect("biweekly" in monthsPer).toBe(false);
   });
 });
 
@@ -28,6 +29,11 @@ describe("nextDueDate", () => {
 
   it("springt jährlich korrekt (anchor + 12 Monate)", () => {
     expect(nextDueDate(d(2025, 3, 20), "yearly", d(2026, 1, 1))).toEqual(d(2026, 3, 20));
+  });
+
+  it("springt zweiwöchentlich in 14-Tage-Schritten", () => {
+    expect(nextDueDate(d(2026, 1, 5), "biweekly", d(2026, 1, 18))).toEqual(d(2026, 1, 19));
+    expect(nextDueDate(d(2026, 1, 5), "biweekly", d(2026, 2, 2))).toEqual(d(2026, 2, 2));
   });
 
   it("driftet bei monatlich mit Anker 31. NICHT — addiert immer vom Original-Anker", () => {
@@ -63,6 +69,14 @@ describe("dueDatesWithin", () => {
     expect(dueDatesWithin(d(2024, 3, 20), "yearly", d(2026, 1, 1), d(2027, 12, 31))).toEqual([
       d(2026, 3, 20),
       d(2027, 3, 20),
+    ]);
+  });
+
+  it("sammelt zweiwöchentliche Fälligkeiten im Zeitraum", () => {
+    expect(dueDatesWithin(d(2026, 1, 5), "biweekly", d(2026, 1, 1), d(2026, 2, 3))).toEqual([
+      d(2026, 1, 5),
+      d(2026, 1, 19),
+      d(2026, 2, 2),
     ]);
   });
 
