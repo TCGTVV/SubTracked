@@ -9,6 +9,41 @@
 
 ---
 
+## 2026-06-11 — Claude: MacBook-Dev-Umgebung aufgesetzt — LAUFENDE SESSION
+
+> **Hinweis:** Session-Start-Eintrag (Setup auf dem MacBook). Wird am **Ende der Session unten erweitert** (inhaltliche Arbeit). Nicht durch neuen Eintrag ersetzen.
+
+### Was passierte (Setup)
+
+- **Kontext:** User ist von Windows/Linux auf das **MacBook (aarch64-apple-darwin)** gewechselt, um die UX-Bug-Welle aus dem User-Test (siehe nächster Eintrag) anzugehen. Auf dieser Maschine fehlte die komplette Build-Toolchain.
+- **Lokale Toolchain installiert** (vorher war auf diesem Mac **kein** `cargo`/`rust-analyzer`/`pnpm` vorhanden):
+  - Rust: rustup stable, `rustc`/`cargo` **1.96.0** unter `~/.cargo/bin`, Component `rust-analyzer` (Proxy `~/.cargo/bin/rust-analyzer`).
+  - `pnpm` **11.3.0** via corepack (= `package.json`-`packageManager`-Pin).
+  - Persistenz verifiziert: frische Login-Shell hat `cargo`/`rustc`/`rust-analyzer`/`pnpm` automatisch im PATH (rustup → `~/.zshenv` + `~/.profile`). Damit ist der **`--no-verify`-Workaround früherer Sessions hinfällig** — der lefthook-pre-commit-Hook läuft jetzt vollständig durch (cargo-fmt, biome, cargo-clippy, vitest).
+- **Serena:** TS + Rust war bereits in `.serena/project.yml` aktiviert (Vor-Session). rust-analyzer jetzt installiert → Rust-LSP greift nach VSC-Neustart voll. Serena-Pfade relativ zum Root → Rust unter `src-tauri/src/...`.
+- **Volle CI-Parität lokal grün auf macOS:** `pnpm lint` (Biome) ✓ · `pnpm test:run` (**175/175** Vitest) ✓ · `cargo fmt --check` ✓ · `cargo clippy --all-targets -- -D warnings` ✓ · `cargo test` ✓.
+- **Code-Fix (Cross-Platform-clippy):** `TRAY_FOCUS_RAISE_DELAY` in `src-tauri/src/lib.rs` wird nur im `#[cfg(target_os = "linux")]`-Block (Tray-Focus-Raise) genutzt, ihre **Definition** war ungeguarded → auf macOS toter Code, `clippy -D warnings` brach **lokal**. CI (Linux) war/ist zu Recht grün. Fix: Definition mit demselben `#[cfg(target_os = "linux")]` versehen → sauber auf beiden Plattformen, Linux-Verhalten unverändert. `StdDuration`-Import bleibt via `REMINDER_INTERVAL`/`TRAY_FOCUS_RETRY_DELAY` genutzt.
+
+### Status (Setup-Phase)
+
+- Branch `main`, committet + gepusht: `src-tauri/src/lib.rs` (cfg-Guard), `HANDOVER.md` (dieser Eintrag). (`.serena/project.yml` brauchte nichts — Rust war remote schon ergänzt.)
+- Lokaler Merge-Hinweis: Beim Push war origin/main bereits voraus (Backup-Feature, Release-Matrix, HANDOVER-Archivierung). Lokaler Setup-Commit verworfen, auf origin/main rebased, nur der weiterhin gültige lib.rs-Fix neu aufgesetzt.
+
+### Nächster Schritt
+
+- Inhaltliche Arbeit: **UX-Bug-Welle** aus dem User-Test (nächster Eintrag) — empfohlene Reihenfolge dort: App-Icon → drei Dialog-Bugs im Aufwasch (Backdrop-Click, Auto-Close, Button-Position) → IncomeDialog angleichen → Header-Reihenfolge.
+- Diesen Eintrag am Session-Ende unten um die geleistete Arbeit erweitern.
+
+### Gotchas / Stolperfallen
+
+- **macOS vs. Linux clippy:** Linux-only-Konstanten/-Code mit `#[cfg(target_os = "linux")]` an **Definition UND Verwendung** guarden, sonst bricht lokales macOS-clippy `-D warnings`, während Linux-CI grün bleibt.
+
+### Geänderte/neue Memories
+
+- Claude-Memories: `dev-toolchain-installed` (Toolchain installiert, CI-Parität lokal, macOS-clippy-Gotcha), `serena-rust-language-added` (Serena TS+Rust, LSP-Reaktivierung, Pfad-Konvention).
+
+---
+
 ## 2026-06-11 — Claude: Smoke-Test Windows + macOS grün, v0.1.0 unblocked
 
 ### Was passierte
