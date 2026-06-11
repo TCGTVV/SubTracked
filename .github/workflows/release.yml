@@ -94,7 +94,36 @@ jobs:
           # Den bereits gepushten Tag verwenden, keinen neuen erzeugen.
           tagName: ${{ github.ref_name }}
           releaseName: 'SubTracked ${{ github.ref_name }}'
-          releaseBody: 'Installer zum Download unten unter „Assets". Lokale-first Abo-Tracker, keine Cloud.'
+          releaseBody: |
+            SubTracked zeigt dir nicht nur, was deine Abos kosten, sondern wann dein Konto durch kommende Abbuchungen knapp wird. Lokale Desktop-App, keine Cloud, keine Registrierung.
+
+            ## Download
+
+            - Windows: `SubTracked_0.1.0_x64_en-US.msi`
+            - macOS Apple Silicon: `SubTracked_0.1.0_aarch64.dmg`
+            - macOS Intel: `SubTracked_0.1.0_x64.dmg`
+            - Linux Debian/Ubuntu: `SubTracked_0.1.0_amd64.deb`
+            - Linux Fedora/openSUSE/RHEL: `SubTracked-0.1.0-1.x86_64.rpm`
+            - Linux universell: `SubTracked_0.1.0_amd64.AppImage`
+
+            Die `.app.tar.gz`-Assets für macOS werden für spätere Updater-/Automationspfade mitgebaut; normale Nutzer nehmen die `.dmg`.
+
+            ## Hinweis zu unsignierten Builds
+
+            Diese frühe Version ist noch nicht code-signiert. macOS Gatekeeper und Windows SmartScreen können beim ersten Start warnen.
+
+            - macOS: `.dmg` öffnen, App nach `Applications` ziehen, dann per Rechtsklick → Öffnen starten.
+            - Windows: SmartScreen → Weitere Informationen → Trotzdem ausführen.
+
+            ## Enthalten
+
+            - Konten mit Saldo, Mindestpuffer und Cashflow-Forecast
+            - Abos mit Erinnerungen, Archivierung, Preis-Historie und zweiwöchentlichem Intervall
+            - wiederkehrende und einmalige Einnahmen
+            - lokale SQLite-Datenbank und JSON-Backup/Restore
+            - native Notifications, Tray und Autostart
+
+            Smoke-getestet auf Linux, macOS und Windows. Details und Source-Build-Anleitung stehen im README.
           # Entwurf: erst prüfen, dann manuell veröffentlichen.
           releaseDraft: true
           prerelease: false

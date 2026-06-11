@@ -7,8 +7,58 @@ Solo-Projekt, lokal-first. Es gibt keinen Auto-Promotion-Pfad — jedes Release 
 1. **Tag setzen + pushen**: `git tag v0.X.Y && git push origin v0.X.Y`. Das triggert [.github/workflows/release.yml](.github/workflows/release.yml).
 2. **CI baut** auf macOS (arm64 + x86_64), Linux (`ubuntu-22.04`) und Windows. Ergebnis: ein **Draft**-Release auf GitHub mit allen Installern. Dauer ca. 10–15 Min.
 3. **Draft prüfen**: Assets vollständig (`.msi` + `-setup.exe`, `.dmg` + `.app.tar.gz` ×2, `.deb` + `.rpm` + `.AppImage`)? Version in den Dateinamen korrekt?
-4. **Smoke-Checkliste durchgehen** (siehe unten) — auf jedem OS, das released wird.
-5. **Draft veröffentlichen**, erst wenn alle Plattformen abgenommen sind. Vorher nicht.
+4. **Release-Text prüfen**: Die tauri-action legt den Body aus `.github/workflows/release.yml` an. Vor Veröffentlichung kurz gegen die Asset-Namen prüfen und bei Bedarf ergänzen (siehe Vorlage unten).
+5. **Smoke-Checkliste durchgehen** (siehe unten) — auf jedem OS, das released wird.
+6. **Draft veröffentlichen**, erst wenn alle Plattformen abgenommen sind. Vorher nicht.
+
+## Release-Page für normale Nutzer
+
+Der GitHub-Release muss ohne Projektwissen verständlich sein: was laden, was beim ersten Start erwartet wird, und dass die App lokal-first arbeitet.
+
+### Download-Matrix
+
+| System | Asset | Nutzung |
+| --- | --- | --- |
+| Windows | `SubTracked_0.1.0_x64_en-US.msi` | Standard-Installer; alternativ `SubTracked_0.1.0_x64-setup.exe`. |
+| macOS Apple Silicon | `SubTracked_0.1.0_aarch64.dmg` | Macs mit M-Serie. |
+| macOS Intel | `SubTracked_0.1.0_x64.dmg` | ältere Intel-Macs. |
+| Linux Debian/Ubuntu | `SubTracked_0.1.0_amd64.deb` | Debian-, Ubuntu- und verwandte Systeme. |
+| Linux Fedora/openSUSE/RHEL | `SubTracked-0.1.0-1.x86_64.rpm` | RPM-basierte Distributionen. |
+| Linux universell | `SubTracked_0.1.0_amd64.AppImage` | ohne Installation startbar. |
+
+Die `.app.tar.gz`-Assets für macOS werden für spätere Updater-/Automationspfade mitgebaut; normale Nutzer nehmen die `.dmg`.
+
+### Release-Body-Vorlage
+
+```markdown
+SubTracked zeigt dir nicht nur, was deine Abos kosten, sondern wann dein Konto durch kommende Abbuchungen knapp wird. Lokale Desktop-App, keine Cloud, keine Registrierung.
+
+## Download
+
+- Windows: `SubTracked_0.1.0_x64_en-US.msi`
+- macOS Apple Silicon: `SubTracked_0.1.0_aarch64.dmg`
+- macOS Intel: `SubTracked_0.1.0_x64.dmg`
+- Linux Debian/Ubuntu: `SubTracked_0.1.0_amd64.deb`
+- Linux Fedora/openSUSE/RHEL: `SubTracked-0.1.0-1.x86_64.rpm`
+- Linux universell: `SubTracked_0.1.0_amd64.AppImage`
+
+## Hinweis zu unsignierten Builds
+
+Diese frühe Version ist noch nicht code-signiert. macOS Gatekeeper und Windows SmartScreen können beim ersten Start warnen.
+
+- macOS: `.dmg` öffnen, App nach `Applications` ziehen, dann per Rechtsklick → Öffnen starten.
+- Windows: SmartScreen → Weitere Informationen → Trotzdem ausführen.
+
+## Enthalten
+
+- Konten mit Saldo, Mindestpuffer und Cashflow-Forecast
+- Abos mit Erinnerungen, Archivierung, Preis-Historie und zweiwöchentlichem Intervall
+- wiederkehrende und einmalige Einnahmen
+- lokale SQLite-Datenbank und JSON-Backup/Restore
+- native Notifications, Tray und Autostart
+
+Smoke-getestet auf Linux, macOS und Windows. Details und Source-Build-Anleitung stehen im README.
+```
 
 ### Wegwerf-Tags vor v0.1.0
 
