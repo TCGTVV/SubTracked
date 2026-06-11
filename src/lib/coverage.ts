@@ -36,6 +36,18 @@ export interface AccountCoverage {
 const UNASSIGNED_KEY = "__unassigned__";
 const UNASSIGNED_LABEL = "(kein Konto zugeordnet)";
 
+function incomeDatesWithin(income: Income, from: Date, until: Date): Date[] {
+  const anchor = parseStrictISODate(income.anchorDate);
+  if (!anchor) return [];
+  if (!income.oneTime) return dueDatesWithin(anchor, income.interval, from, until);
+  return anchor >= from && anchor <= until ? [anchor] : [];
+}
+
+function monthlyEquivalentCents(sub: Subscription): number {
+  if (sub.interval === "biweekly") return (sub.amountCents * 26) / 12;
+  return sub.amountCents / monthsPer[sub.interval];
+}
+
 /**
  * Anstehende Abflüsse je Konto über die nächsten `months` Monate, plus Saldo-Forecast
  * pro Buchung und Frühwarnung für Mindestpuffer / Konto-im-Minus.
@@ -155,9 +167,7 @@ export function computeCoverage(
     }
 
     const list = itemsByBucket.get(key) ?? [];
-    const anchor = parseStrictISODate(inc.anchorDate);
-    if (!anchor) continue;
-    for (const d of dueDatesWithin(anchor, inc.interval, from, until)) {
+    for (const d of incomeDatesWithin(inc, from, until)) {
       list.push({
         type: "income",
         subscriptionId: inc.id,
@@ -225,7 +235,7 @@ export function computeMonthlyBaseline(
     const label = account ? account.name : UNASSIGNED_LABEL;
     const currency = sub.currency;
     const key = `${label}__${currency}`;
-    const monthly = sub.amountCents / monthsPer[sub.interval];
+    const monthly = monthlyEquivalentCents(sub);
     const bucket = buckets.get(key) ?? { account: label, currency, monthlyCents: 0 };
     bucket.monthlyCents += monthly;
     buckets.set(key, bucket);
@@ -289,9 +299,7 @@ export function computeUpcoming(
     if (!inc.active) continue;
     const accountName =
       inc.accountId != null ? (accName.get(inc.accountId) ?? "(unbekanntes Konto)") : null;
-    const anchor = parseStrictISODate(inc.anchorDate);
-    if (!anchor) continue;
-    for (const d of dueDatesWithin(anchor, inc.interval, from, until)) {
+    for (const d of incomeDatesWithin(inc, from, until)) {
       items.push({
         type: "income",
         subscriptionId: inc.id,

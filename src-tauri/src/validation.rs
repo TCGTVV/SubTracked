@@ -1,7 +1,7 @@
 use sqlx::SqlitePool;
 
 use crate::currencies;
-use crate::recurrence::{months_per_interval, parse_iso_date_strict};
+use crate::recurrence::{interval_step, parse_iso_date_strict};
 
 pub const MAX_LEAD_DAYS: i64 = 365;
 pub const MAX_ACCOUNT_BALANCE_CENTS: i64 = 9_000_000_000_000_000;
@@ -24,7 +24,7 @@ pub fn validate_currency(currency: &str) -> Result<(), String> {
 }
 
 pub fn validate_interval(interval: &str) -> Result<(), String> {
-    months_per_interval(interval).map(|_| ())
+    interval_step(interval).map(|_| ())
 }
 
 pub fn validate_anchor_date(date: &str) -> Result<(), String> {

@@ -14,6 +14,7 @@ import { DateField } from "./DateField";
 
 const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
   { value: "monthly", label: "Monatlich" },
+  { value: "biweekly", label: "Zweiwöchentlich" },
   { value: "quarterly", label: "Quartalsweise" },
   { value: "yearly", label: "Jährlich" },
 ];
@@ -45,6 +46,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   const amountId = useId();
   const currencyId = useId();
   const accountIdId = useId();
+  const oneTimeId = useId();
   const intervalId = useId();
   const anchorId = useId();
   const nameErrorId = useId();
@@ -63,6 +65,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   );
   const [currency, setCurrency] = useState<string>(income?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(income?.accountId ?? null);
+  const [oneTime, setOneTime] = useState(income?.oneTime ?? false);
   const [interval, setInterval] = useState<Interval>(income?.interval ?? "monthly");
   const [anchorDate, setAnchorDate] = useState(income?.anchorDate ?? todayISO());
   const [submitting, setSubmitting] = useState(false);
@@ -108,6 +111,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
           amountCents,
           currency,
           accountId,
+          oneTime,
           interval,
           anchorDate,
         });
@@ -117,6 +121,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
           amountCents,
           currency,
           accountId,
+          oneTime,
           interval,
           anchorDate,
           active: true,
@@ -223,11 +228,24 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
         </div>
 
         <div className="field">
+          <label className="setting-label" htmlFor={oneTimeId}>
+            <input
+              id={oneTimeId}
+              type="checkbox"
+              checked={oneTime}
+              onChange={(e) => setOneTime(e.target.checked)}
+            />
+            <span>Einmalige Einnahme</span>
+          </label>
+        </div>
+
+        <div className="field">
           <label htmlFor={intervalId}>Intervall</label>
           <select
             id={intervalId}
             value={interval}
             onChange={(e) => setInterval(e.target.value as Interval)}
+            disabled={oneTime}
           >
             {INTERVAL_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -238,7 +256,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
         </div>
 
         <div className="field">
-          <label htmlFor={anchorId}>Erste / nächste Fälligkeit</label>
+          <label htmlFor={anchorId}>{oneTime ? "Datum" : "Erste / nächste Fälligkeit"}</label>
           <DateField
             id={anchorId}
             buttonRef={anchorRef}

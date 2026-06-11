@@ -119,6 +119,20 @@
       "interval": "yearly",
       "from": "2027-03-01",
       "expected": "2028-02-29"
+    },
+    {
+      "name": "biweekly_one_day_before_next",
+      "anchor": "2026-01-05",
+      "interval": "biweekly",
+      "from": "2026-01-18",
+      "expected": "2026-01-19"
+    },
+    {
+      "name": "biweekly_exact_hit",
+      "anchor": "2026-01-05",
+      "interval": "biweekly",
+      "from": "2026-02-02",
+      "expected": "2026-02-02"
     }
   ]
 }

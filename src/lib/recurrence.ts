@@ -1,12 +1,19 @@
-import { addMonths, isBefore, startOfDay } from "date-fns";
+import { addDays, addMonths, isBefore, startOfDay } from "date-fns";
 
-export type Interval = "monthly" | "quarterly" | "yearly";
+export type Interval = "monthly" | "biweekly" | "quarterly" | "yearly";
 
-export const monthsPer: Record<Interval, number> = {
+export const monthsPer: Record<Exclude<Interval, "biweekly">, number> = {
   monthly: 1,
   quarterly: 3,
   yearly: 12,
 };
+
+const BIWEEKLY_DAYS = 14;
+
+function addInterval(anchor: Date, interval: Interval, k: number): Date {
+  if (interval === "biweekly") return addDays(anchor, k * BIWEEKLY_DAYS);
+  return addMonths(anchor, k * monthsPer[interval]);
+}
 
 /**
  * Nächstes Fälligkeitsdatum am oder nach `from`.
@@ -18,12 +25,11 @@ export const monthsPer: Record<Interval, number> = {
  */
 export function nextDueDate(anchor: Date, interval: Interval, from: Date = new Date()): Date {
   const f = startOfDay(from);
-  const step = monthsPer[interval];
   let k = 0;
   let due = startOfDay(anchor);
   while (isBefore(due, f)) {
     k += 1;
-    due = startOfDay(addMonths(anchor, k * step));
+    due = startOfDay(addInterval(anchor, interval, k));
   }
   return due;
 }
@@ -32,7 +38,6 @@ export function nextDueDate(anchor: Date, interval: Interval, from: Date = new D
 export function dueDatesWithin(anchor: Date, interval: Interval, from: Date, until: Date): Date[] {
   const f = startOfDay(from);
   const u = startOfDay(until);
-  const step = monthsPer[interval];
   const a = startOfDay(anchor);
   const out: Date[] = [];
   let k = 0;
@@ -40,13 +45,13 @@ export function dueDatesWithin(anchor: Date, interval: Interval, from: Date, unt
   // erste Fälligkeit >= from finden (immer relativ zum Original-Anker addieren)
   while (isBefore(due, f)) {
     k += 1;
-    due = startOfDay(addMonths(a, k * step));
+    due = startOfDay(addInterval(a, interval, k));
   }
   // dann einsammeln, solange <= until
   while (!isBefore(u, due)) {
     out.push(due);
     k += 1;
-    due = startOfDay(addMonths(a, k * step));
+    due = startOfDay(addInterval(a, interval, k));
   }
   return out;
 }

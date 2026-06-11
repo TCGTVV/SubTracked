@@ -124,11 +124,12 @@ export function formatAmount(cents: number, currency: string): string {
 }
 
 export function formatNextDue(
-  sub: { anchorDate: string; interval: Interval },
+  sub: { anchorDate: string; interval: Interval; oneTime?: boolean },
   now: Date = new Date(),
 ): string {
   const anchor = parseStrictISODate(sub.anchorDate);
   if (!anchor) return "Ungültiges Datum";
+  if (sub.oneTime) return format(anchor, "dd.MM.yyyy");
   const due = nextDueDate(anchor, sub.interval, now);
   return format(due, "dd.MM.yyyy");
 }

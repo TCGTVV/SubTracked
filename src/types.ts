@@ -1,4 +1,4 @@
-export type Interval = "monthly" | "quarterly" | "yearly";
+export type Interval = "monthly" | "biweekly" | "quarterly" | "yearly";
 
 export interface Account {
   id: number;
@@ -20,6 +20,7 @@ export interface Income {
   interval: Interval;
   anchorDate: string; // ISO "YYYY-MM-DD"
   active: boolean;
+  oneTime: boolean;
 }
 
 export interface Subscription {

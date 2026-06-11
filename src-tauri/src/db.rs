@@ -88,6 +88,8 @@ pub struct Income {
     pub interval: String,
     pub anchor_date: String,
     pub active: bool,
+    #[serde(default)]
+    pub one_time: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -100,6 +102,7 @@ pub struct NewIncome {
     pub interval: String,
     pub anchor_date: String,
     pub active: Option<bool>,
+    pub one_time: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

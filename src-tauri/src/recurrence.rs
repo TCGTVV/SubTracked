@@ -1,4 +1,4 @@
-use chrono::{Months, NaiveDate};
+use chrono::{Duration, Months, NaiveDate};
 
 pub fn parse_iso_date_strict(date: &str) -> Result<NaiveDate, String> {
     // chrono's %Y-%m-%d akzeptiert auch unpadded Werte wie "2026-6-8".
@@ -13,16 +13,37 @@ pub fn parse_iso_date_strict(date: &str) -> Result<NaiveDate, String> {
         .map_err(|_| format!("Ungueltiges Datum: {date}. Erwartet: YYYY-MM-DD."))
 }
 
-/// Single Source of Truth fuer Intervalle: Name + Monatsschritt. Wer ein neues
-/// Intervall einfuehrt, ergaenzt hier eine Zeile — `months_per_interval` und
-/// `validation::validate_interval` ziehen daraus automatisch nach.
-pub const ALLOWED_INTERVALS: &[(&str, u32)] = &[("monthly", 1), ("quarterly", 3), ("yearly", 12)];
+#[derive(Clone, Copy)]
+pub enum IntervalStep {
+    Months(u32),
+    Days(i64),
+}
 
-pub fn months_per_interval(interval: &str) -> Result<u32, String> {
+/// Single Source of Truth fuer Intervalle: Name + Schritt. Wer ein neues
+/// Intervall einfuehrt, ergaenzt hier eine Zeile — `interval_step` und
+/// `validation::validate_interval` ziehen daraus automatisch nach.
+pub const ALLOWED_INTERVALS: &[(&str, IntervalStep)] = &[
+    ("monthly", IntervalStep::Months(1)),
+    ("biweekly", IntervalStep::Days(14)),
+    ("quarterly", IntervalStep::Months(3)),
+    ("yearly", IntervalStep::Months(12)),
+];
+
+#[cfg(test)]
+fn months_per_interval(interval: &str) -> Result<u32, String> {
+    match interval_step(interval)? {
+        IntervalStep::Months(months) => Ok(months),
+        IntervalStep::Days(_) => Err(format!(
+            "Intervall {interval} ist kein Monatsintervall. Erlaubt fuer Monatsfaktor: monthly, quarterly, yearly."
+        )),
+    }
+}
+
+pub fn interval_step(interval: &str) -> Result<IntervalStep, String> {
     ALLOWED_INTERVALS
         .iter()
         .find(|(name, _)| *name == interval)
-        .map(|(_, months)| *months)
+        .map(|(_, step)| *step)
         .ok_or_else(|| {
             format!(
                 "Unbekanntes Intervall: {interval}. Erlaubt: {}.",
@@ -47,14 +68,19 @@ pub fn next_due_date(
     interval: &str,
     from: NaiveDate,
 ) -> Result<NaiveDate, String> {
-    let step = months_per_interval(interval)?;
+    let step = interval_step(interval)?;
     let mut k: u32 = 0;
     let mut due = anchor;
     while due < from {
         k += 1;
-        due = anchor
-            .checked_add_months(Months::new(k * step))
-            .ok_or_else(|| format!("Datum-Overflow bei k={k}"))?;
+        due = match step {
+            IntervalStep::Months(months) => anchor
+                .checked_add_months(Months::new(k * months))
+                .ok_or_else(|| format!("Datum-Overflow bei k={k}"))?,
+            IntervalStep::Days(days) => anchor
+                .checked_add_signed(Duration::days(i64::from(k) * days))
+                .ok_or_else(|| format!("Datum-Overflow bei k={k}"))?,
+        };
     }
     Ok(due)
 }
@@ -81,7 +107,21 @@ mod tests {
         assert_eq!(months_per_interval("monthly").unwrap(), 1);
         assert_eq!(months_per_interval("quarterly").unwrap(), 3);
         assert_eq!(months_per_interval("yearly").unwrap(), 12);
+        assert!(months_per_interval("biweekly").is_err());
         assert!(months_per_interval("foobar").is_err());
+    }
+
+    #[test]
+    fn biweekly_step() {
+        let anchor = d(2026, 1, 5);
+        assert_eq!(
+            next_due_date(anchor, "biweekly", d(2026, 1, 18)).unwrap(),
+            d(2026, 1, 19)
+        );
+        assert_eq!(
+            next_due_date(anchor, "biweekly", d(2026, 2, 2)).unwrap(),
+            d(2026, 2, 2)
+        );
     }
 
     /// Kritischer Test: Anker 31.01. darf nicht auf den 28. driften,
