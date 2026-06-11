@@ -1,5 +1,6 @@
 import { type FormEvent, type Ref, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
+import { closeDialogOnBackdropClick } from "../lib/dialog";
 import {
   CURRENCY_OPTIONS,
   formatAmount,
@@ -172,7 +173,8 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   }
 
   return (
-    <dialog ref={ref} className="dialog">
+    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
+    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
       <form onSubmit={handleSubmit} className="form" noValidate>
         <h2>{isEdit ? "Abo bearbeiten" : "Neues Abo"}</h2>
 
