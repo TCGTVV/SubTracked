@@ -1,6 +1,5 @@
 import { type FormEvent, type Ref, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
-import { closeDialogOnBackdropClick } from "../lib/dialog";
 import {
   CURRENCY_OPTIONS,
   formatAmount,
@@ -10,15 +9,10 @@ import {
   parseAmountInput,
   todayISO,
 } from "../lib/format";
+import { INTERVAL_OPTIONS } from "../lib/recurrence";
 import type { Account, Interval, PriceHistoryEntry, Subscription } from "../types";
 import { DateField } from "./DateField";
-
-const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
-  { value: "monthly", label: "Monatlich" },
-  { value: "biweekly", label: "Zweiwöchentlich" },
-  { value: "quarterly", label: "Quartalsweise" },
-  { value: "yearly", label: "Jährlich" },
-];
+import { Dialog } from "./Dialog";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
@@ -46,7 +40,8 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
   const maxEntry = chronological.reduce((best, entry) =>
     entry.amountCents > best.amountCents ? entry : best,
   );
-  const range = Math.max(max - min, 1);
+  const isConstant = min === max;
+  const range = max - min;
   const width = 320;
   const height = 120;
   const paddingX = 18;
@@ -57,7 +52,9 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
 
   const points = chronological.map((entry, index) => {
     const x = paddingX + index * xStep;
-    const y = paddingY + innerHeight - ((entry.amountCents - min) / range) * innerHeight;
+    const y = isConstant
+      ? paddingY + innerHeight / 2
+      : paddingY + innerHeight - ((entry.amountCents - min) / range) * innerHeight;
     return { entry, x, y };
   });
   const line = points.map((point) => `${point.x},${point.y}`).join(" ");
@@ -83,8 +80,14 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
         ))}
       </svg>
       <div className="price-history-range">
-        <span>{formatAmount(min, minEntry.currency)}</span>
-        <span>{formatAmount(max, maxEntry.currency)}</span>
+        {isConstant ? (
+          <span>Konstant: {formatAmount(min, minEntry.currency)}</span>
+        ) : (
+          <>
+            <span>{formatAmount(min, minEntry.currency)}</span>
+            <span>{formatAmount(max, maxEntry.currency)}</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -229,8 +232,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   }
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
-    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
+    <Dialog ref={ref}>
       <form onSubmit={handleSubmit} className="form" noValidate>
         <h2>{isEdit ? "Abo bearbeiten" : "Neues Abo"}</h2>
 
@@ -427,6 +429,6 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
           </button>
         </div>
       </form>
-    </dialog>
+    </Dialog>
   );
 }

@@ -9,6 +9,86 @@
 
 ---
 
+## 2026-06-12 — Codex: Befunde 9 und 10 umgesetzt, 4/7/8 ins Backlog
+
+> Session-Fokus: Nach den bereits implementierten Review-Befunden 2 und 6 noch die Cleanup-Befunde 9 und 10 umgesetzt. Außerdem geprüft, ob 4/7/8 im Backlog stehen: standen sie nicht explizit, daher jetzt nachgetragen.
+
+### Was geändert wurde
+
+- **Befund 9 (`INTERVAL_OPTIONS`-Duplikat) gefixt:**
+  - Neue zentrale `INTERVAL_OPTIONS` in `src/lib/recurrence.ts` neben der TS-Recurrence-Logik.
+  - Lokale Duplikate aus `src/components/IncomeDialog.tsx` und `src/components/SubscriptionDialog.tsx` entfernt.
+  - Beide Dialoge importieren jetzt dieselbe Optionliste.
+- **Befund 10 (Dialog-Backdrop-Close-Wrapper) gefixt:**
+  - Neue Komponente `src/components/Dialog.tsx` kapselt nativen `<dialog>`-Tag, Default-`className="dialog"`, den `biome-ignore`-Kommentar und `closeDialogOnBackdropClick`.
+  - `AccountsDialog`, `IncomeDialog`, `SettingsDialog`, `SubscriptionDialog` nutzen jetzt `<Dialog ref={ref}>…</Dialog>` statt jeweils eigenem nativen `<dialog>` mit identischem Handler.
+  - `src/lib/dialog.ts` bleibt als kleine Utility für den Wrapper bestehen.
+- **Backlog ergänzt:**
+  - `BACKLOG.md` enthält jetzt offene Punkte für Review-Befund 4 (Migration 0007 crash-sicher), 7 (`sqlite_sequence`/AUTOINCREMENT nach Migration 0007) und 8 (vergangene einmalige Einnahmen nicht als aktiven Cashflow zählen).
+
+### Verifikation
+
+- `pnpm test:run` ✓ — 14 Files / 188 Tests.
+- `pnpm build` ✓ — `tsc && vite build` sauber.
+- `pnpm lint` ✓ — Biome clean nach `pnpm lint:fix` für Import-Sortierung.
+- Rust nicht angefasst → `cargo test`, `cargo fmt --check`, `cargo clippy` nicht gelaufen.
+- `pnpm tauri dev` nicht gestartet; keine manuelle UI-Verifikation in dieser Session.
+
+### Status / Nächster Schritt
+
+- Working Tree dirty mit den vorherigen Befund-2/6-Änderungen plus: `BACKLOG.md`, `src/components/Dialog.tsx`, `src/components/{AccountsDialog,IncomeDialog,SettingsDialog,SubscriptionDialog}.tsx`, `src/lib/recurrence.ts`, `HANDOVER.md`.
+- Vor Commit nach Projektregel noch `/code-review high` über den gesamten aktuellen Diff laufen lassen (Befunde 2, 6, 9, 10 + Backlog/Handover).
+- Nach Review: Befunde fixen falls vorhanden, dann committen/pushen. Danach bleiben aus dem ursprünglichen Review nur noch 4/7/8 als Backlog-Punkte offen.
+
+### Gotchas
+
+- `Dialog` nutzt die React-19-`ref`-als-Prop-Form, passend zu den bestehenden Dialog-Komponenten. `pnpm build` bestätigt die Typen.
+- `INTERVAL_OPTIONS` lebt jetzt in `recurrence.ts`, während manche Domain-Typen weiterhin `Interval` aus `types.ts` importieren. Die Unions sind aktuell deckungsgleich; ein neues Intervall muss weiterhin TS/Rust/Schema/Testvektoren gemeinsam anfassen.
+
+---
+
+## 2026-06-12 — Codex: Befunde 2 und 6 gefixt
+
+> Session-Fokus: Die zwei optionalen Vor-v0.1.0-Fixes aus dem letzten Review umgesetzt: Empty-State „nur Konten" und PriceHistoryGraph bei konstanten Preisen.
+
+### Was geändert wurde
+
+- **Befund 2 (Empty-State „nur Konten") gefixt** in `src/App.tsx`:
+  - Neuer gemeinsamer Zustand `hasActiveCashflow` plus `activeIncomes`.
+  - Empty-State hängt nicht mehr an `accounts.length === 0`, sondern an fehlenden aktiven Abos/Einnahmen.
+  - Copy auf „Noch keine Zahlungsdaten" angepasst; bei vorhandenem Konto bleibt der CTA für erstes Abo/Einnahme sichtbar.
+  - `StatusCard`, `UpcomingSection` und `OverviewSection` laufen nur noch bei aktivem Cashflow; dadurch keine quasi-leere Overview nach Kontoanlage.
+- **Regressionstest für Befund 2** neu in `src/App.test.tsx`:
+  - Mockt Hooks und Kind-Komponenten minimal.
+  - Prüft: vorhandenes Konto + keine Abos/Einnahmen zeigt Empty-State und rendert keine Overview.
+- **Befund 6 (PriceHistoryGraph konstant flach)** gefixt in `src/components/SubscriptionDialog.tsx`:
+  - Bei `min === max` liegen Graph-Punkte jetzt auf der SVG-Mittellinie statt auf der Unterkante.
+  - Min/Max-Zeile zeigt in diesem Fall `Konstant: …` statt zweimal denselben Betrag.
+- **Regressionstest für Befund 6** in `src/components/SubscriptionDialog.test.tsx`:
+  - `listPriceHistory`-Mock benannt und im `beforeEach` zurückgesetzt.
+  - Prüft konstante Historie mit zwei Einträgen: beide `cy="60"` und sichtbarer `Konstant`-Hinweis.
+
+### Verifikation
+
+- `pnpm test:run` ✓ — 14 Files / 188 Tests.
+- `pnpm build` ✓ — `tsc && vite build` sauber.
+- `pnpm lint` ✓ — Biome clean.
+- Rust nicht angefasst → `cargo test`, `cargo fmt --check`, `cargo clippy` nicht gelaufen.
+- `pnpm tauri dev` nicht gestartet; keine manuelle UI-Verifikation in dieser Session.
+
+### Status / Nächster Schritt
+
+- Working Tree dirty mit `src/App.tsx`, `src/App.test.tsx`, `src/components/SubscriptionDialog.tsx`, `src/components/SubscriptionDialog.test.tsx`, `HANDOVER.md`.
+- Vor einem Commit ist nach Projektregel wegen nicht-trivialer UI-/Logikänderung noch `/code-review high` fällig.
+- Danach committen/pushen oder direkt weiter Richtung v0.1.0-Tag, je nachdem ob der Review noch etwas findet.
+
+### Gotchas
+
+- Der neue App-Test mockt Kind-Komponenten bewusst, damit nur der Onboarding-Zustand geprüft wird. Falls später Integration gegen echte Dialoge gewünscht ist, separaten App-Integrationstest ergänzen.
+- Der konstante Graph-Test verlässt sich auf die aktuelle SVG-Geometrie (`height=120`, `paddingY=16`, `innerHeight=88` → Mitte `cy=60`). Wenn die Geometrie geändert wird, muss der Erwartungswert mitwandern.
+
+---
+
 ## 2026-06-12 — Claude: `/code-review high` vor v0.1.0 — 10 Befunde, noch nichts gefixt
 
 > Session-Fokus: Nach `git pull` (Codex hatte den Produktnutzen-Block + Release-Doku + Qualitätsrunde direkt auf `main` gepusht, ohne Review) den ausstehenden `/code-review high` über alles vom 11.06. nachgeholt. Kein Code geändert, nur dokumentiert.

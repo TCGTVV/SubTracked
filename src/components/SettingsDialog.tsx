@@ -12,7 +12,7 @@ import {
   type ReminderStatus,
   sendTestNotification,
 } from "../lib/db";
-import { closeDialogOnBackdropClick } from "../lib/dialog";
+import { Dialog } from "./Dialog";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
@@ -186,8 +186,7 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
       : null;
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
-    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
+    <Dialog ref={ref}>
       <div className="settings-dialog">
         <h2>Einstellungen</h2>
 
@@ -370,6 +369,6 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
           </button>
         </div>
       </div>
-    </dialog>
+    </Dialog>
   );
 }

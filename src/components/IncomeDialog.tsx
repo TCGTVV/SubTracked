@@ -1,6 +1,5 @@
 import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addIncome, updateIncome } from "../lib/db";
-import { closeDialogOnBackdropClick } from "../lib/dialog";
 import {
   CURRENCY_OPTIONS,
   getCurrencySubdivisor,
@@ -9,15 +8,10 @@ import {
   parseAmountInput,
   todayISO,
 } from "../lib/format";
+import { INTERVAL_OPTIONS } from "../lib/recurrence";
 import type { Account, Income, Interval } from "../types";
 import { DateField } from "./DateField";
-
-const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
-  { value: "monthly", label: "Monatlich" },
-  { value: "biweekly", label: "Zweiwöchentlich" },
-  { value: "quarterly", label: "Quartalsweise" },
-  { value: "yearly", label: "Jährlich" },
-];
+import { Dialog } from "./Dialog";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
@@ -141,8 +135,7 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   }
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
-    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
+    <Dialog ref={ref}>
       <form onSubmit={(e) => void handleSubmit(e)} className="form" noValidate>
         <h2>{isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}</h2>
 
@@ -299,6 +292,6 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
           </button>
         </div>
       </form>
-    </dialog>
+    </Dialog>
   );
 }

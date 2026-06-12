@@ -1,6 +1,5 @@
 import { type FormEvent, type Ref, useId, useRef, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
-import { closeDialogOnBackdropClick } from "../lib/dialog";
 import {
   CURRENCY_OPTIONS,
   daysSince,
@@ -10,6 +9,7 @@ import {
   parseSignedAmountInput,
 } from "../lib/format";
 import type { Account } from "../types";
+import { Dialog } from "./Dialog";
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
@@ -209,8 +209,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
   const isEditing = editingId != null;
 
   return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
-    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
+    <Dialog ref={ref}>
       <div className="accounts-dialog">
         <h2>Konten</h2>
 
@@ -393,6 +392,6 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
           </div>
         </form>
       </div>
-    </dialog>
+    </Dialog>
   );
 }
