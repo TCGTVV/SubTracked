@@ -2,7 +2,7 @@
 
 > **Konvention für jeden Agent, der an SubTracked arbeitet:**
 >
-> 1. **Session-Start:** Diesen Eintrag oben **vollständig lesen**, bevor du etwas anderes tust. Erst danach `AGENTS.md`, `BACKLOG.md`, Memories etc.
+> 1. **Session-Start:** [`CLAUDE.md`](CLAUDE.md) im Project-Root wird automatisch in den Top-Level-Kontext geladen — die operativen Tool-Wahl-Regeln (Serena-Default) gelten ab Sekunde eins, ohne dass du sie aktiv lesen musst. Direkt danach diesen HANDOVER-Eintrag oben **vollständig lesen**, dann nach Bedarf `AGENTS.md` (Stack/Konventionen), `BACKLOG.md` (Aufgabenstand), Serena-Memories (Domänen-Einstieg via `mem:core`).
 > 2. **Session-Ende:** Einen neuen Eintrag **oben** anfügen (direkt unter dieser Anleitung, über dem aktuell obersten Eintrag). Schablone steht ganz unten in dieser Datei.
 > 3. Alte Einträge **nicht löschen** — sie sind der Verlauf, wie git-Log, aber narrativ. Wenn die Datei zu lang wird, älteste Einträge in `HANDOVER-archive.md` auslagern (ab ~20 Einträgen sinnvoll).
 > 4. Sprache: Deutsch (passend zur Projekt-Konvention).
