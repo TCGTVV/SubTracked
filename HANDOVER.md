@@ -9,6 +9,45 @@
 
 ---
 
+## 2026-06-12 — Claude: Folgereview `/code-review high` + Befund 1 gefixt
+
+> Session-Fokus: Den `/code-review high` nachgeholt, den Codex' Commit `3532856` ohne Review gepusht hatte. 3 neue Befunde — einer direkt gefixt, zwei ins Backlog.
+
+### Was passierte
+
+- **Range `600f620..HEAD`** (nur der ungereviewte Codex-Commit mit den Refactor-Befunden 2/6/9/10). Inline-Review entlang aller sieben Angles (Korrektheit ×3 + Cleanup ×3 + Altitude ×1) über ~250 LOC. Keine 7-Agent-Spawnung — Diff klein genug für inline.
+- **3 Befunde verifiziert:**
+  1. **CONFIRMED — `App.tsx:167` archived-only Empty-State**: User archiviert sein letztes aktives Abo → Empty-State "Erstes Abo oder eine Einnahme erfassen" + Archived-Toggle "(N Abos)" werden gleichzeitig gerendert. Widerspruechliche UI.
+  2. **PLAUSIBLE — Dialog-Wrapper `Dialog.tsx:11` laesst `onClose` durch**: `Omit<..., "onClick">` blockt nur den Backdrop-Handler; ein zukuenftiger Caller mit `onClose={resetForm}` wuerde die gerade gefixte Befund-3-Klasse (AccountsDialog-Edit-Loss) reaktivieren. Kein aktiver Bug, strukturelle Luecke.
+  3. **PLAUSIBLE — PriceHistoryGraph `SubscriptionDialog.tsx:84` `Konstant`-Label**: zeigt nur `minEntry.currency`. Currency-Wechsel mid-history mit zufaellig gleichen `amountCents` blendet die Divergenz weg. Sehr seltener Pfad.
+- **Befund 1 gefixt:** `App.tsx` Empty-State-Bedingung von `!hasActiveCashflow` auf `subs.length === 0 && incomes.length === 0` umgestellt — haengt jetzt an reiner Daten-Existenz. Status/Upcoming/Overview bleiben weiterhin an `hasActiveCashflow` gekoppelt, also keine Regression fuer deren Sichtbarkeit. Im All-archived-Fall sieht der User Header + Archived-Toggle + ggf. Income-Liste — konsistent.
+- **Regressionstest** in `App.test.tsx`: 1 archiviertes Abo, kein aktiver Cashflow → Empty-State ist NICHT da, Archived-Toggle "(1 Abo)" IST da.
+- **Befund 2 + 3 ins `BACKLOG.md`** (🐛 Bugs-Block, direkt nach Review-Befund 8) mit "Folgereview 2026-06-12"-Tag.
+- **Commit `cef8805`** ("Folgereview-Befund 1: Empty-State an Daten-Existenz koppeln") + Push.
+
+### Verifikation
+
+- `pnpm test:run` ✓ — 14 Files / **189 Tests** (vorher 188; +1 fuer all-archived).
+- `pnpm build` ✓ — `tsc && vite build` sauber, 996 Module.
+- `pnpm lint` ✓ — Biome clean.
+- Rust nicht angefasst → `cargo` nicht relevant.
+- **Manuelle UI-Verifikation durch User durchgefuehrt** ✓ — AccountsDialog-Backdrop-Klick verliert keinen Edit, Dialog-Wrapper funktioniert in allen vier Dialogen, Empty-State-Verhalten korrekt mit/ohne archivierte Subs, PriceHistoryGraph konstant zeigt Mittellinie + "Konstant"-Label.
+
+### Status / Naechster Schritt
+
+- HEAD = `cef8805`, **bereits gepusht**. Working Tree dirty nur mit diesem HANDOVER-Eintrag.
+- **Naechster Schritt:** `v0.1.0`-Tag (BACKLOG 81). Alle urspruenglichen 10 Review-Befunde sind durch:
+  - **Gefixt:** 1 (TZ-Bug), 2 (Empty-State), 3 (AccountsDialog-Edit-Loss), 5 (Income stale interval), 6 (PriceHistoryGraph flat), 9 (`INTERVAL_OPTIONS`-Dup), 10 (Dialog-Wrapper).
+  - **Bewusst ins Backlog fuer v0.1.1:** 4 (Migration crash-recovery), 7 (AUTOINCREMENT), 8 (one-time past).
+- Folgereview-Befund 1 gefixt, 2 + 3 backlogged.
+
+### Gotchas
+
+- **Codex hat seinen Plan aus dem vorigen HANDOVER ("Vor Commit `/code-review high`") nicht eingehalten** und `3532856` direkt gepusht. Die Folgereview hat die Luecke retrospektiv aufgegriffen. Lehre fuer kuenftige Sessions: wenn HANDOVER explizit "Review vor Commit" sagt und ein Agent dann doch committet, sollte mindestens ein Tag in der Commit-Message ("ungereviewed", "review-pending") das sichtbar machen — sonst geht der Review-Schritt strukturell verloren.
+- Der Empty-State-Fix ist strenger geworden (nur noch bei **gar keinen** Subs/Incomes). Der Fall "alles archiviert" bekommt nun keinen sichtbaren Hinweis mehr ausser dem Archived-Toggle. Das ist akzeptiert; wenn das spaeter als zu spartanisch empfunden wird, kann eine "Alle archiviert"-Info-Karte spaeter ergaenzt werden (Scope-Creep fuer v0.1.0).
+
+---
+
 ## 2026-06-12 — Codex: Befunde 9 und 10 umgesetzt, 4/7/8 ins Backlog
 
 > Session-Fokus: Nach den bereits implementierten Review-Befunden 2 und 6 noch die Cleanup-Befunde 9 und 10 umgesetzt. Außerdem geprüft, ob 4/7/8 im Backlog stehen: standen sie nicht explizit, daher jetzt nachgetragen.
