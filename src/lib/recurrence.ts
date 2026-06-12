@@ -8,6 +8,13 @@ export const monthsPer: Record<Exclude<Interval, "biweekly">, number> = {
   yearly: 12,
 };
 
+export const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
+  { value: "monthly", label: "Monatlich" },
+  { value: "biweekly", label: "Zweiwöchentlich" },
+  { value: "quarterly", label: "Quartalsweise" },
+  { value: "yearly", label: "Jährlich" },
+];
+
 const BIWEEKLY_DAYS = 14;
 
 function addInterval(anchor: Date, interval: Interval, k: number): Date {

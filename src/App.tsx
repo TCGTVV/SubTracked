@@ -46,6 +46,8 @@ function App() {
   }, [incomeOpenSeq]);
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
+  const activeIncomes = useMemo(() => incomes.filter((i) => i.active), [incomes]);
+  const hasActiveCashflow = activeSubs.length > 0 || activeIncomes.length > 0;
   const archivedCount = subs.length - activeSubs.length;
   const preFilteredSubs = showArchived ? subs : activeSubs;
   const visibleSubs = useMemo(
@@ -164,10 +166,14 @@ function App() {
           Fehler: {error}
         </p>
       )}
-      {!loading && !error && subs.length === 0 && accounts.length === 0 && incomes.length === 0 && (
+      {!loading && !error && !hasActiveCashflow && (
         <section className="empty-state" aria-labelledby="empty-title">
-          <h2 id="empty-title">Noch keine Daten</h2>
-          <p>Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow.</p>
+          <h2 id="empty-title">Noch keine Zahlungsdaten</h2>
+          <p>
+            {accounts.length === 0
+              ? "Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow."
+              : "Erstes Abo oder eine Einnahme erfassen, danach zeigt SubTracked den Cashflow."}
+          </p>
           <div className="empty-state-actions">
             <button type="button" onClick={openAccounts}>
               Konto anlegen
@@ -182,20 +188,12 @@ function App() {
         </section>
       )}
 
-      {!loading && !error && (activeSubs.length > 0 || incomes.some((i) => i.active)) && (
-        <StatusCard
-          subscriptions={activeSubs}
-          accounts={accounts}
-          incomes={incomes.filter((i) => i.active)}
-        />
+      {!loading && !error && hasActiveCashflow && (
+        <StatusCard subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
       )}
 
-      {!loading && (activeSubs.length > 0 || incomes.some((i) => i.active)) && (
-        <UpcomingSection
-          subscriptions={activeSubs}
-          accounts={accounts}
-          incomes={incomes.filter((i) => i.active)}
-        />
+      {!loading && !error && hasActiveCashflow && (
+        <UpcomingSection subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
       )}
 
       {archivedCount > 0 && (
@@ -272,11 +270,9 @@ function App() {
         </ul>
       )}
 
-      <OverviewSection
-        subscriptions={activeSubs}
-        accounts={accounts}
-        incomes={incomes.filter((i) => i.active)}
-      />
+      {hasActiveCashflow && (
+        <OverviewSection subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
+      )}
 
       {incomes.length > 0 && (
         <section className="income-list-section">

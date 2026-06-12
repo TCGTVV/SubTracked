@@ -13,7 +13,7 @@ vi.mock("../lib/db", () => ({
 
 const mockAddSubscription = vi.mocked(addSubscription);
 const mockUpdateSubscription = vi.mocked(updateSubscription);
-vi.mocked(listPriceHistory);
+const mockListPriceHistory = vi.mocked(listPriceHistory);
 
 const accounts: Account[] = [
   {
@@ -68,6 +68,8 @@ describe("SubscriptionDialog", () => {
   beforeEach(() => {
     mockAddSubscription.mockReset();
     mockUpdateSubscription.mockReset();
+    mockListPriceHistory.mockReset();
+    mockListPriceHistory.mockResolvedValue([]);
   });
 
   it("zeigt 'Neues Abo' als Titel im Neu-Modus", () => {
@@ -85,6 +87,36 @@ describe("SubscriptionDialog", () => {
     expect(screen.getByLabelText("Konto")).toHaveValue("1");
     expect(screen.getByLabelText("Vorlauf (Tage)")).toHaveValue(7);
     expect(screen.getByRole("button", { name: "Speichern" })).toBeInTheDocument();
+  });
+
+  it("zeichnet konstante Preis-Historien mittig statt auf der Unterkante", async () => {
+    mockListPriceHistory.mockResolvedValue([
+      {
+        id: 2,
+        subscriptionId: existingSub.id,
+        amountCents: 1799,
+        currency: "EUR",
+        changedAt: "2026-02-01T00:00:00Z",
+      },
+      {
+        id: 1,
+        subscriptionId: existingSub.id,
+        amountCents: 1799,
+        currency: "EUR",
+        changedAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+
+    const { container } = renderDialog(existingSub);
+
+    await waitFor(() => {
+      expect(screen.getByText("Preis-Historie (2 Einträge)")).toBeInTheDocument();
+    });
+    expect(screen.getByText("Konstant: 17,99 €")).toBeInTheDocument();
+
+    const points = Array.from(container.querySelectorAll(".price-history-point"));
+    expect(points).toHaveLength(2);
+    expect(points.map((point) => point.getAttribute("cy"))).toEqual(["60", "60"]);
   });
 
   it("ruft addSubscription mit gerundetem Cent-Betrag und onSaved im Neu-Modus", async () => {
