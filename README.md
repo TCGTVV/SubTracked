@@ -71,7 +71,7 @@ Die erste echte Release-Version ist `v0.1.0`. Die Installer werden über GitHub 
 
 ## Download
 
-Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen.
+Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases/latest). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen.
 
 | System | Empfohlener Download | Hinweis |
 | --- | --- | --- |
