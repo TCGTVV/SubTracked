@@ -210,7 +210,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: nativer <dialog> schliesst per Escape; onClick ergaenzt nur den Backdrop-Klick
-    <dialog ref={ref} className="dialog" onClose={resetForm} onClick={closeDialogOnBackdropClick}>
+    <dialog ref={ref} className="dialog" onClick={closeDialogOnBackdropClick}>
       <div className="accounts-dialog">
         <h2>Konten</h2>
 

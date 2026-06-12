@@ -9,6 +9,7 @@ import {
   parseSignedAmountInput,
   parseStrictISODate,
   todayISO,
+  toISODateLocal,
 } from "./format";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
@@ -103,6 +104,23 @@ describe("formatNextDue", () => {
 describe("todayISO", () => {
   it("liefert das heutige Datum im yyyy-MM-dd-Format", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("toISODateLocal", () => {
+  it("serialisiert Date via lokale Getter, nicht via UTC", () => {
+    // Regression-Schutz fuer den TZ-Bug in coverage.ts: lokale Mitternacht in
+    // Europe/Berlin (UTC+1/+2) wuerde via toISOString().slice(0,10) den Vortag
+    // liefern. toISODateLocal nutzt explizit getFullYear/getMonth/getDate.
+    const d = new Date(2026, 0, 20);
+    expect(toISODateLocal(d)).toBe("2026-01-20");
+
+    const newYear = new Date(2026, 0, 1);
+    expect(toISODateLocal(newYear)).toBe("2026-01-01");
+
+    // Monats- und Tagespad: einstellige Werte muessen mit Null gepadded sein.
+    const padded = new Date(2026, 2, 5);
+    expect(toISODateLocal(padded)).toBe("2026-03-05");
   });
 });
 

@@ -138,6 +138,21 @@ export function todayISO(): string {
   return format(new Date(), "yyyy-MM-dd");
 }
 
+/**
+ * Serialisiert ein Date als ISO-Datum (`YYYY-MM-DD`) anhand der **lokalen** Zeitzone.
+ *
+ * `Date#toISOString` würde in jeder Zeitzone östlich von UTC den Vortag liefern,
+ * wenn das Date — wie in unserer Recurrence/Coverage-Pipeline üblich — auf lokaler
+ * Mitternacht steht (lokale Mitternacht = vorheriger Tag in UTC). Deshalb bauen wir
+ * den String aus den lokalen Gettern.
+ */
+export function toISODateLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /** Days elapsed since a SQLite `datetime('now')` string (UTC, format "YYYY-MM-DD HH:MM:SS"). */
 export function daysSince(sqliteDatetime: string | null): number | null {
   if (!sqliteDatetime) return null;

@@ -1,6 +1,6 @@
 import { addDays, addMonths, startOfDay } from "date-fns";
 import type { Account, Income, Subscription } from "../types";
-import { parseStrictISODate } from "./format";
+import { parseStrictISODate, toISODateLocal } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
 export interface CoverageItem {
@@ -130,7 +130,7 @@ export function computeCoverage(
         type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
-        date: d.toISOString().slice(0, 10),
+        date: toISODateLocal(d),
         cents: sub.amountCents,
       });
     }
@@ -172,7 +172,7 @@ export function computeCoverage(
         type: "income",
         subscriptionId: inc.id,
         subscription: inc.name,
-        date: d.toISOString().slice(0, 10),
+        date: toISODateLocal(d),
         cents: inc.amountCents,
       });
     }
@@ -286,7 +286,7 @@ export function computeUpcoming(
         type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
-        date: d.toISOString().slice(0, 10),
+        date: toISODateLocal(d),
         cents: sub.amountCents,
         currency: sub.currency,
         accountName,
@@ -304,7 +304,7 @@ export function computeUpcoming(
         type: "income",
         subscriptionId: inc.id,
         subscription: inc.name,
-        date: d.toISOString().slice(0, 10),
+        date: toISODateLocal(d),
         cents: inc.amountCents,
         currency: inc.currency,
         accountName,
