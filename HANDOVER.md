@@ -9,6 +9,98 @@
 
 ---
 
+## 2026-06-12 — Claude: v0.1.0 released + UI-Redesign-Plan + IncomeDialog-Pilot (MUI v9)
+
+> Session-Fokus: v0.1.0 oeffentlich verfuegbar machen, dann den naechsten grossen Block (UI-Redesign Richtung arsnova.eu) starten. Plan-Mode, dann Pilot, dann User-Sicht-Check.
+
+### Was passierte
+
+**v0.1.0-Release abgeschlossen**
+
+- Annotated Tag `v0.1.0` auf `2cc8cab` gesetzt + gepusht.
+- Release-Workflow `.github/workflows/release.yml` (tauri-action) hat in 9m24s alle 10 Installer gebaut: Linux `.deb`/`.AppImage`/`.rpm`, Windows `.msi`/`-setup.exe`, macOS Intel + Apple Silicon `.dmg` + `.app.tar.gz`.
+- Draft-Release vom User geprueft und als latest Release publiziert (Standard-Setting). `v0.1.0` ist damit oeffentlich.
+- `BACKLOG.md` Zeile 96 abgehakt (Commit `20a51fc`).
+
+**UI-Redesign-Plan (Plan-Mode)**
+
+- Plan-File `/home/legr/.claude/plans/swift-crafting-patterson.md` (ausserhalb Repo).
+- Phase-1-Exploration: 0 CSS-Variablen in App.css (1148 Zeilen), Dark-Mode rein per `@media (prefers-color-scheme: dark)` ohne Toggle-Plumbing, 11 Komponenten alle vanilla HTML-Primitive, Tests ueberwiegend aria-resilient (Ausnahme `.closest(".account-item")` in `AccountsDialog.test.tsx`).
+- Lib-Wahl: MUI gegen shadcn/ui (kein M3 out-of-the-box), Material Web Components (juenger), Tailwind+M3 (alles selbst bauen). MUI hat die ausgereifteste M3-Adjacent-Implementation in React + beste Doku-Tiefe fuer Anfaenger-Lernen.
+- Pilot-Wahl: **IncomeDialog** (kleinster reiner Form-Dialog, ~200 LOC, etabliert Form-Primitive fuer die drei anderen Dialoge).
+
+**MUI-Realitaetscheck vor Install (wichtig fuer naechste Agenten)**
+
+- MUI ist bei **9.1.1**, nicht v6 wie der Plan erwartete. API-Drift:
+  - `CssVarsProvider` → **`ThemeProvider`**
+  - `extendTheme` → **`createTheme({ cssVariables: { colorSchemeSelector: "class" }, colorSchemes: { light: true, dark: true } })`**
+  - `getInitColorSchemeScript()` (Funktion aus `@mui/material/styles`) → **`<InitColorSchemeScript />`** (Komponente aus `@mui/material/InitColorSchemeScript`)
+- Material Design 3 ist in MUI v9 **nicht** als First-Class-Tokenset eingebaut (kein `surfaceContainerLow`, `onPrimaryContainer` etc.). MUI ist M2-by-default mit konfigurierbaren Farben. „Echtes M3" wuerde Material Web Components erfordern. **Userwunsch ist arsnova-Look, nicht M3-Spec-Konformitaet** — daher Entscheidung: MUI v9 + Custom-Theme.
+
+**Pilot (Commit `3d487d1`)**
+
+- Deps: `@mui/material 9.1.1`, `@emotion/react 11.14`, `@emotion/styled 11.14`, `@fontsource/inter 5.2.8`, `material-symbols 0.45.0`.
+- `src/theme/theme.ts`: Teal-Petrol-Slate-Palette (Primary `#0f766e` / Dark `#5eead4`, Secondary `#007A8A`, Info `#2596be`, Slate fuer Text), `cssVariables` aktiv, `borderRadius: 12`, Inter-Typo, Button-`textTransform: none`.
+- `src/theme/fonts.ts`: Inter 400-700 + Material Symbols Outlined lokal via npm-Pakete (Tauri-CSP-konform, kein Google-Fonts-Request).
+- `src/main.tsx`: `ThemeProvider` + `CssBaseline enableColorScheme` + `InitColorSchemeScript` (Anti-Flicker), `defaultMode="system"` folgt prefers-color-scheme.
+- `src/components/IncomeDialog.tsx`: kompletter MUI-Rewrite. MUI-Komponenten: `Dialog`/`DialogTitle`/`DialogContent`/`DialogActions`, `TextField` (Name + Betrag mit `slotProps.htmlInput.inputMode = "decimal"`), `Select`/`MenuItem` in `FormControl`/`InputLabel`/`FormHelperText` (Waehrung/Konto/Intervall), `Checkbox` via `FormControlLabel`, `Alert severity="error"` fuer Submit-Errors, `Stack spacing={2}` als Vertical-Layout.
+- `src/App.tsx`: IncomeDialog-API auf **`open`/`onClose`** modernisiert. `incomeOpenSeq` + `incomeDialogRef` + Open-`useEffect` entfernt, durch `incomeOpen` Boolean ersetzt. `startNewIncome`/`startEditIncome`/`handleIncomeSaved` schalten den State direkt.
+- `DateField` bleibt vanilla `react-day-picker` (per Plan out-of-scope), in `FormControl`/`FormLabel` gewrappt.
+
+### Verifikation
+
+- `pnpm build` ✓ — Main JS 562 kB (vorher 325), CSS 31 kB (vorher 22), Material Symbols Outlined als separates **3.9 MB woff2-Asset** (kein JS-Bundle-Impact, aber Asset-Groesse beachten).
+- `pnpm test:run` ✓ — 14/14 Files, **189/189 Tests**. IncomeDialog hat keine eigenen Tests (hatte vorher auch keine), wird in `App.test.tsx` als `<dialog />` gemockt — API-Wechsel bricht den Mock nicht.
+- `pnpm lint` ✓ — Biome clean ueber 57 Dateien.
+- **Manuelle UI-Verifikation durch User** ✓ — IncomeDialog rendert MUI-Look in Light + Dark, Felder + Validation + Speichern funktionieren.
+
+### User-Feedback (kritisch fuer naechste Session)
+
+> "Sieht erstmal ok aus. Aber nur die Einnahmen haben ein neues Design. Ansonsten ist es doch aber auch nicht grossartig anders, oder? Es ist quasi nur blau, oder? Ich dachte wir machen es noch ein wenig **verspielter**."
+
+Klare Ansage: das aktuelle Custom-Theme ist zu zurueckhaltend. Teal `#0f766e` + MUI's M2-Default-Shapes (kantige Buttons, dezente Elevation, kein sichtbarer Mehrfarben-Akzent) wirken optisch nicht weit weg vom alten `#396cd8`-Akzent. Funktional korrekt reicht nicht — der User will Charakter, nicht „MUI-Default mit umlackierter Farbe".
+
+**Konsequenz: bevor weitere Komponenten migriert werden, das Theme verspielter machen.** Sonst zementiert sich der Look auf SubscriptionDialog/AccountsDialog/SettingsDialog.
+
+Hebel fuer die naechste Session:
+
+- `borderRadius` hoch (12 → 18-20, M3-pill-Style fuer Buttons sogar 24).
+- Mehrfarbige Akzente **sichtbar** einsetzen: Secondary `#007A8A` und Info `#2596be` als Surface/Akzent-Flaechen (z.B. DialogTitle-BG, Status-Chips, FormControl-Highlights), nicht nur als unbenutzte Theme-Eintraege.
+- **Material Symbols verwenden**: aktuell wird der Font geladen, aber nirgends gerendert. Buttons mit Icons (Speichern = `save`, Abbrechen = `close`, Header-Plus = `add`) bringen sofort spuerbare Personality.
+- Elevation/Shadows differenzieren: Surface vs. Card vs. elevated Card.
+- Eventuell DialogTitle mit farbiger Surface (Primary-Container-aehnlich) statt plain weiss.
+- Typo-Hierarchie ausgepraegter (Display/Headline-Groessen fuer Section-Titles).
+
+Empfohlener Ablauf naechste Session:
+
+1. Theme `src/theme/theme.ts` aufmotzen (Radii, Component-Overrides fuer `MuiButton`/`MuiDialog`/`MuiCard`, evtl. Custom-Surface-Tokens).
+2. IncomeDialog mit Icons (z.B. `<Button startIcon={<span className="material-symbols-outlined">save</span>}>`) ausstatten — kein Komponenten-Rewrite, nur visuelle Aufmotzung.
+3. User-Sicht-Check des neuen Looks.
+4. Erst wenn der User „so ist es" sagt: weiter mit Plan-Schritt 2 (SubscriptionDialog).
+
+### Status / Naechster Schritt
+
+- HEAD: `3d487d1` (gepusht). Pilot funktional fertig, gates gruen.
+- Working Tree: dirty nur mit diesem HANDOVER-Eintrag.
+- v0.1.0 ist oeffentlich.
+- Plan-File bleibt in `/home/legr/.claude/plans/swift-crafting-patterson.md` (ausserhalb Repo).
+- Memory `feedback_ui_visual_personality` neu angelegt mit dem „verspielter"-Feedback.
+
+### Gotchas
+
+- **Bundle-Size Material Symbols**: 3.9 MB Variable-Font (woff2) als separates Asset, aktuell ungenutzt im DOM. Browser laedt den Font erst bei aktiver `@font-face`-Regel + DOM-Match. Sobald wir Icons benutzen, ist die Groesse gerechtfertigt; falls nie genutzt, spaeter subsetten (nur Codepoints der tatsaechlich verwendeten Icons). Vermeidet 4 MB Overhead pro Installer.
+- **MUI API-Drift v6→v9**: Plan-File enthaelt die alten Namen. Bei Bedarf Plan aktualisieren oder Body von Commit `3d487d1` als Referenz nutzen.
+- **CssBaseline + App.css gleichzeitig aktiv**: Vanilla-CSS reicht bis zur kompletten Migration, aber `CssBaseline` ueberschreibt manche `:root`-Defaults (`box-sizing: border-box`, `body`-margin/-padding-Reset, Theme-Hintergrundfarbe). User sah dadurch im Sicht-Check keine kaputten Stellen, beim Migrieren weiterer Komponenten beobachten.
+- **DateField nicht migriert**: `react-day-picker` bleibt fuer den Pilot. Sieht im M3-Dialog leicht inkonsistent aus (eckiger Button-Shape statt Pill). Eigener Refactor spaeter; das Wrap in `FormControl`/`FormLabel` macht es zumindest beschriftungsmaessig konsistent.
+- **`IncomeDialog`-API geaendert**: `ref: Ref<HTMLDialogElement>` raus, `open: boolean` + `onClose: () => void` rein. Wenn jemand spaeter auf die alte API spekuliert (z.B. in einem Test, der das gegen die echte Komponente baut), erscheint das als Breaking Change. Im Repo aktuell kein Caller mehr auf der alten API.
+- **Plan-File ausserhalb Repo**: `/home/legr/.claude/plans/swift-crafting-patterson.md` ist nicht versioniert. Bei Bedarf koennte sie als `docs/plans/ui-redesign-pilot.md` ins Repo wandern, damit andere Agents sie direkt sehen — aktuell nicht zwingend.
+
+### Geaenderte/neue Memories
+
+- **Neu:** `feedback_ui_visual_personality` — User-Praeferenz „verspielter Look", konkret nach dem zurueckhaltenden IncomeDialog-Pilot.
+
+---
+
 ## 2026-06-12 — Claude: Folgereview `/code-review high` + Befund 1 gefixt
 
 > Session-Fokus: Den `/code-review high` nachgeholt, den Codex' Commit `3532856` ohne Review gepusht hatte. 3 neue Befunde — einer direkt gefixt, zwei ins Backlog.
