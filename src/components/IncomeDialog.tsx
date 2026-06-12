@@ -1,4 +1,22 @@
-import { type FormEvent, type Ref, useId, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
+  FormLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+} from "@mui/material";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { addIncome, updateIncome } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
@@ -11,12 +29,12 @@ import {
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
 import type { Account, Income, Interval } from "../types";
 import { DateField } from "./DateField";
-import { Dialog } from "./Dialog";
 
 interface Props {
-  ref: Ref<HTMLDialogElement>;
+  open: boolean;
   income: Income | null;
   accounts: Account[];
+  onClose: () => void;
   onSaved: () => void;
 }
 
@@ -33,24 +51,14 @@ function centsToInput(cents: number, currency: string): string {
   return (cents / divisor).toFixed(2).replace(".", ",");
 }
 
-export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
+export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props) {
   const isEdit = income !== null;
 
-  const nameId = useId();
-  const amountId = useId();
-  const currencyId = useId();
-  const accountIdId = useId();
-  const oneTimeId = useId();
-  const intervalId = useId();
   const anchorId = useId();
-  const nameErrorId = useId();
-  const amountErrorId = useId();
-  const currencyErrorId = useId();
-  const anchorErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
-  const currencyRef = useRef<HTMLSelectElement>(null);
+  const currencyRef = useRef<HTMLInputElement>(null);
   const anchorRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(income?.name ?? "");
@@ -60,9 +68,6 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   const [currency, setCurrency] = useState<string>(income?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(income?.accountId ?? null);
   const [oneTime, setOneTime] = useState(income?.oneTime ?? false);
-  // Bei einmaligen Einnahmen ist das gespeicherte Intervall semantisch irrelevant.
-  // Wir normalisieren beim Init auf "monthly", damit ein spaeteres Untoggle nicht
-  // lautlos ein altes Intervall (z.B. "biweekly") reaktiviert.
   const [interval, setInterval] = useState<Interval>(
     income?.oneTime ? "monthly" : (income?.interval ?? "monthly"),
   );
@@ -135,162 +140,140 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   }
 
   return (
-    <Dialog ref={ref}>
-      <form onSubmit={(e) => void handleSubmit(e)} className="form" noValidate>
-        <h2>{isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}</h2>
-
-        <div className="field">
-          <label htmlFor={nameId}>Name</label>
-          <input
-            id={nameId}
-            ref={nameRef}
-            type="text"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              clearFieldError("name");
-            }}
-            aria-invalid={!!errors.name}
-            aria-describedby={errors.name ? nameErrorId : undefined}
-            required
-          />
-          {errors.name && (
-            <span id={nameErrorId} className="field-error" role="alert">
-              {errors.name}
-            </span>
-          )}
-        </div>
-
-        <div className="field">
-          <label htmlFor={amountId}>Betrag</label>
-          <input
-            id={amountId}
-            ref={amountRef}
-            type="text"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              clearFieldError("amount");
-            }}
-            aria-invalid={!!errors.amount}
-            aria-describedby={errors.amount ? amountErrorId : undefined}
-          />
-          {errors.amount && (
-            <span id={amountErrorId} className="field-error" role="alert">
-              {errors.amount}
-            </span>
-          )}
-        </div>
-
-        <div className="field">
-          <label htmlFor={currencyId}>Währung</label>
-          <select
-            id={currencyId}
-            ref={currencyRef}
-            value={currency}
-            onChange={(e) => {
-              setCurrency(e.target.value);
-              clearFieldError("currency");
-            }}
-            aria-invalid={!!errors.currency}
-            aria-describedby={errors.currency ? currencyErrorId : undefined}
-          >
-            {CURRENCY_OPTIONS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          {errors.currency && (
-            <span id={currencyErrorId} className="field-error" role="alert">
-              {errors.currency}
-            </span>
-          )}
-        </div>
-
-        <div className="field">
-          <label htmlFor={accountIdId}>Konto</label>
-          <select
-            id={accountIdId}
-            value={accountId ?? ""}
-            onChange={(e) => setAccountId(e.target.value === "" ? null : Number(e.target.value))}
-          >
-            <option value="">(kein Konto)</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label className="setting-label" htmlFor={oneTimeId}>
-            <input
-              id={oneTimeId}
-              type="checkbox"
-              checked={oneTime}
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+        <DialogTitle>{isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              label="Name"
+              inputRef={nameRef}
+              value={name}
               onChange={(e) => {
-                const checked = e.target.checked;
-                setOneTime(checked);
-                if (checked) setInterval("monthly");
+                setName(e.target.value);
+                clearFieldError("name");
               }}
+              error={!!errors.name}
+              helperText={errors.name}
+              required
+              fullWidth
             />
-            <span>Einmalige Einnahme</span>
-          </label>
-        </div>
 
-        <div className="field">
-          <label htmlFor={intervalId}>Intervall</label>
-          <select
-            id={intervalId}
-            value={interval}
-            onChange={(e) => setInterval(e.target.value as Interval)}
-            disabled={oneTime}
-          >
-            {INTERVAL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </div>
+            <TextField
+              label="Betrag"
+              inputRef={amountRef}
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearFieldError("amount");
+              }}
+              error={!!errors.amount}
+              helperText={errors.amount}
+              slotProps={{ htmlInput: { inputMode: "decimal" } }}
+              fullWidth
+            />
 
-        <div className="field">
-          <label htmlFor={anchorId}>{oneTime ? "Datum" : "Erste / nächste Fälligkeit"}</label>
-          <DateField
-            id={anchorId}
-            buttonRef={anchorRef}
-            value={anchorDate}
-            onChange={(v) => {
-              setAnchorDate(v);
-              clearFieldError("anchorDate");
-            }}
-            ariaInvalid={!!errors.anchorDate}
-            ariaDescribedBy={errors.anchorDate ? anchorErrorId : undefined}
-          />
-          {errors.anchorDate && (
-            <span id={anchorErrorId} className="field-error" role="alert">
-              {errors.anchorDate}
-            </span>
-          )}
-        </div>
+            <FormControl fullWidth error={!!errors.currency}>
+              <InputLabel id={`${anchorId}-currency-label`}>Währung</InputLabel>
+              <Select
+                labelId={`${anchorId}-currency-label`}
+                label="Währung"
+                inputRef={currencyRef}
+                value={currency}
+                onChange={(e) => {
+                  setCurrency(e.target.value);
+                  clearFieldError("currency");
+                }}
+              >
+                {CURRENCY_OPTIONS.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.currency && <FormHelperText>{errors.currency}</FormHelperText>}
+            </FormControl>
 
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+            <FormControl fullWidth>
+              <InputLabel id={`${anchorId}-account-label`}>Konto</InputLabel>
+              <Select
+                labelId={`${anchorId}-account-label`}
+                label="Konto"
+                value={accountId === null ? "" : String(accountId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAccountId(v === "" ? null : Number(v));
+                }}
+                displayEmpty
+              >
+                <MenuItem value="">(kein Konto)</MenuItem>
+                {accounts.map((a) => (
+                  <MenuItem key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
-        <div className="form-actions">
-          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
-            Abbrechen
-          </button>
-          <button type="submit" disabled={submitting}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={oneTime}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setOneTime(checked);
+                    if (checked) setInterval("monthly");
+                  }}
+                />
+              }
+              label="Einmalige Einnahme"
+            />
+
+            <FormControl fullWidth disabled={oneTime}>
+              <InputLabel id={`${anchorId}-interval-label`}>Intervall</InputLabel>
+              <Select
+                labelId={`${anchorId}-interval-label`}
+                label="Intervall"
+                value={interval}
+                onChange={(e) => setInterval(e.target.value as Interval)}
+              >
+                {INTERVAL_OPTIONS.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth error={!!errors.anchorDate}>
+              <FormLabel htmlFor={anchorId} sx={{ mb: 0.5 }}>
+                {oneTime ? "Datum" : "Erste / nächste Fälligkeit"}
+              </FormLabel>
+              <DateField
+                id={anchorId}
+                buttonRef={anchorRef}
+                value={anchorDate}
+                onChange={(v) => {
+                  setAnchorDate(v);
+                  clearFieldError("anchorDate");
+                }}
+                ariaInvalid={!!errors.anchorDate}
+                ariaDescribedBy={errors.anchorDate ? `${anchorId}-error` : undefined}
+              />
+              {errors.anchorDate && (
+                <FormHelperText id={`${anchorId}-error`}>{errors.anchorDate}</FormHelperText>
+              )}
+            </FormControl>
+
+            {error && <Alert severity="error">{error}</Alert>}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Abbrechen</Button>
+          <Button type="submit" variant="contained" disabled={submitting}>
             {submitting ? "Speichern …" : "Speichern"}
-          </button>
-        </div>
+          </Button>
+        </DialogActions>
       </form>
     </Dialog>
   );

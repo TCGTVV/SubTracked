@@ -28,22 +28,17 @@ function App() {
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
-  const [incomeOpenSeq, setIncomeOpenSeq] = useState(0);
+  const [incomeOpen, setIncomeOpen] = useState(false);
   const [settingsOpenSeq, setSettingsOpenSeq] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
   const subDialogRef = useRef<HTMLDialogElement>(null);
-  const incomeDialogRef = useRef<HTMLDialogElement>(null);
   const accountsDialogRef = useRef<HTMLDialogElement>(null);
   const settingsDialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (subOpenSeq > 0) subDialogRef.current?.showModal();
   }, [subOpenSeq]);
-
-  useEffect(() => {
-    if (incomeOpenSeq > 0) incomeDialogRef.current?.showModal();
-  }, [incomeOpenSeq]);
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
   const activeIncomes = useMemo(() => incomes.filter((i) => i.active), [incomes]);
@@ -67,16 +62,16 @@ function App() {
 
   function startNewIncome() {
     setEditingIncome(null);
-    setIncomeOpenSeq((s) => s + 1);
+    setIncomeOpen(true);
   }
 
   function startEditIncome(income: Income) {
     setEditingIncome(income);
-    setIncomeOpenSeq((s) => s + 1);
+    setIncomeOpen(true);
   }
 
   function handleIncomeSaved() {
-    incomeDialogRef.current?.close();
+    setIncomeOpen(false);
     void reloadAll();
   }
 
@@ -340,10 +335,10 @@ function App() {
         onSaved={handleSubSaved}
       />
       <IncomeDialog
-        key={`${editingIncome?.id ?? "new-income"}-${incomeOpenSeq}`}
-        ref={incomeDialogRef}
+        open={incomeOpen}
         income={editingIncome}
         accounts={accounts}
+        onClose={() => setIncomeOpen(false)}
         onSaved={handleIncomeSaved}
       />
       <AccountsDialog ref={accountsDialogRef} accounts={accounts} onChanged={reloadAccounts} />
