@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
-import type { Account } from "./types";
+import type { Account, Subscription } from "./types";
 
 vi.mock("./hooks/useNotificationPermission", () => ({
   useNotificationPermission: vi.fn(),
@@ -94,5 +94,37 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Erstes Abo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Einnahme hinzufügen" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Overview Mock")).not.toBeInTheDocument();
+  });
+
+  it("zeigt keinen Empty-State, wenn nur archivierte Abos vorhanden sind", () => {
+    const archivedSub: Subscription = {
+      id: 10,
+      name: "Netflix",
+      amountCents: 1799,
+      currency: "EUR",
+      accountId: account.id,
+      interval: "monthly",
+      anchorDate: "2026-01-01",
+      leadDays: 3,
+      active: false,
+      notify: true,
+    };
+    mockUseSubscriptions.mockReturnValue({
+      subs: [archivedSub],
+      accounts: [account],
+      incomes: [],
+      loading: false,
+      error: null,
+      setError: vi.fn(),
+      reloadAll: vi.fn(),
+      reloadAccounts: vi.fn(),
+    });
+
+    render(<App />);
+
+    expect(
+      screen.queryByRole("heading", { name: "Noch keine Zahlungsdaten" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/Archivierte anzeigen \(1 Abo\)/)).toBeInTheDocument();
   });
 });
