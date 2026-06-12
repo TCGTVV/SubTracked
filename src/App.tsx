@@ -166,7 +166,7 @@ function App() {
           Fehler: {error}
         </p>
       )}
-      {!loading && !error && !hasActiveCashflow && (
+      {!loading && !error && subs.length === 0 && incomes.length === 0 && (
         <section className="empty-state" aria-labelledby="empty-title">
           <h2 id="empty-title">Noch keine Zahlungsdaten</h2>
           <p>
