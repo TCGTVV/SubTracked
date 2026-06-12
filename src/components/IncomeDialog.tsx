@@ -66,7 +66,12 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
   const [currency, setCurrency] = useState<string>(income?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(income?.accountId ?? null);
   const [oneTime, setOneTime] = useState(income?.oneTime ?? false);
-  const [interval, setInterval] = useState<Interval>(income?.interval ?? "monthly");
+  // Bei einmaligen Einnahmen ist das gespeicherte Intervall semantisch irrelevant.
+  // Wir normalisieren beim Init auf "monthly", damit ein spaeteres Untoggle nicht
+  // lautlos ein altes Intervall (z.B. "biweekly") reaktiviert.
+  const [interval, setInterval] = useState<Interval>(
+    income?.oneTime ? "monthly" : (income?.interval ?? "monthly"),
+  );
   const [anchorDate, setAnchorDate] = useState(income?.anchorDate ?? todayISO());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -233,7 +238,11 @@ export function IncomeDialog({ ref, income, accounts, onSaved }: Props) {
               id={oneTimeId}
               type="checkbox"
               checked={oneTime}
-              onChange={(e) => setOneTime(e.target.checked)}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setOneTime(checked);
+                if (checked) setInterval("monthly");
+              }}
             />
             <span>Einmalige Einnahme</span>
           </label>

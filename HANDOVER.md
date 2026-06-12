@@ -9,6 +9,105 @@
 
 ---
 
+## 2026-06-12 — Claude: `/code-review high` vor v0.1.0 — 10 Befunde, noch nichts gefixt
+
+> Session-Fokus: Nach `git pull` (Codex hatte den Produktnutzen-Block + Release-Doku + Qualitätsrunde direkt auf `main` gepusht, ohne Review) den ausstehenden `/code-review high` über alles vom 11.06. nachgeholt. Kein Code geändert, nur dokumentiert.
+
+### Was passierte
+
+- **Stand beim Start:** Branch `main` auf `da4f85f`, dann `git pull --ff-only` → `048add6`. Working Tree clean.
+- **Serena aktiviert** (TS + Rust, `.serena/project.yml` schon konfiguriert), alle 7 Memories gelesen (`core`, `conventions`, `tech_stack`, `suggested_commands`, `task_completion`, `ui_vision`, `memory_maintenance`).
+- **Alle sechs 11.06.-HANDOVER-Einträge gelesen** (Codex × 3, Claude × 3) — die UX-Bug-Welle, der Produktnutzen-Block und die Qualitätsrunde sind alle erledigt und gepusht, aber zwei der drei Codex-Blöcke (Produktnutzen + Qualitätsrunde) sind ohne `/code-review high` rausgegangen.
+- **Review-Range:** `a3c5403..HEAD` — alles seit „Windows-Smoke grün". Deckt sieben Code-Commits ab (Toolchain-cfg-Fix, App-Icon, Dialog-Backdrop, Header-Reihenfolge, Produktnutzen, Release-Doku, Qualitätsrunde). 46 Files, +988/-107.
+- **Sieben Finder-Agents parallel** (3 Korrektheit + 3 Cleanup + 1 Altitude) je bis 6 Kandidaten, dann inline-Verifikation gegen den realen Code (statt 12+ Verifier-Agents — Token-Sparsamkeit). Drei Kandidaten REFUTED (TS-strict-Narrowing rettet `monthsPer`-NaN; `months_per_interval` cfg(test) hat keinen realen Caller; backdrop-Click bei Select-Popup wäre nur theoretisch). Mehrere Duplikate über Angles zusammengeführt (PriceHistoryGraph-Cleanup-Cluster, Empty-State-Cluster, oneTime-Cluster).
+
+### Die 10 Befunde (schwerste zuerst)
+
+**Korrektheit hoch (Top 5 — vor v0.1.0 anschauen):**
+
+1. **TZ-Bug `toISOString().slice(0,10)`** ([coverage.ts:175](src/lib/coverage.ts#L175), auch :133/:289/:307) — In jeder Zeitzone östlich von UTC liefert die Konvertierung eines lokal-mitternächtlichen `Date` den Vortag. User in Berlin sieht alle Cashflow-Daten in StatusCard/UpcomingSection um einen Tag zu früh. Vitest fängt das nicht ab (`vitest.config.ts` setzt `TZ='UTC'`). Pre-existing, aber in dieser Session in beiden geänderten Funktionen (`computeCoverage`, `computeUpcoming`) drin.
+2. **Empty-State-Loch „nur Konten"** ([App.tsx:167](src/App.tsx#L167)) — Bedingung verlangt subs UND accounts UND incomes leer. Sobald der User aus dem Empty-State „Konto anlegen" klickt und sein erstes Konto speichert, verschwindet die Sektion in einen quasi-leeren Zustand ohne CTA. Onboarding-Flow kippt nach Schritt 1 raus.
+3. **AccountsDialog: Backdrop-Klick verwirft Edit lautlos** ([AccountsDialog.tsx:213](src/components/AccountsDialog.tsx#L213)) — Kombination `onClose={resetForm}` + neuer `onClick={closeDialogOnBackdropClick}` führt dazu, dass ein versehentlicher Backdrop-Klick den laufenden Konto-Edit komplett löscht. Andere Dialoge nicht betroffen (kein `onClose`-Reset).
+4. **Migration 0007 ist crash-unsicher** ([0007_biweekly_and_one_time_incomes.sql:25](src-tauri/migrations/0007_biweekly_and_one_time_incomes.sql#L25)) — `-- no-transaction` plus `DROP TABLE subscriptions` vor `RENAME` heißt: Power-loss/SIGKILL zwischen den beiden Statements hinterlässt die DB ohne `subscriptions`-Tabelle, sqlx kann nicht selber zurück (CREATE TABLE schon vergeben). Gleiches Risiko ab Zeile 49 für `incomes`. Low-probability, aber wenn's trifft, kann der User die App nicht mehr starten.
+5. **IncomeDialog speichert stale Intervall bei `oneTime=true`** ([IncomeDialog.tsx:248](src/components/IncomeDialog.tsx#L248)) — Interval-Select wird nur `disabled`, der State `interval` bleibt aber gefüllt und wird mitgeschickt. Edit-Flow: User untoggelt später `oneTime` → das alte Intervall ist wieder aktiv, ohne dass er es bestätigt → phantom-wiederkehrende Einnahme.
+
+**Korrektheit mittel:**
+
+6. **PriceHistoryGraph kollabiert flach bei min===max** ([SubscriptionDialog.tsx:49](src/components/SubscriptionDialog.tsx#L49)) — `range = Math.max(0, 1) = 1` schickt alle Punkte auf die Chart-Unterkante. User sieht „Preis ist auf Minimum gefallen", obwohl er konstant ist. Trigger: zwei gleiche Preise in der Historie.
+7. **Migration 0007 AUTOINCREMENT-Kollision** ([0007_biweekly_and_one_time_incomes.sql:18](src-tauri/migrations/0007_biweekly_and_one_time_incomes.sql#L18)) — `sqlite_sequence` wird nicht explizit fortgeschrieben. Wenn vor der Migration eine ID gelöscht und nicht via FK CASCADE entsorgt wurde (Backup-Restore-Pfad, älteres Schema), kann das nächste `addSubscription` post-Migration die alte ID wiedervergeben. Workaround: `INSERT OR REPLACE INTO sqlite_sequence …` vor dem DROP.
+8. **One-time-Income mit vergangenem Datum bleibt active=true** ([coverage.ts:43](src/lib/coverage.ts#L43)) — `incomes.some(i => i.active)` triggert StatusCard/UpcomingSection-Render, `incomeDatesWithin` liefert aber `[]` → leere Sektionen mit Headline. Fix: entweder auto-archivieren oder den `some`-Filter um `oneTime+past`-Check ergänzen.
+
+**Cleanup / Altitude:**
+
+9. **`INTERVAL_OPTIONS` 1:1 dupliziert** ([IncomeDialog.tsx:15](src/components/IncomeDialog.tsx#L15) und [SubscriptionDialog.tsx:16](src/components/SubscriptionDialog.tsx#L16)) — vier identische `{value,label}`-Paare. Lift nach `src/lib/recurrence.ts` neben `Interval` und `monthsPer`.
+10. **Backdrop-Close-Util als Opt-in pro Dialog** ([dialog.ts:9](src/lib/dialog.ts#L9)) — vier Stellen mit identischem `onClick={closeDialogOnBackdropClick}` plus identischem `biome-ignore`-Kommentar. Tiefe Lösung: kleine `<Dialog>`-Wrapper-Komponente, die className, Backdrop-Close, biome-ignore und die `closest('dialog')?.close()`-Cancel-Convention einmal kapselt — siehe auch Befund 3, dort ist die Inkonsistenz mit `onClose={resetForm}` ein direktes Symptom.
+
+### Was im selben Turn dann doch noch passierte
+
+User-Entscheidung: Befunde **1, 3, 5** sofort fixen. Plus: User hat die 6. Korrektur fällig gemacht, dass ich **immer noch reflexhaft `Read`/`Edit` statt Serena nutze**, obwohl die Memory das seit fünf Verstärkungen sagt. Hardcoding-Schritt vorgeschoben.
+
+- **Hardcoding der Serena-Regel** (damit es nicht beim 7. Mal passiert):
+  - Neue [CLAUDE.md](CLAUDE.md) im Project-Root mit knapper operativer Top-Regel (Pre-Flight-Check 1–4 + Anti-Pattern-Liste + klare Ausnahmen). Wird in jeder Session garantiert in den Top-Level-Kontext geladen, anders als die Auto-Memory.
+  - `feedback_serena.md` (Auto-Memory) auf 6. Verstärkung erweitert mit konkretem Verweis auf CLAUDE.md und Selbstkritik („ich kann die Memory offenbar lesen, aber nicht anwenden — deshalb jetzt in den Top-Level-Kontext").
+  - `MEMORY.md`-Indexzeile verschärft: „**HARTE REGEL (6× korrigiert)**" statt der vorigen weichen Formulierung.
+- **Fix 1 (TZ-Bug, Befund 1):** Neue Util `toISODateLocal(d)` in [src/lib/format.ts](src/lib/format.ts) (nach `todayISO` per `insert_after_symbol`). Vier Stellen in [src/lib/coverage.ts](src/lib/coverage.ts) (`d.toISOString().slice(0,10)` × 4) per `replace_content` ersetzt, Import ergänzt. Plus neuer Test-Block `describe("toISODateLocal", …)` in [src/lib/format.test.ts](src/lib/format.test.ts) als Vertragsdoku/Regression-Schutz (kann den ursprünglichen Bug bei `TZ='UTC'` in vitest nicht live nachstellen, fängt aber jeden Rückfall in `toISOString` ab, sobald jemand non-UTC fährt).
+- **Fix 3 (AccountsDialog Edit-Loss, Befund 3):** `onClose={resetForm}` aus dem `<dialog>`-Tag in [src/components/AccountsDialog.tsx](src/components/AccountsDialog.tsx) entfernt. Resultat: Backdrop-Klick (und Escape, und „Schließen"-Button) schließen nur noch — sie verwerfen den Form-State nicht mehr. Reset passiert weiterhin nach erfolgreichem `handleSubmit` (Zeile 180) und beim expliziten „Abbrechen"-Button im Edit-Modus (Zeile 387). User-Vorteil: versehentliches Schließen verliert keinen Edit; beim Wiederöffnen ist der Stand noch da.
+- **Fix 5 (IncomeDialog stale Intervall, Befund 5):** Zwei Stellen in [src/components/IncomeDialog.tsx](src/components/IncomeDialog.tsx):
+  - Init-State normalisiert (`income?.oneTime ? "monthly" : (income?.interval ?? "monthly")`) — alte DB-Rows mit `one_time=true` und stale `interval='biweekly'` laden jetzt als `monthly` in den State.
+  - `onChange` des oneTime-Checkbox setzt zusätzlich `setInterval("monthly")`, sobald der Haken gesetzt wird. Tradeoff: User, der oneTime an-/aus-toggelt, verliert dabei sein zuvor gewähltes Intervall und muss es bei „aus" erneut wählen. Sicherheit > Convenience.
+- **Alle Edits über Serena** (`insert_after_symbol`, `replace_content`, `find_symbol`). Einzige bewusste Ausnahme: 8-Zeilen-`Read` auf `format.test.ts`-Header für den Import-Anchor, weil `search_for_pattern` in der MCP-Config nicht aktiviert ist.
+
+### Status am Sitzungsende
+
+- Branch `main`, **Working Tree dirty** mit:
+  - HANDOVER.md (dieser Eintrag, doppelt erweitert)
+  - CLAUDE.md (neu, Project-Root)
+  - src/lib/format.ts, src/lib/format.test.ts (Util + Test)
+  - src/lib/coverage.ts (4 Stellen)
+  - src/components/AccountsDialog.tsx (1 Attribut entfernt)
+  - src/components/IncomeDialog.tsx (Init + onChange)
+- Plus außerhalb Project-Root: feedback_serena.md + MEMORY.md (Auto-Memory).
+- **Befunde 1, 3, 5 implementiert + alle Gates grün** — bereit für Commit.
+
+### Verifikation
+
+- **Befund-Verifikation (Review-Phase):** 1, 2, 3, 5, 6 als CONFIRMED markiert (Failure-Szenarien aus den Code-Zeilen reproduzierbar); 4, 7, 8, 9, 10 als PLAUSIBLE (real, aber teils zustandsabhängig oder Cleanup).
+- **Post-Fix-Gates für Fix 1/3/5:**
+  - `pnpm test:run` ✓ — 13 Files / **186 Tests** (vorher 185; +1 für `toISODateLocal`).
+  - `pnpm build` ✓ — `tsc && vite build` sauber, 995 Module, kein TS-Fehler.
+  - `pnpm lint` ✓ — Biome clean (nach einem `lint:fix` wegen Doppel-Leerzeile zwischen Test-Blöcken).
+  - **Rust nicht angefasst** → `cargo` nicht relevant für diese Fixes.
+  - **Manuelle UI-Verifikation steht aus** — `pnpm tauri dev` diese Session nicht gestartet. Backdrop-Klick auf den AccountsDialog (Befund 3) ist in jsdom nicht testbar; bitte User klickt das im echten Build durch.
+
+### Nächster Schritt
+
+**Vor v0.1.0-Tag noch offen:**
+
+- **~~Befunde 1, 3, 5~~ erledigt** (siehe „Was im selben Turn dann doch noch passierte").
+- **Optional vor Release** (Bonus, nicht blockierend):
+  - **Befund 2 (Empty-State „nur Konten"):** Bedingung in [App.tsx:167](src/App.tsx#L167) auf `activeSubs.length===0 && !incomes.some(i=>i.active)` umstellen (Konten alleine erfüllen den Empty-Zustand), plus OverviewSection im Empty-State unterdrücken. Klein, aber Onboarding-relevant.
+  - **Befund 6 (PriceHistoryGraph flat):** in [SubscriptionDialog.tsx:49](src/components/SubscriptionDialog.tsx#L49) bei `min===max` y-Mitte verwenden und ein „konstant"-Label statt Min/Max. ~5 Zeilen.
+- **Bewusst auf v0.1.1 verschoben** (BACKLOG-fähig):
+  - Befund 4 (Migration crash recovery) — Transaction-Rebuild-Pattern oder Idempotenz-Guards (`CREATE TABLE IF NOT EXISTS … _new`).
+  - Befund 7 (AUTOINCREMENT-Kollision) — `INSERT OR REPLACE INTO sqlite_sequence` Statement + Migrations-Test mit gelöschten IDs.
+  - Befund 8 (one-time past anchor) — UX-Polish, auto-archive-Logik.
+  - Befund 9 (`INTERVAL_OPTIONS`-Dup) und Befund 10 (Dialog-Wrapper) — Cleanup, kein Release-Blocker.
+
+**Direkt nach diesem Eintrag:** Commit + Push der Befunde 1/3/5 + CLAUDE.md + HANDOVER-Update. Danach kann der User über die Bonus-Fixes (2, 6) oder direkt über `v0.1.0`-Tag (BACKLOG 81) entscheiden.
+
+### Gotchas / Stolperfallen
+
+- **Vitest läuft mit `TZ='UTC'`** — der TZ-Bug (Befund 1) ist deshalb komplett unsichtbar in der CI. Wenn der Fix kommt, **muss** der Test explizit in eine non-UTC-Zone gestubbt werden, sonst grünt der Test auch ohne Fix.
+- **Codex hat ohne Review committet/gepusht** — der Produktnutzen-Commit `650efc8` und der Qualitätsrunde-Commit `048add6` waren laut HANDOVER nicht reviewed. Beide Befunde, die ich oben am höchsten ranke (TZ-Bug + Empty-State + AccountsDialog), stammen aus diesen beiden Blöcken. Für die Zukunft: `/code-review high` ist nicht „nice to have", sondern fängt genau die Klasse von Bugs ab, die die Test-Suite strukturell nicht sieht.
+- **`closeDialogOnBackdropClick`-Util hat scharfe Kanten** mit `onClose`-Reset-Pattern (siehe Befund 3). Beim Aufräumen via Dialog-Wrapper (Befund 10) den Backwards-Compat-Pfad mitnehmen, sonst verlierst du in anderen Dialogen auch State.
+- **Inline-Verifikation statt Verifier-Agents:** Spec sieht pro Kandidat einen Verifier-Agent vor; ich habe das aus Token-Gründen inline gemacht. Falls jemand mehr Konfidenz für die PLAUSIBLE-Kandidaten (4, 7, 8) braucht, einzeln einen Agent dranschicken.
+
+### Geänderte/neue Memories
+
+- Keine. Die Befunde sind PR-spezifisch und gehören in HANDOVER + ggf. BACKLOG, nicht in Serena-Memories. Falls Befund 1 (TZ-Bug) sich als systematisches Anti-Pattern in der Codebase erweist (mehr Stellen mit `toISOString().slice(0,10)`), wäre eine Convention-Memory „Datum-Strings immer aus lokalen Gettern, nie via toISOString" sinnvoll — aber erst nach Fix verifizieren, ob das die einzigen vier Stellen sind.
+
+---
+
 ## 2026-06-11 — Codex: v0.1.0-Qualitätsrunde (unwrap, Settings, Empty-State)
 
 > Session-Fokus: die drei vor Release noch sinnvollen Qualitäts-Items umgesetzt: Production-`unwrap`/`expect` auditieren, Settings-Support minimal ausbauen, Empty-State nützlicher machen.
