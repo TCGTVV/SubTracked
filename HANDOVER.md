@@ -9,6 +9,74 @@
 
 ---
 
+## 2026-06-15 — Claude: UI-Stack-Pivot — MUI raus, Tailwind v4 + shadcn/ui + Dashboard-Shell (Phase 0+1)
+
+> Session-Fokus: Den gescheiterten MUI-Pilot verworfen und auf einen neuen UI-Stack umgestellt. Plan-Mode → Stack-/Design-Entscheidungen mit User → Phase 0 (Scaffolding) + Phase 1 (Shell + Slice) gebaut. **Steht am User-Sign-off-Gate.**
+
+### Warum der Pivot
+
+Der MUI-v9-Pilot (Vorsession) wurde vom User abgelehnt: Look „quasi nur blau / zu zurückhaltend", und beim Sicht-Check brach das Layout (Hintergrund reichte nicht bis zum Boden — `CssBaseline` vs. `App.css`). Kernproblem: sichtbarer **Halb-Zustand**. User-Wunsch neu: dynamischer, fenstergrößen-reaktiver, verspielter Look. Nach Optionsvergistung (Apps als Referenz) entschieden:
+
+- **Stack:** Tailwind CSS v4 + shadcn/ui + lucide-react. **MUI/Emotion/Material-Symbols komplett raus.**
+- **Layout:** Dashboard mit linker Sidebar (Referenz: Actual Budget / Spotify), Content-Grid rechts, reagiert fluid auf Fensterbreite.
+- **Farbe:** Wärmere, buntere Basis — **Indigo/Violett** als Primary, **Koralle/Rose** als Akzent, Multi-Hue-Kategorie-Akzente (chart-1..5). Weg vom Teal.
+- **Dark-Mode:** folgt System **+ Hell/Dunkel/System-Umschalter** (in der Sidebar).
+- **„Dynamisch" = CSS-Technik:** Fluid-Tokens via `clamp()` (Schrift, `--sidebar-w`, `--card-min`) + `auto-fill`-Grid.
+
+Genehmigter Plan: `/home/legr/.claude/plans/giggly-munching-flame.md` (außerhalb Repo). Drei Phasen, jede für sich grün/lauffähig, kein Halb-Zustand-Bruch.
+
+### Was passierte — Phase 0 (Scaffolding, nicht-invasiv)
+
+- Branch **`feat/ui-dashboard`** angelegt (von `f11a17a`).
+- Deps: `+ tailwindcss@4.3.1 @tailwindcss/vite` (dev), `+ clsx tailwind-merge class-variance-authority lucide-react@1.18 tw-animate-css`. `@fontsource/inter` **behalten**.
+- `vite.config.ts`: `@tailwindcss/vite`-Plugin + `@`→`src`-Alias. Alias auch in `vitest.config.ts` und `tsconfig.json` (`paths`).
+- **`src/index.css` neu** — das Token-System: warme Palette (Indigo/Violett-Primary, Koralle-Accent, success/warning, chart-1..5, Sidebar-Tokens) für Light + `.dark`, `@theme inline`-Mapping, Fluid-Tokens (`--text-fluid-*`, `--sidebar-w`, `--card-min`), `@layer base` (html/body/#root volle Höhe — **das fixt den ursprünglichen Layout-Bruch zentral**), Inter-Import.
+- `src/lib/utils.ts` (`cn()`), `components.json` (shadcn, new-york, baseColor neutral, css=src/index.css).
+- shadcn-Basis nach `src/components/ui/`: button input label select checkbox dialog card badge switch separator scroll-area dropdown-menu tooltip alert.
+- `biome.json`: `css.parser.tailwindDirectives: true` (sonst Parse-Error bei `@apply`/`@theme`).
+- Phase 0 baut/testet/lintet grün; `index.css` noch nicht importiert → null Verhaltensänderung.
+
+### Was passierte — Phase 1 (MUI raus, Shell + Slice)
+
+- **MUI-Deps entfernt**, `src/theme/` + `src/components/Icon.tsx` gelöscht.
+- `src/main.tsx`: ThemeProvider/CssBaseline/InitColorSchemeScript raus; importiert `index.css` + (vorläufig) `App.css`.
+- **`src/hooks/useColorScheme.ts` neu**: `light|dark|system`, persistiert in localStorage, setzt `.dark` auf `<html>`, folgt im System-Modus live `matchMedia`. Test-/SSR-sicher (try/catch + `typeof matchMedia`).
+- **`src/components/AppSidebar.tsx` neu**: Wordmark, View-Nav (Übersicht/Abos/Einnahmen), Konten-Liste mit Salden (Klick → AccountsDialog), Footer mit 3-Segment-Theme-Toggle (Sun/Monitor/Moon) + Einstellungen. Alles Token-/lucide-basiert.
+- **`src/App.tsx` neu aufgebaut**: `grid grid-cols-[var(--sidebar-w)_1fr] h-screen` mit Sidebar + scrollendem Content. View-State `useState<'overview'|'subs'|'incomes'>`. Sticky Content-Header mit „+ Neues Abo / + Neue Einnahme". Übersicht = StatusCard + UpcomingSection + OverviewSection; Abos/Einnahmen = **Card-Grid** (`auto-fill, minmax(var(--card-min),1fr)`) mit `CashflowCard`/`CardActions` (modul-level Komponenten), bunter Links-Akzentstreifen je `id % 5` (chart-Farben), Hover-Lift. Empty-State neu gestaltet. **Gesamte Geschäftslogik/Handler unverändert** übernommen.
+- **`src/components/IncomeDialog.tsx`** → kompletter shadcn-Rewrite (Dialog/Input/Label/Select/Checkbox/Alert/Button, lucide-Icons). Logik (validate/handleSubmit/centsToInput) 1:1. Radix-Select braucht Sentinel `NO_ACCOUNT="none"` statt leerem Item-Wert. **Damit ist MUI vollständig raus.**
+- **`StatusCard.tsx` + `UpcomingSection.tsx`** auf Tailwind/lucide migriert (Teil des Slice-Looks); Logik unverändert.
+- **`DateField.tsx`**: Trigger mit Token-Tailwind-Klassen versehen (sieht im neuen Dialog brauchbar aus); Popover-Migration auf shadcn erst Phase 2.
+- **`App.css` globale Element-Regeln gestrippt** (`:root`, `h1/h2`, `input/button/select`, Hover/Active/Focus, Dark-`:root`/Form) — sie hätten via unlayered-CSS die shadcn-Komponenten **überschrieben**. Klassen-Regeln (`.sub-item`, `.coverage-*`, `.price-history-*`, `.dialog`, `.field-*`, `.date-popover` …) bleiben für die noch-unmigrierten Komponenten.
+- **Tests angepasst:** `App.test` Test 2 navigiert jetzt zur Abos-View (Archiv-Toggle lebt dort); `fireEvent` ergänzt. `UpcomingSection.test` Selektor `.upcoming-row` → `li`.
+
+### Verifikation (alle grün)
+
+- `pnpm build` ✓ — JS **460 kB** (vorher 563), kein 3.9-MB-Material-Symbols-Font mehr. CSS 83 kB (Tailwind + Legacy-App.css), gzip 15 kB.
+- `pnpm test:run` ✓ — 14 Files / **189 Tests**.
+- `pnpm lint` ✓ — Biome clean (nur 1 info).
+- **Manuelle UI-Verifikation steht aus** — `pnpm tauri dev` noch nicht durch den User geprüft. **Das ist das Sign-off-Gate.**
+
+### Status / Nächster Schritt
+
+- Branch **`feat/ui-dashboard`**, **Working Tree komplett uncommitted** (Phase 0+1 als ein grüner Checkpoint). Vor Phase 2 committen (z.B. „Phase 0+1: Tailwind+shadcn-Foundation + Dashboard-Shell").
+- **GATE:** User macht `pnpm tauri dev`, prüft Sidebar + Übersicht in Light/Dark, Theme-Toggle, Fenster-Resize (Card-Grid bricht um), Neue-Einnahme-Dialog. Erst bei „so ist es" → **Phase 2**.
+- **Phase 2** (siehe Plan): SubscriptionDialog/AccountsDialog/SettingsDialog auf shadcn `Dialog` (ersetzt nativen `Dialog.tsx` + `lib/dialog.ts`), DateField → shadcn Popover+Calendar, OverviewSection/SubscriptionFilterBar/NotificationPermissionBanner/ErrorBoundary + PriceHistoryGraph migrieren, restliche Tests anpassen (`AccountsDialog.test` `.account-item`, `OverviewSection.test` `details/summary`/`.coverage-warning-danger`, `SubscriptionDialog.test` SVG-`cy`, Dialog-Öffnen via Radix statt `<dialog>.setAttribute`), **`App.css` final löschen**.
+
+### Gotchas
+
+- **Legacy-Dialoge transitorisch roh:** SubscriptionDialog/AccountsDialog/SettingsDialog nutzen noch `<dialog>`+App.css; deren Buttons/Inputs sind nach dem Strippen der globalen Element-Regeln **native/ungestylt**. Erwartet, Phase 2 fixt das. Sie sitzen aber im neuen Shell auf neuer Base — kein Bruch wie beim MUI-Versuch.
+- **oklch im WebView:** index.css nutzt oklch-Farben; auf aktuellem CachyOS-WebKitGTK ok, aber beim echten `tauri dev` Dark/Resize gegenchecken.
+- **`App.css`-Import liegt jetzt in `main.tsx`** (nach index.css), nicht mehr in App.tsx. Reihenfolge wichtig: Token-Base zuerst, Legacy danach.
+- **Radix-Select-Sentinel:** leerer Item-Wert verboten → `NO_ACCOUNT="none"` in IncomeDialog (beim Accounts-/SubscriptionDialog in Phase 2 gleiches Muster beachten).
+- **CSP unverändert nötig:** Tailwind v4 baut statische CSS-Datei (kein Runtime-Inject), lucide = SVG-in-JS → `style-src 'self'` reicht. Bestätigt, keine `tauri.conf.json`-Änderung.
+- **`size-4.5` u.ä.** genutzt (Tailwind-v4-Fractional-Spacing) — baut sauber.
+
+### Geänderte/neue Memories
+
+- Keine in dieser Session. Wenn der neue Stack steht (nach Phase 2), sollten `tech_stack`/`ui_vision`/`conventions`-Memories aktualisiert werden (MUI→Tailwind+shadcn, neue Token-/Fluid-Konventionen, `cn()`-Nutzung). **TODO für Folgesession.**
+
+---
+
 ## 2026-06-12 — Claude: v0.1.0 released + UI-Redesign-Plan + IncomeDialog-Pilot (MUI v9)
 
 > Session-Fokus: v0.1.0 oeffentlich verfuegbar machen, dann den naechsten grossen Block (UI-Redesign Richtung arsnova.eu) starten. Plan-Mode, dann Pilot, dann User-Sicht-Check.

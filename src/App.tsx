@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
+import { AppSidebar, type DashboardView } from "./components/AppSidebar";
 import { IncomeDialog } from "./components/IncomeDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
@@ -8,6 +10,8 @@ import { StatusCard } from "./components/StatusCard";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { SubscriptionFilterBar } from "./components/SubscriptionFilterBar";
 import { UpcomingSection } from "./components/UpcomingSection";
+import { Button } from "./components/ui/button";
+import { useColorScheme } from "./hooks/useColorScheme";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
@@ -17,14 +21,107 @@ import {
   DEFAULT_SUB_LIST_OPTIONS,
   type SubListOptions,
 } from "./lib/subscription-list";
+import { cn } from "./lib/utils";
 import type { Income, Subscription } from "./types";
-import "./App.css";
+
+const ACCENTS = [
+  "border-l-chart-1",
+  "border-l-chart-2",
+  "border-l-chart-3",
+  "border-l-chart-4",
+  "border-l-chart-5",
+] as const;
+
+interface CardActionsProps {
+  onEdit: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+  active: boolean;
+  name: string;
+}
+
+function CardActions({ onEdit, onToggle, onDelete, active, name }: CardActionsProps) {
+  return (
+    <div className="mt-auto flex gap-1 pt-1">
+      <Button variant="ghost" size="icon" onClick={onEdit} aria-label={`${name} bearbeiten`}>
+        <Pencil />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggle}
+        aria-label={`${name} ${active ? "archivieren" : "reaktivieren"}`}
+      >
+        {active ? <Archive /> : <ArchiveRestore />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onDelete}
+        aria-label={`${name} löschen`}
+        className="text-muted-foreground hover:text-destructive"
+      >
+        <Trash2 />
+      </Button>
+    </div>
+  );
+}
+
+function CashflowCard({
+  id,
+  active,
+  accent,
+  title,
+  subtitle,
+  amount,
+  income = false,
+  children,
+}: {
+  id: number;
+  active: boolean;
+  accent: string;
+  title: string;
+  subtitle: ReactNode;
+  amount: string;
+  income?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      key={id}
+      className={cn(
+        "flex flex-col gap-2 rounded-xl border border-l-4 bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md",
+        accent,
+        !active && "opacity-60",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{title}</p>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        <span
+          className={cn(
+            "shrink-0 rounded-full px-2.5 py-1 text-sm font-semibold tabular-nums",
+            income ? "bg-success/15 text-success" : "bg-primary/10 text-primary",
+          )}
+        >
+          {income ? "+" : ""}
+          {amount}
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 function App() {
   const { subs, accounts, incomes, loading, error, setError, reloadAll, reloadAccounts } =
     useSubscriptions();
   const { status: notifStatus, activate: activateNotifications } = useNotificationPermission();
+  const { scheme, setScheme } = useColorScheme();
 
+  const [view, setView] = useState<DashboardView>("overview");
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
@@ -130,202 +227,231 @@ function App() {
   const accountName = (id: number | null): string | null =>
     id === null ? null : (accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)");
 
-  return (
-    <main className="container">
-      <header className="header">
-        <h1>SubTracked</h1>
-        <div className="header-actions">
-          <button type="button" onClick={startNew}>
-            Neues Abo
-          </button>
-          <button type="button" onClick={startNewIncome}>
-            Neue Einnahme
-          </button>
-          <button type="button" onClick={openAccounts}>
-            Konten
-          </button>
-          <button type="button" onClick={openSettings}>
-            Einstellungen
-          </button>
-        </div>
-      </header>
+  const isEmpty = !loading && !error && subs.length === 0 && incomes.length === 0;
+  const viewTitle = view === "overview" ? "Übersicht" : view === "subs" ? "Abos" : "Einnahmen";
 
-      <NotificationPermissionBanner
-        status={notifStatus}
-        onActivate={() => void activateNotifications()}
+  return (
+    <div className="grid h-screen grid-cols-[var(--sidebar-w)_1fr] overflow-hidden">
+      <AppSidebar
+        view={view}
+        onViewChange={setView}
+        accounts={accounts}
+        onOpenAccounts={openAccounts}
+        onOpenSettings={openSettings}
+        scheme={scheme}
+        onSchemeChange={setScheme}
       />
 
-      {loading && <p>Lade …</p>}
-      {error && (
-        <p className="error" role="alert">
-          Fehler: {error}
-        </p>
-      )}
-      {!loading && !error && subs.length === 0 && incomes.length === 0 && (
-        <section className="empty-state" aria-labelledby="empty-title">
-          <h2 id="empty-title">Noch keine Zahlungsdaten</h2>
-          <p>
-            {accounts.length === 0
-              ? "Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow."
-              : "Erstes Abo oder eine Einnahme erfassen, danach zeigt SubTracked den Cashflow."}
-          </p>
-          <div className="empty-state-actions">
-            <button type="button" onClick={openAccounts}>
-              Konto anlegen
-            </button>
-            <button type="button" onClick={startNew}>
-              Erstes Abo
-            </button>
-            <button type="button" onClick={startNewIncome}>
-              Einnahme hinzufügen
-            </button>
+      <main className="flex flex-col overflow-y-auto">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background/80 px-6 py-4 backdrop-blur">
+          <h1 className="text-fluid-xl font-bold tracking-tight">{viewTitle}</h1>
+          <div className="flex gap-2">
+            <Button onClick={startNew}>
+              <Plus />
+              Neues Abo
+            </Button>
+            <Button variant="secondary" onClick={startNewIncome}>
+              <Plus />
+              Neue Einnahme
+            </Button>
           </div>
-        </section>
-      )}
+        </header>
 
-      {!loading && !error && hasActiveCashflow && (
-        <StatusCard subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
-      )}
-
-      {!loading && !error && hasActiveCashflow && (
-        <UpcomingSection subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
-      )}
-
-      {archivedCount > 0 && (
-        <label className="archive-toggle">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
+        <div className="flex flex-col gap-4 p-6">
+          <NotificationPermissionBanner
+            status={notifStatus}
+            onActivate={() => void activateNotifications()}
           />
-          <span>
-            Archivierte anzeigen ({archivedCount}
-            {archivedCount === 1 ? " Abo" : " Abos"})
-          </span>
-        </label>
-      )}
 
-      {preFilteredSubs.length >= 2 && (
-        <SubscriptionFilterBar
-          subs={preFilteredSubs}
-          accounts={accounts}
-          options={filterOptions}
-          onChange={setFilterOptions}
-        />
-      )}
+          {loading && <p className="text-muted-foreground">Lade …</p>}
+          {error && (
+            <p
+              className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              role="alert"
+            >
+              Fehler: {error}
+            </p>
+          )}
 
-      {preFilteredSubs.length > 0 && visibleSubs.length === 0 && (
-        <p className="empty">Kein Abo passt zu den aktuellen Filtern.</p>
-      )}
+          {isEmpty && (
+            <section
+              className="flex flex-col items-center gap-4 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center"
+              aria-labelledby="empty-title"
+            >
+              <span className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow">
+                <Wallet className="size-7" />
+              </span>
+              <div>
+                <h2 id="empty-title" className="text-fluid-lg font-semibold">
+                  Noch keine Zahlungsdaten
+                </h2>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  {accounts.length === 0
+                    ? "Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow."
+                    : "Erstes Abo oder eine Einnahme erfassen, danach zeigt SubTracked den Cashflow."}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button variant="outline" onClick={openAccounts}>
+                  Konto anlegen
+                </Button>
+                <Button onClick={startNew}>Erstes Abo</Button>
+                <Button variant="secondary" onClick={startNewIncome}>
+                  Einnahme hinzufügen
+                </Button>
+              </div>
+            </section>
+          )}
 
-      {visibleSubs.length > 0 && (
-        <ul className="sub-list">
-          {visibleSubs.map((sub) => {
-            const account = accountName(sub.accountId);
-            return (
-              <li key={sub.id} className={`sub-item${sub.active ? "" : " sub-archived"}`}>
-                <div className="sub-info">
-                  <span className="sub-name">{sub.name}</span>
-                  <span className="sub-next">
-                    {sub.active ? <>nächste Fälligkeit: {formatNextDue(sub)}</> : <>archiviert</>}
-                    {account && <> · {account}</>}
-                    {sub.active && !sub.notify && <> · stumm</>}
-                  </span>
+          {/* ÜBERSICHT */}
+          {!isEmpty && view === "overview" && (
+            <>
+              {hasActiveCashflow && (
+                <StatusCard
+                  subscriptions={activeSubs}
+                  accounts={accounts}
+                  incomes={activeIncomes}
+                />
+              )}
+              {hasActiveCashflow && (
+                <UpcomingSection
+                  subscriptions={activeSubs}
+                  accounts={accounts}
+                  incomes={activeIncomes}
+                />
+              )}
+              {hasActiveCashflow && (
+                <OverviewSection
+                  subscriptions={activeSubs}
+                  accounts={accounts}
+                  incomes={activeIncomes}
+                />
+              )}
+              {!hasActiveCashflow && (
+                <p className="text-muted-foreground">
+                  Keine aktiven Abos oder Einnahmen. Lege etwas an oder reaktiviere Archiviertes.
+                </p>
+              )}
+            </>
+          )}
+
+          {/* ABOS */}
+          {!isEmpty && view === "subs" && (
+            <>
+              {archivedCount > 0 && (
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={showArchived}
+                    onChange={(e) => setShowArchived(e.target.checked)}
+                    className="size-4 accent-primary"
+                  />
+                  Archivierte anzeigen ({archivedCount}
+                  {archivedCount === 1 ? " Abo" : " Abos"})
+                </label>
+              )}
+
+              {preFilteredSubs.length >= 2 && (
+                <SubscriptionFilterBar
+                  subs={preFilteredSubs}
+                  accounts={accounts}
+                  options={filterOptions}
+                  onChange={setFilterOptions}
+                />
+              )}
+
+              {preFilteredSubs.length === 0 ? (
+                <p className="text-muted-foreground">Noch keine Abos.</p>
+              ) : visibleSubs.length === 0 ? (
+                <p className="text-muted-foreground">Kein Abo passt zu den aktuellen Filtern.</p>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--card-min),1fr))] gap-3">
+                  {visibleSubs.map((sub) => {
+                    const account = accountName(sub.accountId);
+                    return (
+                      <CashflowCard
+                        key={sub.id}
+                        id={sub.id}
+                        active={sub.active}
+                        accent={ACCENTS[sub.id % ACCENTS.length]}
+                        title={sub.name}
+                        amount={formatAmount(sub.amountCents, sub.currency)}
+                        subtitle={
+                          <>
+                            {sub.active ? (
+                              <>nächste Fälligkeit: {formatNextDue(sub)}</>
+                            ) : (
+                              <>archiviert</>
+                            )}
+                            {account && <> · {account}</>}
+                            {sub.active && !sub.notify && <> · stumm</>}
+                          </>
+                        }
+                      >
+                        <CardActions
+                          name={sub.name}
+                          active={sub.active}
+                          onEdit={() => startEdit(sub)}
+                          onToggle={() => void handleToggleActive(sub)}
+                          onDelete={() => void handleDelete(sub)}
+                        />
+                      </CashflowCard>
+                    );
+                  })}
                 </div>
-                <div className="sub-meta">
-                  <span className="sub-amount">{formatAmount(sub.amountCents, sub.currency)}</span>
-                  <button
-                    type="button"
-                    className="sub-edit"
-                    onClick={() => startEdit(sub)}
-                    aria-label={`${sub.name} bearbeiten`}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-archive"
-                    onClick={() => void handleToggleActive(sub)}
-                    aria-label={`${sub.name} ${sub.active ? "archivieren" : "reaktivieren"}`}
-                  >
-                    {sub.active ? "Archivieren" : "Reaktivieren"}
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-delete"
-                    onClick={() => void handleDelete(sub)}
-                    aria-label={`${sub.name} löschen`}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              )}
+            </>
+          )}
 
-      {hasActiveCashflow && (
-        <OverviewSection subscriptions={activeSubs} accounts={accounts} incomes={activeIncomes} />
-      )}
-
-      {incomes.length > 0 && (
-        <section className="income-list-section">
-          <h2>Einnahmen</h2>
-          <ul className="sub-list">
-            {incomes.map((income) => (
-              <li key={income.id} className={`sub-item${income.active ? "" : " sub-archived"}`}>
-                <div className="sub-info">
-                  <span className="sub-name">{income.name}</span>
-                  <span className="sub-next">
-                    {income.active ? (
-                      <>
-                        {income.oneTime ? "Datum" : "nächste Fälligkeit"}: {formatNextDue(income)}
-                        {income.oneTime && <> · einmalig</>}
-                      </>
-                    ) : (
-                      <>archiviert</>
-                    )}
-                    {income.accountId !== null &&
-                      accounts.find((a) => a.id === income.accountId)?.name && (
-                        <> · {accounts.find((a) => a.id === income.accountId)?.name}</>
-                      )}
-                  </span>
+          {/* EINNAHMEN */}
+          {!isEmpty && view === "incomes" && (
+            <>
+              {incomes.length === 0 ? (
+                <p className="text-muted-foreground">Noch keine Einnahmen.</p>
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--card-min),1fr))] gap-3">
+                  {incomes.map((income) => {
+                    const account = accountName(income.accountId);
+                    return (
+                      <CashflowCard
+                        key={income.id}
+                        id={income.id}
+                        active={income.active}
+                        accent={ACCENTS[income.id % ACCENTS.length]}
+                        title={income.name}
+                        income
+                        amount={formatAmount(income.amountCents, income.currency)}
+                        subtitle={
+                          <>
+                            {income.active ? (
+                              <>
+                                {income.oneTime ? "Datum" : "nächste Fälligkeit"}:{" "}
+                                {formatNextDue(income)}
+                                {income.oneTime && <> · einmalig</>}
+                              </>
+                            ) : (
+                              <>archiviert</>
+                            )}
+                            {account && <> · {account}</>}
+                          </>
+                        }
+                      >
+                        <CardActions
+                          name={income.name}
+                          active={income.active}
+                          onEdit={() => startEditIncome(income)}
+                          onToggle={() => void handleToggleIncomeActive(income)}
+                          onDelete={() => void handleDeleteIncome(income)}
+                        />
+                      </CashflowCard>
+                    );
+                  })}
                 </div>
-                <div className="sub-meta">
-                  <span className="sub-amount income-amount">
-                    +{formatAmount(income.amountCents, income.currency)}
-                  </span>
-                  <button
-                    type="button"
-                    className="sub-edit"
-                    onClick={() => startEditIncome(income)}
-                    aria-label={`${income.name} bearbeiten`}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-archive"
-                    onClick={() => void handleToggleIncomeActive(income)}
-                    aria-label={`${income.name} ${income.active ? "archivieren" : "reaktivieren"}`}
-                  >
-                    {income.active ? "Archivieren" : "Reaktivieren"}
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-delete"
-                    onClick={() => void handleDeleteIncome(income)}
-                    aria-label={`${income.name} löschen`}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+              )}
+            </>
+          )}
+        </div>
+      </main>
 
       <SubscriptionDialog
         key={`${editingSub?.id ?? "new"}-${subOpenSeq}`}
@@ -347,7 +473,7 @@ function App() {
         openSeq={settingsOpenSeq}
         onDataReplaced={reloadAll}
       />
-    </main>
+    </div>
   );
 }
 

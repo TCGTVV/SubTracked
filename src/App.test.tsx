@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
@@ -125,6 +125,9 @@ describe("App", () => {
     expect(
       screen.queryByRole("heading", { name: "Noch keine Zahlungsdaten" }),
     ).not.toBeInTheDocument();
+
+    // Der Archiv-Toggle lebt in der Abos-Ansicht; dorthin navigieren.
+    fireEvent.click(screen.getByRole("button", { name: "Abos" }));
     expect(screen.getByText(/Archivierte anzeigen \(1 Abo\)/)).toBeInTheDocument();
   });
 });
