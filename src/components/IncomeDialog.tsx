@@ -1,21 +1,4 @@
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  FormLabel,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-} from "@mui/material";
+import { Pencil, Save, Wallet, X } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 import { addIncome, updateIncome } from "../lib/db";
 import {
@@ -29,6 +12,13 @@ import {
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
 import type { Account, Income, Interval } from "../types";
 import { DateField } from "./DateField";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface Props {
   open: boolean;
@@ -45,6 +35,9 @@ interface FieldErrors {
   anchorDate?: string;
 }
 
+/** Sentinel für „kein Konto" — Radix-Select erlaubt keinen leeren Item-Wert. */
+const NO_ACCOUNT = "none";
+
 function centsToInput(cents: number, currency: string): string {
   const divisor = getCurrencySubdivisor(currency);
   if (divisor === 1) return cents.toString();
@@ -58,7 +51,7 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
-  const currencyRef = useRef<HTMLInputElement>(null);
+  const currencyRef = useRef<HTMLButtonElement>(null);
   const anchorRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(income?.name ?? "");
@@ -140,115 +133,138 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <form onSubmit={(e) => void handleSubmit(e)} noValidate>
-        <DialogTitle>{isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Name"
-              inputRef={nameRef}
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                clearFieldError("name");
-              }}
-              error={!!errors.name}
-              helperText={errors.name}
-              required
-              fullWidth
-            />
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-fluid-lg">
+              {isEdit ? (
+                <Pencil className="size-5 text-primary" />
+              ) : (
+                <Wallet className="size-5 text-primary" />
+              )}
+              {isEdit ? "Einnahme bearbeiten" : "Neue Einnahme"}
+            </DialogTitle>
+          </DialogHeader>
 
-            <TextField
-              label="Betrag"
-              inputRef={amountRef}
-              value={amount}
-              onChange={(e) => {
-                setAmount(e.target.value);
-                clearFieldError("amount");
-              }}
-              error={!!errors.amount}
-              helperText={errors.amount}
-              slotProps={{ htmlInput: { inputMode: "decimal" } }}
-              fullWidth
-            />
-
-            <FormControl fullWidth error={!!errors.currency}>
-              <InputLabel id={`${anchorId}-currency-label`}>Währung</InputLabel>
-              <Select
-                labelId={`${anchorId}-currency-label`}
-                label="Währung"
-                inputRef={currencyRef}
-                value={currency}
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-name`}>Name</Label>
+              <Input
+                id={`${anchorId}-name`}
+                ref={nameRef}
+                value={name}
                 onChange={(e) => {
-                  setCurrency(e.target.value);
-                  clearFieldError("currency");
+                  setName(e.target.value);
+                  clearFieldError("name");
                 }}
-              >
-                {CURRENCY_OPTIONS.map((c) => (
-                  <MenuItem key={c} value={c}>
-                    {c}
-                  </MenuItem>
-                ))}
-              </Select>
-              {errors.currency && <FormHelperText>{errors.currency}</FormHelperText>}
-            </FormControl>
+                aria-invalid={!!errors.name}
+                required
+              />
+              {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+            </div>
 
-            <FormControl fullWidth>
-              <InputLabel id={`${anchorId}-account-label`}>Konto</InputLabel>
-              <Select
-                labelId={`${anchorId}-account-label`}
-                label="Konto"
-                value={accountId === null ? "" : String(accountId)}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-amount`}>Betrag</Label>
+              <Input
+                id={`${anchorId}-amount`}
+                ref={amountRef}
+                value={amount}
                 onChange={(e) => {
-                  const v = e.target.value;
-                  setAccountId(v === "" ? null : Number(v));
+                  setAmount(e.target.value);
+                  clearFieldError("amount");
                 }}
-                displayEmpty
-              >
-                <MenuItem value="">(kein Konto)</MenuItem>
-                {accounts.map((a) => (
-                  <MenuItem key={a.id} value={String(a.id)}>
-                    {a.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                inputMode="decimal"
+                aria-invalid={!!errors.amount}
+              />
+              {errors.amount && <p className="text-sm text-destructive">{errors.amount}</p>}
+            </div>
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={oneTime}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setOneTime(checked);
-                    if (checked) setInterval("monthly");
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-currency`}>Währung</Label>
+                <Select
+                  value={currency}
+                  onValueChange={(v) => {
+                    setCurrency(v);
+                    clearFieldError("currency");
                   }}
-                />
-              }
-              label="Einmalige Einnahme"
-            />
+                >
+                  <SelectTrigger
+                    id={`${anchorId}-currency`}
+                    ref={currencyRef}
+                    aria-invalid={!!errors.currency}
+                    className="w-full"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_OPTIONS.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.currency && <p className="text-sm text-destructive">{errors.currency}</p>}
+              </div>
 
-            <FormControl fullWidth disabled={oneTime}>
-              <InputLabel id={`${anchorId}-interval-label`}>Intervall</InputLabel>
-              <Select
-                labelId={`${anchorId}-interval-label`}
-                label="Intervall"
-                value={interval}
-                onChange={(e) => setInterval(e.target.value as Interval)}
-              >
-                {INTERVAL_OPTIONS.map((o) => (
-                  <MenuItem key={o.value} value={o.value}>
-                    {o.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-account`}>Konto</Label>
+                <Select
+                  value={accountId === null ? NO_ACCOUNT : String(accountId)}
+                  onValueChange={(v) => setAccountId(v === NO_ACCOUNT ? null : Number(v))}
+                >
+                  <SelectTrigger id={`${anchorId}-account`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_ACCOUNT}>(kein Konto)</SelectItem>
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-            <FormControl fullWidth error={!!errors.anchorDate}>
-              <FormLabel htmlFor={anchorId} sx={{ mb: 0.5 }}>
-                {oneTime ? "Datum" : "Erste / nächste Fälligkeit"}
-              </FormLabel>
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id={`${anchorId}-onetime`}
+                checked={oneTime}
+                onCheckedChange={(checked) => {
+                  const on = checked === true;
+                  setOneTime(on);
+                  if (on) setInterval("monthly");
+                }}
+              />
+              <Label htmlFor={`${anchorId}-onetime`} className="font-medium">
+                Einmalige Einnahme
+              </Label>
+            </div>
+
+            {!oneTime && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-interval`}>Intervall</Label>
+                <Select value={interval} onValueChange={(v) => setInterval(v as Interval)}>
+                  <SelectTrigger id={`${anchorId}-interval`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERVAL_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={anchorId}>{oneTime ? "Datum" : "Erste / nächste Fälligkeit"}</Label>
               <DateField
                 id={anchorId}
                 buttonRef={anchorRef}
@@ -261,20 +277,31 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
                 ariaDescribedBy={errors.anchorDate ? `${anchorId}-error` : undefined}
               />
               {errors.anchorDate && (
-                <FormHelperText id={`${anchorId}-error`}>{errors.anchorDate}</FormHelperText>
+                <p id={`${anchorId}-error`} className="text-sm text-destructive">
+                  {errors.anchorDate}
+                </p>
               )}
-            </FormControl>
+            </div>
 
-            {error && <Alert severity="error">{error}</Alert>}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose}>Abbrechen</Button>
-          <Button type="submit" variant="contained" disabled={submitting}>
-            {submitting ? "Speichern …" : "Speichern"}
-          </Button>
-        </DialogActions>
-      </form>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              <X />
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              <Save />
+              {submitting ? "Speichern …" : "Speichern"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

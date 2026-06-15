@@ -53,7 +53,7 @@ describe("UpcomingSection", () => {
         accounts={accounts}
       />,
     );
-    const row = screen.getByText("Netflix").closest(".upcoming-row");
+    const row = screen.getByText("Netflix").closest("li");
     expect(row?.textContent).toMatch(/20\.06\./);
     expect(row?.textContent).toMatch(/Hauptkonto/);
     expect(row?.textContent).toMatch(/17,99/);

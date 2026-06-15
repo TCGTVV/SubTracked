@@ -50,7 +50,7 @@ export function DateField({ ariaDescribedBy, ariaInvalid, buttonRef, id, value, 
         id={id}
         ref={buttonRef}
         type="button"
-        className="date-trigger"
+        className="date-trigger flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm shadow-xs transition-colors hover:bg-accent/5 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-invalid:border-destructive"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
