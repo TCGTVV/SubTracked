@@ -20,9 +20,12 @@ interface NextDueVectorRaw {
 }
 
 const ALLOWED_INTERVALS = [
-  "monthly",
+  "weekly",
   "biweekly",
+  "monthly",
+  "bimonthly",
   "quarterly",
+  "semiannual",
   "yearly",
 ] as const satisfies readonly Interval[];
 
@@ -72,6 +75,6 @@ describe("assertInterval narrowing", () => {
   });
 
   it("wirft bei voellig unbekanntem Intervall", () => {
-    expect(() => assertInterval("weekly", "v1")).toThrow(/weekly/);
+    expect(() => assertInterval("fortnightly", "v1")).toThrow(/fortnightly/);
   });
 });

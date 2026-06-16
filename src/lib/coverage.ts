@@ -44,6 +44,7 @@ function incomeDatesWithin(income: Income, from: Date, until: Date): Date[] {
 }
 
 function monthlyEquivalentCents(sub: Subscription): number {
+  if (sub.interval === "weekly") return (sub.amountCents * 52) / 12;
   if (sub.interval === "biweekly") return (sub.amountCents * 26) / 12;
   return sub.amountCents / monthsPer[sub.interval];
 }

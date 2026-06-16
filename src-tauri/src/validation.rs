@@ -245,7 +245,7 @@ mod tests {
         for (interval, _) in crate::recurrence::ALLOWED_INTERVALS {
             assert!(validate_interval(interval).is_ok(), "{interval}");
         }
-        assert!(validate_interval("weekly").is_err());
+        assert!(validate_interval("fortnightly").is_err());
         assert!(validate_interval("Monthly").is_err());
         assert!(validate_interval("").is_err());
     }
@@ -315,10 +315,15 @@ mod tests {
             validate_subscription_fields("Netflix", 1_799, "XYZ", "monthly", "2026-06-01", 7)
                 .is_err()
         );
-        assert!(
-            validate_subscription_fields("Netflix", 1_799, "EUR", "weekly", "2026-06-01", 7)
-                .is_err()
-        );
+        assert!(validate_subscription_fields(
+            "Netflix",
+            1_799,
+            "EUR",
+            "fortnightly",
+            "2026-06-01",
+            7
+        )
+        .is_err());
         assert!(
             validate_subscription_fields("Netflix", 1_799, "EUR", "monthly", "08.06.2026", 7)
                 .is_err()

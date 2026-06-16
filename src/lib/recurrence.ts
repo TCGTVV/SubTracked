@@ -1,25 +1,39 @@
 import { addDays, addMonths, isBefore, startOfDay } from "date-fns";
+import type { Interval } from "../types";
 
-export type Interval = "monthly" | "biweekly" | "quarterly" | "yearly";
+// Re-Export, damit bestehende Importe aus "./recurrence" weiter funktionieren.
+// Single Source of Truth ist `src/types.ts`.
+export type { Interval };
 
-export const monthsPer: Record<Exclude<Interval, "biweekly">, number> = {
+/** Tag-basierte Intervalle (reine Tagesarithmetik, kein Monatstag-Drift). */
+const DAY_STEPS = {
+  weekly: 7,
+  biweekly: 14,
+} as const satisfies Partial<Record<Interval, number>>;
+
+type DayInterval = keyof typeof DAY_STEPS;
+
+export const monthsPer: Record<Exclude<Interval, DayInterval>, number> = {
   monthly: 1,
+  bimonthly: 2,
   quarterly: 3,
+  semiannual: 6,
   yearly: 12,
 };
 
 export const INTERVAL_OPTIONS: ReadonlyArray<{ value: Interval; label: string }> = [
-  { value: "monthly", label: "Monatlich" },
+  { value: "weekly", label: "Wöchentlich" },
   { value: "biweekly", label: "Zweiwöchentlich" },
+  { value: "monthly", label: "Monatlich" },
+  { value: "bimonthly", label: "Alle 2 Monate" },
   { value: "quarterly", label: "Quartalsweise" },
+  { value: "semiannual", label: "Halbjährlich" },
   { value: "yearly", label: "Jährlich" },
 ];
 
-const BIWEEKLY_DAYS = 14;
-
 function addInterval(anchor: Date, interval: Interval, k: number): Date {
-  if (interval === "biweekly") return addDays(anchor, k * BIWEEKLY_DAYS);
-  return addMonths(anchor, k * monthsPer[interval]);
+  if (interval in DAY_STEPS) return addDays(anchor, k * DAY_STEPS[interval as DayInterval]);
+  return addMonths(anchor, k * monthsPer[interval as Exclude<Interval, DayInterval>]);
 }
 
 /**
