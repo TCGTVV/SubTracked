@@ -9,6 +9,42 @@
 
 ---
 
+## 2026-06-16 — Claude: Kündigungs-Erinnerungen + Notification-Bugfix
+
+> Erstes von vier vom User gewünschten Features (Feature-Roadmap, siehe „Nächste Schritte" unten). User-Sicht-Check für #1 erteilt. **Enthält einen kritischen Bugfix.**
+
+### Kritischer Bugfix (seit 0008 latent)
+
+- `run_reminder_check` (reminders.rs) lud im SELECT die `cancel_*`-Spalten nicht → `query_as::<Subscription>` schlug bei **jedem** Reminder-Lauf fehl (`no column found for name: cancel_mode`). **Notifications waren seit dem 0008-Commit komplett tot.** In den App-Logs bestätigt. SELECT um die vier cancel-Spalten ergänzt.
+- Lehre: Beim Hinzufügen von Struct-Feldern ALLE handgeschriebenen `query_as`-SELECTs mitziehen (commands.rs hatte ich in 0008 angepasst, reminders.rs übersehen — und die Tests bauen Subscriptions direkt, fingen es nicht).
+
+### Was neu ist — Kündigungs-Erinnerungen
+
+- Notification **14 Tage** (`CANCEL_REMINDER_LEAD_DAYS`, fix) vor dem „kündigen bis"-Datum; eigener Text. Respektiert den `notify`-Flag des Abos.
+- **`cancel_deadline` in Rust** (recurrence.rs) als Spiegel von `cancellation.ts` (`subtract_period` mit date-additiver Monats-Klemmung). Reminder laufen in Rust, deshalb nötig.
+- **Drift-Schutz**: 8 neue geteilte Vektoren unter `cancel_deadline` in `tests/fixtures/recurrence-vectors.json`; beide Harnesses (`recurrence.rs::shared_vectors_match_typescript_impl`, `src/lib/recurrence-vectors.test.ts`) prüfen sie → Anzeige (TS) und Reminder (Rust) können nicht auseinanderlaufen.
+- **Migration 0010**: `reminders.kind` (`payment`/`cancel`) + `UNIQUE(subscription_id, due_date, kind)` (Rebuild, `-- no-transaction` Zeile 1). Reminder-Helper-Queries (`reminder_already_sent`/`insert_reminder_if_new`/`delete_reminder_reservation`) bekamen einen `kind`-Parameter.
+
+### Verifikation
+
+- `cargo test` 65 ✓ (clippy fing ein durch `replace_symbol_body` verlorenes `#[test]` am shared-vectors-Test — sonst hätten die Cancel-Vektoren Rust-seitig nie gelaufen), clippy/fmt ✓.
+- `pnpm test:run` 216 ✓, build/lint ✓. Migration 0010 gegen Kopie der echten DB verifiziert (Daten erhalten, kind+UNIQUE korrekt).
+
+### ACHTUNG — DB-Migrationsstand des Users
+
+- Beim 0010-Test fiel auf: die **echte User-DB stand auf Migration 8** — d. h. **0009 (variable Intervalle) war auf der echten DB noch nicht angewandt** (der User hatte beim Sicht-Check wohl nur das Dropdown gesehen, kein weekly/bimonthly-Abo gespeichert). Beim nächsten App-Start laufen 9 + 10 nach (beide gegen DB-Kopie verifiziert). **Nächste Session: kurz prüfen, dass ein weekly/bimonthly-Abo sich auch wirklich speichern lässt.**
+
+### Nächste Schritte (Feature-Roadmap, vom User in dieser Reihenfolge gewünscht)
+
+Der User will diese drei noch — **#2 ist als Nächstes dran**, alle im BACKLOG unter „Geplante Features" detailliert:
+
+1. ✅ Kündigungs-Erinnerungen (dieser Eintrag).
+2. **▶ NÄCHSTES: Kategorien/Tags für Abos.** Fundament — bewusst VOR #3, damit der Kosten-Überblick gleich die Aufschlüsselung nach Kategorie kann. Schema (neue Spalte `category` o. Tag-Tabelle), Rust-Struct/Commands/Validation, db.ts, SubscriptionDialog (Select/Freitext), FilterBar-Erweiterung, Card-Anzeige.
+3. **Abo-Kosten-Überblick.** Prominente Kennzahl „X €/Monat · Y €/Jahr" über alle aktiven Abos + „teuerste Abos" + (mit #2) Aufschlüsselung nach Kategorie. Großteils Frontend (`coverage.ts` hat `monthlyEquivalentCents` als Baustein), neue Komponente in der Übersicht.
+4. **Einmalige Ausgaben.** Analog zu einmaligen Einnahmen (`incomes.one_time`), aber als Ausgabe — für genaueren Deckungs-Forecast. Vermutlich eigene Tabelle oder `one_time`-Ausgaben-Konzept; Migration + Rust + coverage.ts + UI.
+
+---
+
 ## 2026-06-16 — Claude: Variable Intervalle (feste Presets) — weekly/bimonthly/semiannual
 
 > Session-Fokus: BACKLOG-Item „Variable Intervalle". User-Entscheidung: **feste Presets** (kein parametrisches count+unit). Neue Kadenzen `weekly`, `bimonthly` (alle 2 Monate), `semiannual` (halbjährlich) — gelten via gemeinsamer `INTERVAL_OPTIONS`/`parseInterval` für **Abos und Einnahmen**. User-Sicht-Check erteilt. **Wichtig: ein Migrations-Bug hat die App beim ersten Start gecrasht — siehe Gotcha unten.**

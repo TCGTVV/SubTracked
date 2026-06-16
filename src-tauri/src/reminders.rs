@@ -4,8 +4,27 @@ use tauri::AppHandle;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
 use crate::db::Subscription;
-use crate::recurrence::{next_due_date, parse_iso_date_strict};
+use crate::recurrence::{cancel_deadline, next_due_date, parse_iso_date_strict};
 use crate::validation::validate_lead_days;
+
+/// Fester Vorlauf (Tage) für Kündigungs-Erinnerungen vor dem „kündigen bis"-Datum.
+const CANCEL_REMINDER_LEAD_DAYS: i64 = 14;
+
+/// Art einer Erinnerung — landet in `reminders.kind` und steuert den Notification-Text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReminderKind {
+    Payment,
+    Cancel,
+}
+
+impl ReminderKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            ReminderKind::Payment => "payment",
+            ReminderKind::Cancel => "cancel",
+        }
+    }
+}
 
 /// Side-Effect-Seam fuer den Dispatcher. Production-Pfad ist
 /// [`AppNotifier`] (Tauri-Notification-Plugin); im Test bekommt der Dispatcher
@@ -42,13 +61,9 @@ struct DueReminder {
     amount_cents: i64,
     currency: String,
     due_date: NaiveDate,
+    kind: ReminderKind,
 }
 
-/// Bestimmt fuer die uebergebenen Abos diejenigen, deren naechste Faelligkeit
-/// im konfigurierten Vorlauf-Fenster liegt. Reine Funktion ohne Side-Effects:
-/// kein DB-Zugriff, keine Notification, kein Tauri-AppHandle. Stumme Abos
-/// (`notify = false`) werden uebersprungen; der Idempotenz-Check (bereits
-/// gesendet?) gehoert in den Dispatcher, weil er DB braucht.
 fn compute_due_reminders(
     subs: &[Subscription],
     today: NaiveDate,
@@ -56,15 +71,6 @@ fn compute_due_reminders(
     let mut out = Vec::new();
     for sub in subs {
         if !sub.notify {
-            continue;
-        }
-        if let Err(e) = validate_lead_days(sub.lead_days) {
-            tracing::warn!(
-                subscription_id = sub.id,
-                lead_days = sub.lead_days,
-                error = %e,
-                "Abo wegen ungueltigem Reminder-Vorlauf uebersprungen"
-            );
             continue;
         }
         let anchor = match parse_iso_date_strict(&sub.anchor_date) {
@@ -79,29 +85,73 @@ fn compute_due_reminders(
                 continue;
             }
         };
-        let due = match next_due_date(anchor, &sub.interval, today) {
-            Ok(due) => due,
+
+        // Zahlungs-Erinnerung: nur bei gültigem Vorlauf und gültiger Wiederholung.
+        if let Err(e) = validate_lead_days(sub.lead_days) {
+            tracing::warn!(
+                subscription_id = sub.id,
+                lead_days = sub.lead_days,
+                error = %e,
+                "Zahlungs-Erinnerung wegen ungueltigem Vorlauf uebersprungen"
+            );
+        } else {
+            match next_due_date(anchor, &sub.interval, today) {
+                Ok(due) => {
+                    let remind_from = due - Duration::days(sub.lead_days);
+                    if today >= remind_from {
+                        out.push(DueReminder {
+                            subscription_id: sub.id,
+                            subscription_name: sub.name.clone(),
+                            amount_cents: sub.amount_cents,
+                            currency: sub.currency.clone(),
+                            due_date: due,
+                            kind: ReminderKind::Payment,
+                        });
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subscription_id = sub.id,
+                        interval = %sub.interval,
+                        error = %e,
+                        "Zahlungs-Erinnerung wegen ungueltiger Wiederholung uebersprungen"
+                    );
+                }
+            }
+        }
+
+        // Kündigungs-Erinnerung: fester Vorlauf vor dem „kündigen bis"-Datum.
+        match cancel_deadline(
+            sub.cancel_mode.as_deref(),
+            sub.cancel_period_value,
+            sub.cancel_period_unit.as_deref(),
+            sub.cancel_date.as_deref(),
+            anchor,
+            &sub.interval,
+            today,
+        ) {
+            Ok(Some(deadline)) => {
+                let remind_from = deadline - Duration::days(CANCEL_REMINDER_LEAD_DAYS);
+                if today >= remind_from && today <= deadline {
+                    out.push(DueReminder {
+                        subscription_id: sub.id,
+                        subscription_name: sub.name.clone(),
+                        amount_cents: sub.amount_cents,
+                        currency: sub.currency.clone(),
+                        due_date: deadline,
+                        kind: ReminderKind::Cancel,
+                    });
+                }
+            }
+            Ok(None) => {}
             Err(e) => {
                 tracing::warn!(
                     subscription_id = sub.id,
-                    interval = %sub.interval,
                     error = %e,
-                    "Abo wegen ungueltiger Wiederholung beim Reminder-Check uebersprungen"
+                    "Kuendigungs-Erinnerung wegen Fehler bei der Fristberechnung uebersprungen"
                 );
-                continue;
             }
-        };
-        let remind_from = due - Duration::days(sub.lead_days);
-        if today < remind_from {
-            continue;
         }
-        out.push(DueReminder {
-            subscription_id: sub.id,
-            subscription_name: sub.name.clone(),
-            amount_cents: sub.amount_cents,
-            currency: sub.currency.clone(),
-            due_date: due,
-        });
     }
     Ok(out)
 }
@@ -127,26 +177,38 @@ async fn dispatch_due_reminders(
     let mut skipped_no_permission = 0u32;
     for d in due {
         let due_str = d.due_date.format("%Y-%m-%d").to_string();
-        if reminder_already_sent(pool, d.subscription_id, &due_str).await? {
+        let kind = d.kind.as_str();
+        if reminder_already_sent(pool, d.subscription_id, &due_str, kind).await? {
             continue;
         }
         if !granted {
             skipped_no_permission += 1;
             continue;
         }
-        if !insert_reminder_if_new(pool, d.subscription_id, &due_str).await? {
+        if !insert_reminder_if_new(pool, d.subscription_id, &due_str, kind).await? {
             continue;
         }
 
-        let title = format!("{} fällig", d.subscription_name);
-        let body = format!(
-            "{}: {}. Konto rechtzeitig decken.",
-            d.due_date.format("%d.%m.%Y"),
-            format_amount_for_notification(d.amount_cents, &d.currency),
-        );
+        let (title, body) = match d.kind {
+            ReminderKind::Payment => (
+                format!("{} fällig", d.subscription_name),
+                format!(
+                    "{}: {}. Konto rechtzeitig decken.",
+                    d.due_date.format("%d.%m.%Y"),
+                    format_amount_for_notification(d.amount_cents, &d.currency),
+                ),
+            ),
+            ReminderKind::Cancel => (
+                format!("{} kündigen", d.subscription_name),
+                format!(
+                    "Kündigungsfrist bis {}. Jetzt kündigen, falls du nicht verlängern willst.",
+                    d.due_date.format("%d.%m.%Y"),
+                ),
+            ),
+        };
         if let Err(e) = notifier.show(&title, &body) {
             if let Err(delete_err) =
-                delete_reminder_reservation(pool, d.subscription_id, &due_str).await
+                delete_reminder_reservation(pool, d.subscription_id, &due_str, kind).await
             {
                 tracing::error!(
                     subscription_id = d.subscription_id,
@@ -183,7 +245,8 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
 
     let subs = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify FROM subscriptions WHERE active = 1",
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
+         cancel_date FROM subscriptions WHERE active = 1",
     )
     .fetch_all(pool)
     .await
@@ -198,12 +261,14 @@ async fn reminder_already_sent(
     pool: &SqlitePool,
     subscription_id: i64,
     due_date: &str,
+    kind: &str,
 ) -> Result<bool, String> {
     let found: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM reminders WHERE subscription_id = ? AND due_date = ? LIMIT 1",
+        "SELECT 1 FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ? LIMIT 1",
     )
     .bind(subscription_id)
     .bind(due_date)
+    .bind(kind)
     .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -214,14 +279,17 @@ async fn insert_reminder_if_new(
     pool: &SqlitePool,
     subscription_id: i64,
     due_date: &str,
+    kind: &str,
 ) -> Result<bool, String> {
-    let res =
-        sqlx::query("INSERT OR IGNORE INTO reminders (subscription_id, due_date) VALUES (?, ?)")
-            .bind(subscription_id)
-            .bind(due_date)
-            .execute(pool)
-            .await
-            .map_err(|e| e.to_string())?;
+    let res = sqlx::query(
+        "INSERT OR IGNORE INTO reminders (subscription_id, due_date, kind) VALUES (?, ?, ?)",
+    )
+    .bind(subscription_id)
+    .bind(due_date)
+    .bind(kind)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(res.rows_affected() > 0)
 }
 
@@ -229,10 +297,12 @@ async fn delete_reminder_reservation(
     pool: &SqlitePool,
     subscription_id: i64,
     due_date: &str,
+    kind: &str,
 ) -> Result<(), String> {
-    sqlx::query("DELETE FROM reminders WHERE subscription_id = ? AND due_date = ?")
+    sqlx::query("DELETE FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ?")
         .bind(subscription_id)
         .bind(due_date)
+        .bind(kind)
         .execute(pool)
         .await
         .map(|_| ())
@@ -402,6 +472,70 @@ mod tests {
         assert_eq!(ids, vec![1]);
     }
 
+    /// Hilfs-Sub mit festem Kündigungsdatum.
+    fn sub_with_cancel_date(id: i64, cancel_date: &str) -> Subscription {
+        let mut s = sub(id, "2025-01-01", 7, true);
+        s.cancel_mode = Some("date".into());
+        s.cancel_date = Some(cancel_date.into());
+        s
+    }
+
+    #[test]
+    fn compute_emits_cancel_reminder_within_lead_window() {
+        // Kündigungsfrist bis 2025-03-01; 14-Tage-Fenster ab 2025-02-15.
+        let due = compute_due_reminders(&[sub_with_cancel_date(1, "2025-03-01")], d(2025, 2, 20))
+            .unwrap();
+        let cancels: Vec<&DueReminder> = due
+            .iter()
+            .filter(|r| r.kind == ReminderKind::Cancel)
+            .collect();
+        assert_eq!(cancels.len(), 1);
+        assert_eq!(cancels[0].due_date, d(2025, 3, 1));
+    }
+
+    #[test]
+    fn compute_skips_cancel_reminder_before_lead_window() {
+        // 2025-02-10 liegt mehr als 14 Tage vor dem 2025-03-01.
+        let due = compute_due_reminders(&[sub_with_cancel_date(1, "2025-03-01")], d(2025, 2, 10))
+            .unwrap();
+        assert!(due.iter().all(|r| r.kind != ReminderKind::Cancel));
+    }
+
+    #[test]
+    fn compute_skips_cancel_reminder_when_deadline_passed() {
+        let due = compute_due_reminders(&[sub_with_cancel_date(1, "2025-02-01")], d(2025, 2, 20))
+            .unwrap();
+        assert!(due.iter().all(|r| r.kind != ReminderKind::Cancel));
+    }
+
+    #[test]
+    fn compute_skips_cancel_reminder_for_muted_subscription() {
+        let mut s = sub_with_cancel_date(1, "2025-03-01");
+        s.notify = false;
+        let due = compute_due_reminders(&[s], d(2025, 2, 20)).unwrap();
+        assert!(
+            due.is_empty(),
+            "stumme Abos bekommen auch keine Kuendigungs-Erinnerung"
+        );
+    }
+
+    #[test]
+    fn compute_emits_both_payment_and_cancel_reminders() {
+        // Zahlung faellig 2025-03-01 (lead 30 -> Fenster ab 2025-01-30),
+        // Kuendigungsfrist bis 2025-02-25 (Fenster ab 2025-02-11). today im Schnitt beider.
+        let mut s = sub(1, "2025-03-01", 30, true);
+        s.cancel_mode = Some("date".into());
+        s.cancel_date = Some("2025-02-25".into());
+        let due = compute_due_reminders(&[s], d(2025, 2, 20)).unwrap();
+        assert_eq!(due.len(), 2);
+        assert!(due
+            .iter()
+            .any(|r| r.kind == ReminderKind::Payment && r.due_date == d(2025, 3, 1)));
+        assert!(due
+            .iter()
+            .any(|r| r.kind == ReminderKind::Cancel && r.due_date == d(2025, 2, 25)));
+    }
+
     #[test]
     fn formats_regular_currency_for_notifications() {
         assert_eq!(format_amount_for_notification(1799, "EUR"), "17,99 EUR");
@@ -497,6 +631,7 @@ mod tests {
             amount_cents: 1799,
             currency: "EUR".into(),
             due_date: d(2025, 2, 15),
+            kind: ReminderKind::Payment,
         }
     }
 
@@ -566,7 +701,9 @@ mod tests {
     #[tokio::test]
     async fn dispatch_skips_already_reserved_reminder() {
         let pool = test_pool().await;
-        sqlx::query("INSERT INTO reminders (subscription_id, due_date) VALUES (1, '2025-02-15')")
+        sqlx::query(
+            "INSERT INTO reminders (subscription_id, due_date, kind) VALUES (1, '2025-02-15', 'payment')",
+        )
             .execute(&pool)
             .await
             .expect("seed reminder");

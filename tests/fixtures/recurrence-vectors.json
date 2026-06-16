@@ -204,5 +204,96 @@
       "from": "2025-10-01",
       "expected": "2026-03-31"
     }
+  ],
+  "_comment_cancel": "Geteilte Vektoren für die „kündigen bis\"-Berechnung: TS cancelDeadline (src/lib/cancellation.ts) und Rust cancel_deadline (src-tauri/src/recurrence.rs). expected = null bedeutet: keine Kündigung getrackt.",
+  "cancel_deadline": [
+    {
+      "name": "no_cancellation_returns_null",
+      "mode": null,
+      "period_value": null,
+      "period_unit": null,
+      "cancel_date": null,
+      "anchor": "2026-01-01",
+      "interval": "monthly",
+      "from": "2026-06-01",
+      "expected": null
+    },
+    {
+      "name": "fixed_date_returned_as_is",
+      "mode": "date",
+      "period_value": null,
+      "period_unit": null,
+      "cancel_date": "2026-12-01",
+      "anchor": "2026-01-01",
+      "interval": "monthly",
+      "from": "2026-06-01",
+      "expected": "2026-12-01"
+    },
+    {
+      "name": "fixed_date_in_past_still_returned",
+      "mode": "date",
+      "period_value": null,
+      "period_unit": null,
+      "cancel_date": "2026-12-01",
+      "anchor": "2026-01-01",
+      "interval": "monthly",
+      "from": "2027-03-01",
+      "expected": "2026-12-01"
+    },
+    {
+      "name": "period_days_before_next_due",
+      "mode": "period",
+      "period_value": 7,
+      "period_unit": "days",
+      "cancel_date": null,
+      "anchor": "2026-01-15",
+      "interval": "monthly",
+      "from": "2026-06-01",
+      "expected": "2026-06-08"
+    },
+    {
+      "name": "period_weeks_boundary_equals_from",
+      "mode": "period",
+      "period_value": 2,
+      "period_unit": "weeks",
+      "cancel_date": null,
+      "anchor": "2026-01-15",
+      "interval": "monthly",
+      "from": "2026-06-01",
+      "expected": "2026-06-01"
+    },
+    {
+      "name": "period_months_before_yearly_renewal",
+      "mode": "period",
+      "period_value": 3,
+      "period_unit": "months",
+      "cancel_date": null,
+      "anchor": "2026-12-01",
+      "interval": "yearly",
+      "from": "2026-06-01",
+      "expected": "2026-09-01"
+    },
+    {
+      "name": "period_advances_when_deadline_passed",
+      "mode": "period",
+      "period_value": 3,
+      "period_unit": "months",
+      "cancel_date": null,
+      "anchor": "2026-12-01",
+      "interval": "yearly",
+      "from": "2026-10-01",
+      "expected": "2027-09-01"
+    },
+    {
+      "name": "period_months_clamps_to_end_of_month",
+      "mode": "period",
+      "period_value": 1,
+      "period_unit": "months",
+      "cancel_date": null,
+      "anchor": "2026-03-31",
+      "interval": "yearly",
+      "from": "2026-01-01",
+      "expected": "2026-02-28"
+    }
   ]
 }
