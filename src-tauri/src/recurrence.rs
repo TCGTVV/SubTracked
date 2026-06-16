@@ -23,9 +23,12 @@ pub enum IntervalStep {
 /// Intervall einfuehrt, ergaenzt hier eine Zeile — `interval_step` und
 /// `validation::validate_interval` ziehen daraus automatisch nach.
 pub const ALLOWED_INTERVALS: &[(&str, IntervalStep)] = &[
-    ("monthly", IntervalStep::Months(1)),
+    ("weekly", IntervalStep::Days(7)),
     ("biweekly", IntervalStep::Days(14)),
+    ("monthly", IntervalStep::Months(1)),
+    ("bimonthly", IntervalStep::Months(2)),
     ("quarterly", IntervalStep::Months(3)),
+    ("semiannual", IntervalStep::Months(6)),
     ("yearly", IntervalStep::Months(12)),
 ];
 
@@ -105,9 +108,12 @@ mod tests {
     #[test]
     fn months_mapping() {
         assert_eq!(months_per_interval("monthly").unwrap(), 1);
+        assert_eq!(months_per_interval("bimonthly").unwrap(), 2);
         assert_eq!(months_per_interval("quarterly").unwrap(), 3);
+        assert_eq!(months_per_interval("semiannual").unwrap(), 6);
         assert_eq!(months_per_interval("yearly").unwrap(), 12);
         assert!(months_per_interval("biweekly").is_err());
+        assert!(months_per_interval("weekly").is_err());
         assert!(months_per_interval("foobar").is_err());
     }
 

@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-06-16 — Claude: Variable Intervalle (feste Presets) — weekly/bimonthly/semiannual
+
+> Session-Fokus: BACKLOG-Item „Variable Intervalle". User-Entscheidung: **feste Presets** (kein parametrisches count+unit). Neue Kadenzen `weekly`, `bimonthly` (alle 2 Monate), `semiannual` (halbjährlich) — gelten via gemeinsamer `INTERVAL_OPTIONS`/`parseInterval` für **Abos und Einnahmen**. User-Sicht-Check erteilt. **Wichtig: ein Migrations-Bug hat die App beim ersten Start gecrasht — siehe Gotcha unten.**
+
+### Was passierte
+
+- **Rust** `recurrence.rs`: drei Zeilen in `ALLOWED_INTERVALS` (`weekly`=Days(7), `bimonthly`=Months(2), `semiannual`=Months(6)). `validate_interval`/`interval_step` ziehen automatisch nach; anker-additive 31.-Logik unverändert.
+- **TS** `recurrence.ts`: `monthsPer` (bimonthly:2, semiannual:6), `addInterval` generalisiert (Tagesschritte via `DAY_STEPS = {weekly:7, biweekly:14}`), `INTERVAL_OPTIONS` mit Labels (Wöchentlich/Zweiwöchentlich/Monatlich/Alle 2 Monate/Quartalsweise/Halbjährlich/Jährlich). `coverage.ts`: weekly-Monatsäquivalent (`*52/12`).
+- **Migration `0009_variable_intervals.sql`**: Tabellen-Rebuild für `subscriptions` (inkl. der cancel_*-Spalten aus 0008) + `incomes` mit erweitertem interval-CHECK, nach dem 0007-Muster.
+- **Aufräumer:** Es gab **zwei** `Interval`-Definitionen (types.ts + recurrence.ts, historische Duplikate) — hat beim ersten Build einen Typfehler verursacht. `recurrence.ts` re-exportiert jetzt aus `types.ts` → **Single Source of Truth ist `src/types.ts`**.
+- **Testvektoren** (der vom Backlog geforderte Schritt): 10 neue Vektoren in `tests/fixtures/recurrence-vectors.json`, die **TS und Rust gemeinsam** prüfen — inkl. bimonthly 31.-Drift (`2025-01-31 +4mo = 2025-05-31`), Klemmung (`2024-12-31 +2mo = 2025-02-28`), semiannual Klemmung+Rückkehr (`2025-03-31` → Sep30 → Mar31), weekly über Monatsgrenze. Beide Whitelists (TS-`assertInterval`, Rust-`months_mapping`) + die „bad interval"-Tests (nutzten `"weekly"` als ungültig → jetzt `"fortnightly"`) angepasst.
+
+### Verifikation (alle grün)
+
+- `cargo test` ✓ **60**, `cargo clippy -D warnings` ✓, `cargo fmt` ✓.
+- `pnpm test:run` ✓ **207** (15 Files, +10 Vektoren), `pnpm build` ✓, `pnpm lint` ✓ (nur bekanntes `noUselessFragments`-info).
+- **Manueller `pnpm tauri dev`:** Sicht-Check erteilt (neue Intervalle in beiden Dialogen sichtbar, App startet nach Migration sauber).
+
+### Gotcha — Migrations-Crash (FK 787), und was ich draus gelernt habe
+
+- Erster Start crashte: `while executing migration 9: FOREIGN KEY constraint failed (787)`. Ursache: **`-- no-transaction` stand NICHT in Zeile 1** (ich hatte einen Kommentarblock davor). sqlx erkennt die Direktive nur via `sql.starts_with("-- no-transaction")` → Migration lief in einer Transaktion → `PRAGMA foreign_keys=OFF` wirkungslos → beim DROP/RENAME griff die FK-Prüfung wegen der Kind-Zeilen (`reminders`, `subscription_price_history`).
+- **Warum die Tests es nicht fingen:** `test_pool()` nutzt **leere** In-Memory-DBs → keine Kind-Zeilen → kein 787. Der Fehler tritt nur mit echten Daten auf.
+- **Fix:** `-- no-transaction` als allererste Zeile. Verifiziert gegen eine **Kopie der echten DB** (`cp … /tmp/migtest.db && sqlite3 /tmp/migtest.db < 0009…sql`): exit 0, alle Row-Counts erhalten, neuer CHECK akzeptiert weekly/semiannual, lehnt Unsinn ab. Echte User-DB war unbeschädigt (Migration 9 war zurückgerollt, nur 1–8 angewandt).
+- Als Memory festgehalten: `migration-table-rebuild-testing` (Tabellen-Rebuilds immer gegen eine Kopie der befüllten DB testen; `-- no-transaction` = Zeile 1).
+
+### Offen für später
+
+- **„Alle X Wochen" (beliebiges X)** ist bewusst NICHT umgesetzt — das hätte das parametrische count+unit-Modell gebraucht (verworfen). Wenn künftig nötig: separates BACKLOG-Item, Modell-Pivot.
+
+---
+
 ## 2026-06-16 — Claude: Kündigungsfrist / „kündigen bis"-Datum (BACKLOG-Item)
 
 > Session-Fokus: BACKLOG-Item „Kündigungsfrist / kündigen bis"-Datum komplett umgesetzt (vertikaler Schnitt Migration → Rust → TS → UI → Tests). User-Entscheidung vorab: **beides** (Frist *oder* festes Datum, pro Abo umschaltbar) + Frist als **Anzahl + Einheit** (Tage/Wochen/Monate, Monate date-additiv). **Reine Anzeige**, keine Kündigungs-Notification (entspricht Backlog-Text). User-Sicht-Check erteilt.

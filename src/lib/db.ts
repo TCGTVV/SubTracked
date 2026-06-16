@@ -29,7 +29,15 @@ type SubFromRust = Omit<Subscription, "interval" | "cancelMode" | "cancelPeriodU
 };
 
 function parseInterval(s: string): Interval {
-  if (s !== "monthly" && s !== "biweekly" && s !== "quarterly" && s !== "yearly") {
+  if (
+    s !== "weekly" &&
+    s !== "biweekly" &&
+    s !== "monthly" &&
+    s !== "bimonthly" &&
+    s !== "quarterly" &&
+    s !== "semiannual" &&
+    s !== "yearly"
+  ) {
     throw new Error(`Unbekanntes Intervall aus DB: ${s}`);
   }
   return s;

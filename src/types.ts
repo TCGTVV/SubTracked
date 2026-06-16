@@ -1,4 +1,11 @@
-export type Interval = "monthly" | "biweekly" | "quarterly" | "yearly";
+export type Interval =
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "bimonthly"
+  | "quarterly"
+  | "semiannual"
+  | "yearly";
 
 /** Kündigungsmodus eines Abos: Frist (relativ zur Fälligkeit) oder festes Stichdatum. */
 export type CancelMode = "period" | "date";

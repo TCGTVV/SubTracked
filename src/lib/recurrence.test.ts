@@ -8,9 +8,12 @@ const d = (year: number, month: number, day: number) => new Date(year, month - 1
 describe("monthsPer", () => {
   it("mappt Intervalle auf die korrekten Monatsfaktoren", () => {
     expect(monthsPer.monthly).toBe(1);
+    expect(monthsPer.bimonthly).toBe(2);
     expect(monthsPer.quarterly).toBe(3);
+    expect(monthsPer.semiannual).toBe(6);
     expect(monthsPer.yearly).toBe(12);
     expect("biweekly" in monthsPer).toBe(false);
+    expect("weekly" in monthsPer).toBe(false);
   });
 });
 

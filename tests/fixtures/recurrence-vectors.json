@@ -133,6 +133,76 @@
       "interval": "biweekly",
       "from": "2026-02-02",
       "expected": "2026-02-02"
+    },
+    {
+      "name": "weekly_simple_step",
+      "anchor": "2026-01-01",
+      "interval": "weekly",
+      "from": "2026-01-20",
+      "expected": "2026-01-22"
+    },
+    {
+      "name": "weekly_exact_hit",
+      "anchor": "2026-01-01",
+      "interval": "weekly",
+      "from": "2026-01-15",
+      "expected": "2026-01-15"
+    },
+    {
+      "name": "weekly_crosses_month_boundary",
+      "anchor": "2026-01-29",
+      "interval": "weekly",
+      "from": "2026-02-01",
+      "expected": "2026-02-05"
+    },
+    {
+      "name": "bimonthly_simple_step",
+      "anchor": "2026-01-15",
+      "interval": "bimonthly",
+      "from": "2026-02-01",
+      "expected": "2026-03-15"
+    },
+    {
+      "name": "bimonthly_exact_hit",
+      "anchor": "2026-01-15",
+      "interval": "bimonthly",
+      "from": "2026-03-15",
+      "expected": "2026-03-15"
+    },
+    {
+      "name": "bimonthly_drift_31_anchor_additive",
+      "anchor": "2025-01-31",
+      "interval": "bimonthly",
+      "from": "2025-04-01",
+      "expected": "2025-05-31"
+    },
+    {
+      "name": "bimonthly_drift_31_clamps_to_feb28",
+      "anchor": "2024-12-31",
+      "interval": "bimonthly",
+      "from": "2025-01-01",
+      "expected": "2025-02-28"
+    },
+    {
+      "name": "semiannual_simple_step",
+      "anchor": "2025-01-15",
+      "interval": "semiannual",
+      "from": "2025-02-01",
+      "expected": "2025-07-15"
+    },
+    {
+      "name": "semiannual_clamps_mar31_to_sep30",
+      "anchor": "2025-03-31",
+      "interval": "semiannual",
+      "from": "2025-04-01",
+      "expected": "2025-09-30"
+    },
+    {
+      "name": "semiannual_returns_to_31_after_full_year",
+      "anchor": "2025-03-31",
+      "interval": "semiannual",
+      "from": "2025-10-01",
+      "expected": "2026-03-31"
     }
   ]
 }

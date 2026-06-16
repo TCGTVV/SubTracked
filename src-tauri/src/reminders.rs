@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn compute_skips_bad_interval_and_continues_batch() {
         let mut bad = sub(1, "2025-02-15", 7, true);
-        bad.interval = "weekly".to_string();
+        bad.interval = "fortnightly".to_string();
         let subs = vec![bad, sub(2, "2025-02-15", 7, true)];
         let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
         let ids: Vec<i64> = due.iter().map(|d| d.subscription_id).collect();
