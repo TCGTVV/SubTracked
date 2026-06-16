@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import type { Account, Subscription } from "../types";
@@ -50,18 +49,16 @@ const existingSub: Subscription = {
 };
 
 function renderDialog(subscription: Subscription | null = null, onSaved = vi.fn()) {
-  const ref = createRef<HTMLDialogElement>();
   const result = render(
     <SubscriptionDialog
-      ref={ref}
+      open
       subscription={subscription}
       accounts={accounts}
+      onClose={vi.fn()}
       onSaved={onSaved}
     />,
   );
-  // Geschlossener <dialog> ist accessibility-hidden — getByRole findet sonst nichts darin.
-  ref.current?.setAttribute("open", "");
-  return { ...result, ref, onSaved };
+  return { ...result, onSaved };
 }
 
 describe("SubscriptionDialog", () => {
@@ -83,8 +80,8 @@ describe("SubscriptionDialog", () => {
     expect(screen.getByRole("heading", { name: "Abo bearbeiten" })).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Netflix");
     expect(screen.getByLabelText("Betrag")).toHaveValue("17,99");
-    expect(screen.getByLabelText("Währung")).toHaveValue("EUR");
-    expect(screen.getByLabelText("Konto")).toHaveValue("1");
+    expect(screen.getByLabelText("Währung")).toHaveTextContent("EUR");
+    expect(screen.getByLabelText("Konto")).toHaveTextContent("Hauptkonto");
     expect(screen.getByLabelText("Vorlauf (Tage)")).toHaveValue(7);
     expect(screen.getByRole("button", { name: "Speichern" })).toBeInTheDocument();
   });
@@ -107,14 +104,14 @@ describe("SubscriptionDialog", () => {
       },
     ]);
 
-    const { container } = renderDialog(existingSub);
+    renderDialog(existingSub);
 
     await waitFor(() => {
       expect(screen.getByText("Preis-Historie (2 Einträge)")).toBeInTheDocument();
     });
     expect(screen.getByText("Konstant: 17,99 €")).toBeInTheDocument();
 
-    const points = Array.from(container.querySelectorAll(".price-history-point"));
+    const points = Array.from(document.querySelectorAll('svg[role="img"] circle'));
     expect(points).toHaveLength(2);
     expect(points.map((point) => point.getAttribute("cy"))).toEqual(["60", "60"]);
   });
@@ -125,7 +122,6 @@ describe("SubscriptionDialog", () => {
 
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Spotify" } });
     fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "9.99" } });
-    fireEvent.change(screen.getByLabelText("Konto"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
 
     await waitFor(() => {
@@ -136,7 +132,7 @@ describe("SubscriptionDialog", () => {
         name: "Spotify",
         amountCents: 999,
         currency: "EUR",
-        accountId: 2,
+        accountId: null,
         interval: "monthly",
         leadDays: 60,
         notify: true,

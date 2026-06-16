@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
 import type { Account } from "../types";
@@ -39,10 +38,10 @@ const accounts: Account[] = [
 ];
 
 function renderDialog(accountsProp: Account[] = accounts, onChanged = vi.fn()) {
-  const ref = createRef<HTMLDialogElement>();
-  const result = render(<AccountsDialog ref={ref} accounts={accountsProp} onChanged={onChanged} />);
-  ref.current?.setAttribute("open", "");
-  return { ...result, ref, onChanged };
+  const result = render(
+    <AccountsDialog open accounts={accountsProp} onChanged={onChanged} onClose={vi.fn()} />,
+  );
+  return { ...result, onChanged };
 }
 
 describe("AccountsDialog", () => {
@@ -70,7 +69,7 @@ describe("AccountsDialog", () => {
 
   it("zeigt Saldo und Puffer pro Konto an", () => {
     renderDialog();
-    const haupt = screen.getByText("Hauptkonto").closest(".account-item");
+    const haupt = screen.getByText("Hauptkonto").closest("li");
     expect(haupt?.textContent).toMatch(/500,00/);
     expect(haupt?.textContent).toMatch(/100,00/); // Puffer
   });

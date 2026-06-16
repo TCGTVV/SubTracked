@@ -1,7 +1,6 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   exportBackup,
@@ -54,13 +53,8 @@ const defaultAppInfo = {
   logDir: "/home/user/.local/share/com.tcgtvv.subtracked/logs",
 };
 
-function renderDialog(openSeq = 0, onDataReplaced?: () => void | Promise<void>) {
-  const ref = createRef<HTMLDialogElement>();
-  const result = render(
-    <SettingsDialog ref={ref} openSeq={openSeq} onDataReplaced={onDataReplaced} />,
-  );
-  ref.current?.setAttribute("open", "");
-  return { ...result, ref };
+function renderDialog(onDataReplaced?: () => void | Promise<void>) {
+  return render(<SettingsDialog open onClose={vi.fn()} onDataReplaced={onDataReplaced} />);
 }
 
 describe("SettingsDialog", () => {
@@ -240,12 +234,12 @@ describe("SettingsDialog", () => {
 
   it("lädt den Reminder-Status erneut, wenn der Dialog geöffnet wird", async () => {
     mockIsEnabled.mockResolvedValue(false);
-    const { ref, rerender } = renderDialog();
+    const { rerender } = render(<SettingsDialog open={false} onClose={vi.fn()} />);
     await waitFor(() => {
       expect(mockGetReminderStatus).toHaveBeenCalledTimes(1);
     });
 
-    rerender(<SettingsDialog ref={ref} openSeq={1} />);
+    rerender(<SettingsDialog open onClose={vi.fn()} />);
     await waitFor(() => {
       expect(mockGetReminderStatus).toHaveBeenCalledTimes(2);
     });
@@ -310,7 +304,7 @@ describe("SettingsDialog", () => {
     mockOpen.mockResolvedValue("/home/user/subtracked-backup.json");
     mockImportBackup.mockResolvedValue(undefined);
     const onDataReplaced = vi.fn();
-    renderDialog(0, onDataReplaced);
+    renderDialog(onDataReplaced);
 
     // Erster Klick zeigt nur den Bestätigungs-Schritt — noch kein Import.
     fireEvent.click(screen.getByRole("button", { name: "Backup importieren" }));

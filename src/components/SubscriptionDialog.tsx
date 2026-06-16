@@ -1,4 +1,5 @@
-import { type FormEvent, type Ref, useEffect, useId, useRef, useState } from "react";
+import { Bell, FolderClock, Pencil, Plus, Save, X } from "lucide-react";
+import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
@@ -12,12 +13,19 @@ import {
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
 import type { Account, Interval, PriceHistoryEntry, Subscription } from "../types";
 import { DateField } from "./DateField";
-import { Dialog } from "./Dialog";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface Props {
-  ref: Ref<HTMLDialogElement>;
+  open: boolean;
   subscription: Subscription | null;
   accounts: Account[];
+  onClose: () => void;
   onSaved: () => void;
 }
 
@@ -28,6 +36,9 @@ interface FieldErrors {
   anchorDate?: string;
   leadDays?: string;
 }
+
+/** Sentinel für „kein Konto" — Radix-Select erlaubt keinen leeren Item-Wert. */
+const NO_ACCOUNT = "none";
 
 function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
   const chronological = [...entries].reverse();
@@ -60,26 +71,26 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
   const line = points.map((point) => `${point.x},${point.y}`).join(" ");
 
   return (
-    <div className="price-history-graph">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img">
+    <div className="mt-2 flex flex-col gap-2">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" className="w-full">
         <title>Preisverlauf</title>
         <line
-          className="price-history-axis"
+          className="stroke-border"
           x1={paddingX}
           y1={height - paddingY}
           x2={width - paddingX}
           y2={height - paddingY}
         />
-        <polyline className="price-history-line" points={line} />
+        <polyline className="fill-none stroke-primary stroke-2" points={line} />
         {points.map(({ entry, x, y }) => (
-          <circle key={entry.id} className="price-history-point" cx={x} cy={y} r="3.5">
+          <circle key={entry.id} className="fill-primary" cx={x} cy={y} r="3.5">
             <title>
               {entry.changedAt.slice(0, 10)}: {formatAmount(entry.amountCents, entry.currency)}
             </title>
           </circle>
         ))}
       </svg>
-      <div className="price-history-range">
+      <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         {isConstant ? (
           <span>Konstant: {formatAmount(min, minEntry.currency)}</span>
         ) : (
@@ -99,16 +110,10 @@ function centsToInput(cents: number, currency: string): string {
   return (cents / divisor).toFixed(2).replace(".", ",");
 }
 
-export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Props) {
+export function SubscriptionDialog({ open, subscription, accounts, onClose, onSaved }: Props) {
   const isEdit = subscription !== null;
 
-  const nameId = useId();
-  const amountId = useId();
-  const currencyId = useId();
-  const accountIdId = useId();
-  const intervalId = useId();
   const anchorId = useId();
-  const leadId = useId();
   const nameErrorId = useId();
   const amountErrorId = useId();
   const currencyErrorId = useId();
@@ -117,7 +122,7 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
-  const currencyRef = useRef<HTMLSelectElement>(null);
+  const currencyRef = useRef<HTMLButtonElement>(null);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const leadRef = useRef<HTMLInputElement>(null);
 
@@ -232,203 +237,236 @@ export function SubscriptionDialog({ ref, subscription, accounts, onSaved }: Pro
   }
 
   return (
-    <Dialog ref={ref}>
-      <form onSubmit={handleSubmit} className="form" noValidate>
-        <h2>{isEdit ? "Abo bearbeiten" : "Neues Abo"}</h2>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <form onSubmit={handleSubmit} noValidate>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-fluid-lg">
+              {isEdit ? (
+                <Pencil className="size-5 text-primary" />
+              ) : (
+                <Plus className="size-5 text-primary" />
+              )}
+              {isEdit ? "Abo bearbeiten" : "Neues Abo"}
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="field">
-          <label htmlFor={nameId}>Name</label>
-          <input
-            id={nameId}
-            ref={nameRef}
-            type="text"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              clearFieldError("name");
-            }}
-            required
-            autoFocus
-            aria-invalid={errors.name ? true : undefined}
-            aria-describedby={errors.name ? nameErrorId : undefined}
-          />
-          {errors.name && (
-            <span id={nameErrorId} className="field-error" role="alert">
-              {errors.name}
-            </span>
-          )}
-        </div>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-name`}>Name</Label>
+              <Input
+                id={`${anchorId}-name`}
+                ref={nameRef}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  clearFieldError("name");
+                }}
+                required
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? nameErrorId : undefined}
+              />
+              {errors.name && (
+                <p id={nameErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.name}
+                </p>
+              )}
+            </div>
 
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor={amountId}>Betrag</label>
-            <input
-              id={amountId}
-              ref={amountRef}
-              type="text"
-              inputMode="decimal"
-              autoComplete="off"
-              value={amount}
-              onChange={(e) => {
-                setAmount(e.target.value);
-                clearFieldError("amount");
-              }}
-              required
-              aria-invalid={errors.amount ? true : undefined}
-              aria-describedby={errors.amount ? amountErrorId : undefined}
-            />
-            {errors.amount && (
-              <span id={amountErrorId} className="field-error" role="alert">
-                {errors.amount}
-              </span>
+            <div className="grid grid-cols-[1fr_auto] gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-amount`}>Betrag</Label>
+                <Input
+                  id={`${anchorId}-amount`}
+                  ref={amountRef}
+                  value={amount}
+                  onChange={(e) => {
+                    setAmount(e.target.value);
+                    clearFieldError("amount");
+                  }}
+                  inputMode="decimal"
+                  autoComplete="off"
+                  required
+                  aria-invalid={!!errors.amount}
+                  aria-describedby={errors.amount ? amountErrorId : undefined}
+                />
+                {errors.amount && (
+                  <p id={amountErrorId} className="text-sm text-destructive" role="alert">
+                    {errors.amount}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-currency`}>Währung</Label>
+                <Select
+                  value={currency}
+                  onValueChange={(v) => {
+                    setCurrency(v);
+                    clearFieldError("currency");
+                  }}
+                >
+                  <SelectTrigger
+                    id={`${anchorId}-currency`}
+                    ref={currencyRef}
+                    aria-invalid={!!errors.currency}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CURRENCY_OPTIONS.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.currency && (
+                  <p id={currencyErrorId} className="text-sm text-destructive" role="alert">
+                    {errors.currency}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-account`}>Konto</Label>
+              <Select
+                value={accountId === null ? NO_ACCOUNT : String(accountId)}
+                onValueChange={(v) => setAccountId(v === NO_ACCOUNT ? null : Number(v))}
+              >
+                <SelectTrigger id={`${anchorId}-account`} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_ACCOUNT}>(kein Konto)</SelectItem>
+                  {accounts.map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-interval`}>Intervall</Label>
+              <Select value={interval} onValueChange={(v) => setInterval(v as Interval)}>
+                <SelectTrigger id={`${anchorId}-interval`} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={anchorId}>Erste Fälligkeit</Label>
+                <DateField
+                  id={anchorId}
+                  buttonRef={anchorRef}
+                  value={anchorDate}
+                  onChange={(value) => {
+                    setAnchorDate(value);
+                    clearFieldError("anchorDate");
+                  }}
+                  ariaInvalid={errors.anchorDate ? true : undefined}
+                  ariaDescribedBy={errors.anchorDate ? anchorErrorId : undefined}
+                />
+                {errors.anchorDate && (
+                  <p id={anchorErrorId} className="text-sm text-destructive" role="alert">
+                    {errors.anchorDate}
+                  </p>
+                )}
+              </div>
+              <div className="flex w-24 flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-lead`}>Vorlauf (Tage)</Label>
+                <Input
+                  id={`${anchorId}-lead`}
+                  ref={leadRef}
+                  type="number"
+                  min={0}
+                  max={365}
+                  step={1}
+                  value={leadDays}
+                  onChange={(e) => {
+                    setLeadDays(Number(e.target.value));
+                    clearFieldError("leadDays");
+                  }}
+                  required
+                  aria-invalid={!!errors.leadDays}
+                  aria-describedby={errors.leadDays ? leadErrorId : undefined}
+                />
+                {errors.leadDays && (
+                  <p id={leadErrorId} className="text-sm text-destructive" role="alert">
+                    {errors.leadDays}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id={`${anchorId}-notify`}
+                checked={notify}
+                onCheckedChange={(checked) => setNotify(checked === true)}
+              />
+              <Label
+                htmlFor={`${anchorId}-notify`}
+                className="flex items-center gap-1.5 font-medium"
+              >
+                <Bell className="size-4 text-muted-foreground" />
+                Erinnerungen für dieses Abo
+              </Label>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>Fehler beim Speichern: {error}</AlertDescription>
+              </Alert>
+            )}
+
+            {isEdit && priceHistory.length > 1 && (
+              <details className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
+                  <FolderClock className="size-4 text-muted-foreground" />
+                  Preis-Historie ({priceHistory.length} Einträge)
+                </summary>
+                <PriceHistoryGraph entries={priceHistory} />
+                <ul className="mt-2 flex flex-col gap-1">
+                  {priceHistory.map((entry, i) => (
+                    <li key={entry.id} className="flex justify-between gap-2 tabular-nums">
+                      <span className="font-medium">
+                        {formatAmount(entry.amountCents, entry.currency)}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {entry.changedAt.slice(0, 10)}
+                        {i === 0 && <span className="text-success"> (aktuell)</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
           </div>
-          <div className="field field-narrow">
-            <label htmlFor={currencyId}>Währung</label>
-            <select
-              id={currencyId}
-              ref={currencyRef}
-              value={currency}
-              onChange={(e) => {
-                setCurrency(e.target.value);
-                clearFieldError("currency");
-              }}
-              aria-invalid={errors.currency ? true : undefined}
-              aria-describedby={errors.currency ? currencyErrorId : undefined}
-            >
-              {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-            {errors.currency && (
-              <span id={currencyErrorId} className="field-error" role="alert">
-                {errors.currency}
-              </span>
-            )}
-          </div>
-        </div>
 
-        <div className="field">
-          <label htmlFor={accountIdId}>Konto</label>
-          <select
-            id={accountIdId}
-            value={accountId === null ? "" : String(accountId)}
-            onChange={(e) => setAccountId(e.target.value === "" ? null : Number(e.target.value))}
-          >
-            <option value="">(kein Konto)</option>
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field">
-          <label htmlFor={intervalId}>Intervall</label>
-          <select
-            id={intervalId}
-            value={interval}
-            onChange={(e) => setInterval(e.target.value as Interval)}
-          >
-            {INTERVAL_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor={anchorId}>Erste Fälligkeit</label>
-            <DateField
-              id={anchorId}
-              buttonRef={anchorRef}
-              value={anchorDate}
-              onChange={(value) => {
-                setAnchorDate(value);
-                clearFieldError("anchorDate");
-              }}
-              ariaInvalid={errors.anchorDate ? true : undefined}
-              ariaDescribedBy={errors.anchorDate ? anchorErrorId : undefined}
-            />
-            {errors.anchorDate && (
-              <span id={anchorErrorId} className="field-error" role="alert">
-                {errors.anchorDate}
-              </span>
-            )}
-          </div>
-          <div className="field field-narrow">
-            <label htmlFor={leadId}>Vorlauf (Tage)</label>
-            <input
-              id={leadId}
-              ref={leadRef}
-              type="number"
-              min={0}
-              max={365}
-              step={1}
-              value={leadDays}
-              onChange={(e) => {
-                setLeadDays(Number(e.target.value));
-                clearFieldError("leadDays");
-              }}
-              required
-              aria-invalid={errors.leadDays ? true : undefined}
-              aria-describedby={errors.leadDays ? leadErrorId : undefined}
-            />
-            {errors.leadDays && (
-              <span id={leadErrorId} className="field-error" role="alert">
-                {errors.leadDays}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="field">
-          <label className="setting-label">
-            <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-            <span>Erinnerungen für dieses Abo</span>
-          </label>
-        </div>
-
-        {error && (
-          <p className="error" role="alert">
-            Fehler beim Speichern: {error}
-          </p>
-        )}
-
-        {isEdit && priceHistory.length > 1 && (
-          <details className="price-history">
-            <summary>Preis-Historie ({priceHistory.length} Einträge)</summary>
-            <PriceHistoryGraph entries={priceHistory} />
-            <ul className="price-history-list">
-              {priceHistory.map((entry, i) => (
-                <li key={entry.id} className="price-history-row">
-                  <span className="price-history-amount">
-                    {formatAmount(entry.amountCents, entry.currency)}
-                  </span>
-                  <span className="price-history-date">
-                    {entry.changedAt.slice(0, 10)}
-                    {i === 0 && <span className="price-history-current"> (aktuell)</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-
-        <div className="form-actions">
-          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
-            Abbrechen
-          </button>
-          <button type="submit" disabled={submitting}>
-            {submitting ? "Speichere …" : isEdit ? "Speichern" : "Anlegen"}
-          </button>
-        </div>
-      </form>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>
+              <X />
+              Abbrechen
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              <Save />
+              {submitting ? "Speichere …" : isEdit ? "Speichern" : "Anlegen"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

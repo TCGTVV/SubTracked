@@ -31,3 +31,11 @@ Alle nutzer-sichtbaren UI-Texte sind **deutsch**. Code-Identifier/Kommentare fol
 - Geschäftslogik in `src/lib/` bleibt framework-unabhängig (UI austauschbar, testbar). Keine React-Imports dort.
 - Serena-Tool-Zeilennummern sind 0-basiert (vs. Read-Tool 1-basiert) — bei Verweisen aufpassen.
 - HANDOVER-Eintraege von Codex ausdruecklich als Codex-Eintraege markieren.
+
+## UI / shadcn (seit 2026-06-16)
+
+- Klassen-Merging immer über `cn()` aus `src/lib/utils.ts`. Styling nur über Tailwind-Token-Utilities (`bg-card`, `text-muted-foreground`, `border-border`, `text-destructive`, `text-success`/`text-warning`, `chart-1..5`, `text-fluid-*`, `--sidebar-w`/`--card-min`) — **kein `App.css`/Vanilla-CSS mehr**, keine neuen globalen Element-Regeln.
+- **Dialoge sind controlled:** `open: boolean` + `onClose`/`onSaved`-Callbacks (kein nativer `<dialog>`/`ref.showModal()` mehr — `Dialog.tsx`/`lib/dialog.ts` existieren nicht mehr). Entity-initialisierte Dialoge (Sub/Income) bekommen in `App.tsx` einen **Remount-`key`** (`key={`sub-${id}-${seq}`}`), damit der Form-State pro Öffnen frisch ist.
+- **Radix `Select`:** leerer Item-Wert ist verboten → Sentinels (`"none"`/`"__all__"`/`"__none__"`) statt `""`. `SelectContent` läuft auf `position="popper"` (nicht item-aligned). Bei neuen Selects gleiches Muster.
+- shadcn-Komponenten aus der Registry kommen oft mit Biome-Formatverstößen (keine Semikolons etc.) → nach `shadcn add` einmal `pnpm lint:fix`.
+- `src/components/ui/` = generierte shadcn-Primitive; App-Komponenten daneben in `src/components/`. `react-day-picker` ist v10 — `Calendar` ist gegen die v10-API handgeschrieben.

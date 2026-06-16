@@ -1,3 +1,6 @@
+import { BellOff, BellRing } from "lucide-react";
+import { Button } from "./ui/button";
+
 export type NotificationStatus = "loading" | "granted" | "default" | "denied";
 
 interface Props {
@@ -10,20 +13,28 @@ export function NotificationPermissionBanner({ status, onActivate }: Props) {
 
   if (status === "denied") {
     return (
-      <div className="permission-banner permission-banner--denied" role="status">
+      <div
+        className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        role="status"
+      >
+        <BellOff className="size-4 shrink-0" />
         Benachrichtigungen sind blockiert. Bitte in den System-Einstellungen aktivieren.
       </div>
     );
   }
 
   return (
-    <div className="permission-banner" role="status">
-      <span>
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm"
+      role="status"
+    >
+      <span className="flex items-center gap-2">
+        <BellRing className="size-4 shrink-0 text-warning" />
         Benachrichtigungen sind nicht aktiviert — ohne Aktivierung kommen keine Erinnerungen.
       </span>
-      <button type="button" onClick={onActivate}>
+      <Button type="button" size="sm" onClick={onActivate}>
         Aktivieren
-      </button>
+      </Button>
     </div>
   );
 }

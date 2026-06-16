@@ -47,7 +47,10 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  // popper statt item-aligned: item-aligned unterstützt Exit-Animationen nicht
+  // sauber → Aufblitzen beim Schließen (besonders WebKitGTK). popper schließt
+  // sauber wie Popover/Calendar.
+  position = "popper",
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {

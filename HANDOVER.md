@@ -9,6 +9,47 @@
 
 ---
 
+## 2026-06-16 — Claude: UI-Overhaul Phase 2 — alle Komponenten auf shadcn/Tailwind, Legacy-CSS raus + Exit-Flicker-Fix
+
+> Session-Fokus: Phase 2 des UI-Plans (`/home/legr/.claude/plans/giggly-munching-flame.md`) durchgezogen — restliche Dialoge/Sektionen migriert, nativer `<dialog>`-Stack + `App.css` final entfernt. Danach User-Sicht-Check: zwei WebKitGTK-Flacker-Bugs gefunden und gefixt. **User-Sign-off erteilt.** Committet, gepusht, nach `main` gemergt.
+
+### Was passierte — Phase 2 (Pattern ausgerollt)
+
+- **DateField** → shadcn `Popover` + neuer `Calendar` (`src/components/ui/calendar.tsx`, **react-day-picker v10** — Token-`classNames` über `getDefaultClassNames`, lucide-`Chevron`, kein `react-day-picker/style.css` mehr). `popover.tsx` via shadcn-CLI (nutzt `radix-ui`-Umbrella, konsistent mit Phase-0-Komponenten).
+- **SubscriptionDialog / AccountsDialog / SettingsDialog** → shadcn `Dialog`. **Pattern-Wechsel:** vom nativen `ref`/`showModal()` auf **controlled `open`/`onClose`** (wie IncomeDialog). SettingsDialog-Autostart → `Switch`; der `openSeq`-Reload wurde zu einem `open`-Transition-Effect **mit Initial-Mount-Guard** (`skipInitialOpen`-Ref), damit der Mount-Effect nicht doppelt lädt.
+- **App.tsx** umgebaut: drei `*DialogRef`/`showModal`-`useEffect` raus → `subOpen`/`accountsOpen`/`settingsOpen`-Booleans. **Remount-Keys** für Sub-/Income-Dialog (`key={`sub-${id}-${seq}`}`) erzwingen frischen Form-State pro Öffnen — fixt einen latenten Edit-Stale-State-Bug, der mit dem controlled-Pattern ohne Key auch IncomeDialog getroffen hätte.
+- **PriceHistoryGraph** → Token-Farben (`stroke-primary`/`fill-primary`/`stroke-border`).
+- **OverviewSection / SubscriptionFilterBar / NotificationPermissionBanner / ErrorBoundary** → Tailwind-Tokens. FilterBar-Selects → shadcn `Select` mit Sentinel `__all__`/`__none__` (leerer Radix-Item-Wert verboten).
+- **Gelöscht:** `src/components/Dialog.tsx`, `src/lib/dialog.ts`, **`src/App.css`** (Import aus `main.tsx` raus). `theme/` war schon weg.
+- **Tests:** Dialog-Öffnen via `open`-Prop statt `<dialog>.setAttribute("open")`; brittle Selektoren ersetzt (`.account-item`→`li`, `.price-history-point`→`svg[role="img"] circle` + Portal-Query über `document` statt `container`, weil Radix-Content im Portal landet); Radix-Selects werden **nicht interaktiv** getestet (kein user-event/Polyfill-Aufwand) — Werte via Trigger-`textContent` + `aria-invalid` (per Prop gesetzt). AccountsDialog bekam dafür `aria-invalid`+Fehlertext auf dem Währungs-Select. `vitest.setup.ts`: jsdom-Stubs für Radix (`ResizeObserver`/`scrollIntoView`/`hasPointerCapture`/`releasePointerCapture`).
+
+### Sicht-Check-Bugs (WebKitGTK) — beide gefixt
+
+1. **Exit-Flicker aller Overlays:** `tw-animate-css`' `exit`-Keyframe läuft mit `animation-fill-mode: none` → nach `animationend` springt das Element kurz auf `opacity:1` zurück, bevor Radix unmountet → Aufblitzen. Fix in `src/index.css`: unlayered-Regel `[data-state="closed"] { --tw-animation-fill-mode: forwards; animation-fill-mode: forwards; }` — Endzustand hält bis Unmount. Behebt Popover/Kalender.
+2. **Selects flackerten weiter:** Radix-`Select` stand auf `position="item-aligned"` (Default), das **Exit-Animationen nicht sauber unterstützt**. Fix: `select.tsx`-Default auf **`position="popper"`** (popper-Offset/Viewport-Klassen waren im `cn()` schon konditional da). Echte `DropdownMenu`s gibt es keine in der App — alle „Dropdowns" sind Selects, daher Ein-Stellen-Fix.
+
+### Verifikation (alle grün)
+
+- `pnpm build` ✓ — JS 476 kB, **CSS 67,7 kB** (vorher 83 — Legacy-`App.css` weg).
+- `pnpm test:run` ✓ — **14 Files / 189 Tests** (unverändert grün).
+- `pnpm lint` ✓ — exit 0, 1 info (unsafe-fix-Vorschlag `noUselessFragments` in App.tsx incomes-View, bewusst gelassen).
+- **Manuell `pnpm tauri dev`:** User hat Kalender, alle vier Dialoge, beide Selects (Abo + Einnahme) in Light/Dark geprüft → **kein Flackern mehr, Sign-off erteilt.**
+
+### Status / Nächster Schritt
+
+- **Phase 2 abgeschlossen + nach `main` gemergt.** Der UI-Overhaul (Tailwind v4 + shadcn/ui + Dashboard) ist damit komplett — kein MUI/Emotion/Material-Symbols, kein `App.css`, alle Komponenten Token-basiert.
+- Memories aktualisiert: `mem:tech_stack` (Tailwind/shadcn/radix-ui/lucide + Test-Stubs), `mem:conventions` (cn(), controlled-Dialog-Pattern, Radix-Select-Sentinel + popper, Token-Klassen), `mem:ui_vision` (realisierter Stack statt arsnova/MUI-Vorlage). BACKLOG-UI-Redesign-Items abgehakt.
+- **Offen für später:** das `noUselessFragments`-info in App.tsx (kosmetisch); `dropdown-menu.tsx` in `ui/` ist ungenutzt (generiert) — könnte raus.
+
+### Gotchas
+
+- **react-day-picker ist v10** (nicht v9 wie shadcn-Registry erwartet) — `Calendar` ist handgeschrieben gegen die v10-`UI`/`classNames`-API; bei shadcn-Calendar-Re-Add nicht blind überschreiben.
+- **Select öffnet jetzt unterhalb des Triggers** (popper) statt item-aligned — gewolltes shadcn-Standardverhalten.
+- **Radix-Content im Portal:** Tests, die DOM direkt abfragen, müssen `document`/`screen` nutzen, nicht das `render`-`container`.
+- **`[data-state="closed"]`-Flicker-Regel** ist global/unlayered — falls künftig eine Radix-Komponente bewusst beim Schließen sichtbar bleiben soll, hier aufpassen.
+
+---
+
 ## 2026-06-15 — Claude: UI-Stack-Pivot — MUI raus, Tailwind v4 + shadcn/ui + Dashboard-Shell (Phase 0+1)
 
 > Session-Fokus: Den gescheiterten MUI-Pilot verworfen und auf einen neuen UI-Stack umgestellt. Plan-Mode → Stack-/Design-Entscheidungen mit User → Phase 0 (Scaffolding) + Phase 1 (Shell + Slice) gebaut. **Steht am User-Sign-off-Gate.**

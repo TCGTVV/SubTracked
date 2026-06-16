@@ -1,4 +1,5 @@
-import { type FormEvent, type Ref, useId, useRef, useState } from "react";
+import { Pencil, Trash2, Wallet } from "lucide-react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
 import {
   CURRENCY_OPTIONS,
@@ -9,12 +10,18 @@ import {
   parseSignedAmountInput,
 } from "../lib/format";
 import type { Account } from "../types";
-import { Dialog } from "./Dialog";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface Props {
-  ref: Ref<HTMLDialogElement>;
+  open: boolean;
   accounts: Account[];
   onChanged: () => void;
+  onClose: () => void;
 }
 
 interface FormState {
@@ -58,7 +65,7 @@ function parseToCents(input: string, currency: string): number | null {
   return Math.round(num * getCurrencySubdivisor(currency));
 }
 
-export function AccountsDialog({ ref, accounts, onChanged }: Props) {
+export function AccountsDialog({ open, accounts, onChanged, onClose }: Props) {
   const nameId = useId();
   const noteId = useId();
   const currencyId = useId();
@@ -70,7 +77,7 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
   const bufferErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
-  const currencyRef = useRef<HTMLSelectElement>(null);
+  const currencyRef = useRef<HTMLButtonElement>(null);
   const balanceRef = useRef<HTMLInputElement>(null);
   const bufferRef = useRef<HTMLInputElement>(null);
 
@@ -209,189 +216,211 @@ export function AccountsDialog({ ref, accounts, onChanged }: Props) {
   const isEditing = editingId != null;
 
   return (
-    <Dialog ref={ref}>
-      <div className="accounts-dialog">
-        <h2>Konten</h2>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          resetForm();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-fluid-lg">
+            <Wallet className="size-5 text-primary" />
+            Konten
+          </DialogTitle>
+        </DialogHeader>
 
-        {accounts.length === 0 ? (
-          <p className="empty">Noch keine Konten angelegt.</p>
-        ) : (
-          <ul className="account-list">
-            {accounts.map((a) => (
-              <li key={a.id} className="account-item">
-                <div className="account-info">
-                  <span className="account-name">{a.name}</span>
-                  <span className="account-balance">
-                    Saldo: {formatAmount(a.balanceCents, a.currency)}
-                    {a.minBufferCents > 0 && (
-                      <> · Puffer: {formatAmount(a.minBufferCents, a.currency)}</>
-                    )}
-                  </span>
-                  {(() => {
-                    const days = daysSince(a.balanceUpdatedAt);
-                    return days !== null && days >= 7 ? (
-                      <span className="balance-stale-hint">
-                        Saldo vor {days} {days === 1 ? "Tag" : "Tagen"} aktualisiert
-                      </span>
-                    ) : null;
-                  })()}
-                  {a.note && <span className="account-note">{a.note}</span>}
-                </div>
-                <div className="account-actions">
-                  <button
-                    type="button"
-                    onClick={() => startEdit(a)}
-                    aria-label={`Konto ${a.name} bearbeiten`}
-                  >
-                    Bearbeiten
-                  </button>
-                  <button
-                    type="button"
-                    className="sub-delete"
-                    onClick={() => void handleDelete(a)}
-                    aria-label={`Konto ${a.name} löschen`}
-                  >
-                    Löschen
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <form onSubmit={handleSubmit} className="account-add" noValidate>
-          <h3>{isEditing ? "Konto bearbeiten" : "Neues Konto"}</h3>
-
-          <div className="field">
-            <label htmlFor={nameId}>Name</label>
-            <input
-              id={nameId}
-              ref={nameRef}
-              type="text"
-              value={form.name}
-              onChange={(e) => {
-                updateField("name", e.target.value);
-                clearFieldError("name");
-              }}
-              required
-              aria-invalid={errors.name ? true : undefined}
-              aria-describedby={errors.name ? nameErrorId : undefined}
-            />
-            {errors.name && (
-              <span id={nameErrorId} className="field-error" role="alert">
-                {errors.name}
-              </span>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor={currencyId}>Währung</label>
-            <select
-              id={currencyId}
-              ref={currencyRef}
-              value={form.currency}
-              onChange={(e) => {
-                updateField("currency", e.target.value);
-                clearFieldError("currency");
-              }}
-              aria-invalid={errors.currency ? true : undefined}
-              aria-describedby={errors.currency ? currencyErrorId : undefined}
-            >
-              {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+        <div className="flex flex-col gap-4 py-4">
+          {accounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Noch keine Konten angelegt.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {accounts.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-start justify-between gap-3 rounded-lg border bg-card p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{a.name}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                      Saldo: {formatAmount(a.balanceCents, a.currency)}
+                      {a.minBufferCents > 0 && (
+                        <> · Puffer: {formatAmount(a.minBufferCents, a.currency)}</>
+                      )}
+                    </p>
+                    {(() => {
+                      const days = daysSince(a.balanceUpdatedAt);
+                      return days !== null && days >= 7 ? (
+                        <p className="text-xs text-warning">
+                          Saldo vor {days} {days === 1 ? "Tag" : "Tagen"} aktualisiert
+                        </p>
+                      ) : null;
+                    })()}
+                    {a.note && <p className="text-xs text-muted-foreground">{a.note}</p>}
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => startEdit(a)}
+                      aria-label={`Konto ${a.name} bearbeiten`}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void handleDelete(a)}
+                      aria-label={`Konto ${a.name} löschen`}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </li>
               ))}
-            </select>
-            {errors.currency && (
-              <span id={currencyErrorId} className="field-error" role="alert">
-                {errors.currency}
-              </span>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor={balanceId}>Aktueller Saldo</label>
-            <input
-              id={balanceId}
-              ref={balanceRef}
-              type="text"
-              inputMode="decimal"
-              value={form.balance}
-              onChange={(e) => {
-                updateField("balance", e.target.value);
-                clearFieldError("balance");
-              }}
-              placeholder="z.B. 500 oder 500,00"
-              aria-invalid={errors.balance ? true : undefined}
-              aria-describedby={errors.balance ? balanceErrorId : undefined}
-            />
-            {errors.balance && (
-              <span id={balanceErrorId} className="field-error" role="alert">
-                {errors.balance}
-              </span>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor={bufferId}>Mindestpuffer (optional)</label>
-            <input
-              id={bufferId}
-              ref={bufferRef}
-              type="text"
-              inputMode="decimal"
-              value={form.buffer}
-              onChange={(e) => {
-                updateField("buffer", e.target.value);
-                clearFieldError("buffer");
-              }}
-              placeholder="z.B. 100"
-              aria-invalid={errors.buffer ? true : undefined}
-              aria-describedby={errors.buffer ? bufferErrorId : undefined}
-            />
-            {errors.buffer ? (
-              <span id={bufferErrorId} className="field-error" role="alert">
-                {errors.buffer}
-              </span>
-            ) : (
-              <small className="field-hint">
-                Wird in der Übersicht gewarnt, wenn der Saldo darunter fallen würde.
-              </small>
-            )}
-          </div>
-
-          <div className="field">
-            <label htmlFor={noteId}>Notiz (optional)</label>
-            <input
-              id={noteId}
-              type="text"
-              value={form.note}
-              onChange={(e) => updateField("note", e.target.value)}
-              placeholder="z.B. IBAN-Endung oder Karte"
-            />
-          </div>
-
-          {error && (
-            <p className="error" role="alert">
-              Fehler: {error}
-            </p>
+            </ul>
           )}
 
-          <div className="form-actions">
-            <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
-              Schließen
-            </button>
-            {isEditing && (
-              <button type="button" onClick={resetForm}>
-                Abbrechen
-              </button>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4 border-t pt-4" noValidate>
+            <h3 className="font-semibold">{isEditing ? "Konto bearbeiten" : "Neues Konto"}</h3>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={nameId}>Name</Label>
+              <Input
+                id={nameId}
+                ref={nameRef}
+                value={form.name}
+                onChange={(e) => {
+                  updateField("name", e.target.value);
+                  clearFieldError("name");
+                }}
+                required
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? nameErrorId : undefined}
+              />
+              {errors.name && (
+                <p id={nameErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={currencyId}>Währung</Label>
+              <Select
+                value={form.currency}
+                onValueChange={(v) => {
+                  updateField("currency", v);
+                  clearFieldError("currency");
+                }}
+              >
+                <SelectTrigger
+                  id={currencyId}
+                  ref={currencyRef}
+                  className="w-full"
+                  aria-invalid={!!errors.currency}
+                  aria-describedby={errors.currency ? currencyErrorId : undefined}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.currency && (
+                <p id={currencyErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.currency}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={balanceId}>Aktueller Saldo</Label>
+              <Input
+                id={balanceId}
+                ref={balanceRef}
+                inputMode="decimal"
+                value={form.balance}
+                onChange={(e) => {
+                  updateField("balance", e.target.value);
+                  clearFieldError("balance");
+                }}
+                placeholder="z.B. 500 oder 500,00"
+                aria-invalid={!!errors.balance}
+                aria-describedby={errors.balance ? balanceErrorId : undefined}
+              />
+              {errors.balance && (
+                <p id={balanceErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.balance}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={bufferId}>Mindestpuffer (optional)</Label>
+              <Input
+                id={bufferId}
+                ref={bufferRef}
+                inputMode="decimal"
+                value={form.buffer}
+                onChange={(e) => {
+                  updateField("buffer", e.target.value);
+                  clearFieldError("buffer");
+                }}
+                placeholder="z.B. 100"
+                aria-invalid={!!errors.buffer}
+                aria-describedby={errors.buffer ? bufferErrorId : undefined}
+              />
+              {errors.buffer ? (
+                <p id={bufferErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.buffer}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Wird in der Übersicht gewarnt, wenn der Saldo darunter fallen würde.
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={noteId}>Notiz (optional)</Label>
+              <Input
+                id={noteId}
+                value={form.note}
+                onChange={(e) => updateField("note", e.target.value)}
+                placeholder="z.B. IBAN-Endung oder Karte"
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>Fehler: {error}</AlertDescription>
+              </Alert>
             )}
-            <button type="submit" disabled={submitting || !form.name.trim()}>
-              {submitting ? "Speichere …" : isEditing ? "Speichern" : "Hinzufügen"}
-            </button>
-          </div>
-        </form>
-      </div>
+
+            <div className="flex justify-end gap-2">
+              {isEditing && (
+                <Button type="button" variant="ghost" onClick={resetForm}>
+                  Abbrechen
+                </Button>
+              )}
+              <Button type="submit" disabled={submitting || !form.name.trim()}>
+                {submitting ? "Speichere …" : isEditing ? "Speichern" : "Hinzufügen"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
     </Dialog>
   );
 }
