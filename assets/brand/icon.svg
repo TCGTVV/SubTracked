@@ -1,0 +1,43 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5c58e8"/>
+      <stop offset="1" stop-color="#4a3cc2"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0b53f"/>
+      <stop offset="1" stop-color="#df911a"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="20" y="20" width="472" height="472" rx="108" fill="url(#bg)"/>
+
+  <!-- Kalender-Rahmen (offen oben-rechts für den Recurrence-Pfeil) -->
+  <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 296,180 L 182,180 A 30,30 0 0 0 152,210 L 152,342 A 30,30 0 0 0 182,372 L 330,372 A 30,30 0 0 0 360,342 L 360,256"/>
+    <!-- Binding-Tabs -->
+    <path d="M 200,160 L 200,196"/>
+    <path d="M 300,160 L 300,196"/>
+    <!-- Recurrence-Pfeil im oberen rechten Eck -->
+    <path d="M 296,180 C 348,176 368,198 368,238"/>
+  </g>
+  <!-- Pfeilspitze (gefüllt, zeigt nach unten) -->
+  <path d="M 350,232 L 368,262 L 386,232 Z" fill="#ffffff"/>
+
+  <!-- Münzstapel -->
+  <g stroke="#b5710f" stroke-width="4">
+    <!-- hinterer Stapel -->
+    <g fill="url(#coin)">
+      <ellipse cx="290" cy="322" rx="33" ry="12"/>
+      <ellipse cx="290" cy="302" rx="33" ry="12"/>
+      <ellipse cx="290" cy="282" rx="33" ry="12"/>
+      <ellipse cx="290" cy="262" rx="33" ry="12"/>
+    </g>
+    <!-- vorderer Stapel -->
+    <g fill="url(#coin)">
+      <ellipse cx="222" cy="326" rx="33" ry="12"/>
+      <ellipse cx="222" cy="306" rx="33" ry="12"/>
+      <ellipse cx="222" cy="286" rx="33" ry="12"/>
+    </g>
+  </g>
+</svg>

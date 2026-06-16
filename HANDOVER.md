@@ -9,6 +9,24 @@
 
 ---
 
+## 2026-06-16 — Claude: Rebrand auf neue Palette + Release v0.2.0
+
+> Direkt nach Phase 2: Logo/Icons an den neuen Look angepasst und die Version auf 0.2.0 gehoben (großer UI-Overhaul = Minor-Bump). Auf User-Wunsch als getaggter Release.
+
+### Rebrand (neue Palette)
+
+- Altes Teal/Orange-Logo passte nicht mehr → neu in **Indigo→Violett** (`#5c58e8`→`#4a3cc2`) mit **goldenen Münzen** (`#df911a`). Motiv (Kalender + Recurrence-Pfeil + Münzstapel) beibehalten.
+- **SVG-Quellen neu** unter `assets/brand/` (`icon.svg` = App-Icon mit Verlaufs-Hintergrund/weißem Mark; `logo.svg` = README-Banner, Mark Indigo + Wortmarke „Sub"=Indigo/„Tracked"=Slate in **Inter Bold**). Render-Pipeline: `rsvg-convert` → `magick -trim`; Wortmarke nutzt Inter (woff2→ttf via `woff2_decompress`, lokal in fontconfig installiert).
+- **App-/Tray-Icons** via `pnpm tauri icon` aus 1024er-Render neu generiert → ersetzt alle `src-tauri/icons/*` (Desktop). Die zusätzlich erzeugten `64x64.png`/`android/`/`ios/` wurden entfernt (Desktop-only, vorher nicht im Repo).
+- **`assets/logo.png`** (README, weißer BG, 1500×329) ersetzt. `logo2/logo3.png` sind alte untrackte Backups — ignoriert.
+
+### Release v0.2.0
+
+- Version an **vier** Stellen gehoben: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `Cargo.lock` (`subtracked`-Eintrag). In-App-`getAppInfo` liest aus `tauri.conf.json` → Einstellungen zeigen `0.2.0`.
+- Commit → Push → Merge `main` → **Tag `v0.2.0`** gepusht → triggert `release.yml` (tauri-action, baut alle Installer + Draft-Release, wie bei v0.1.0).
+
+---
+
 ## 2026-06-16 — Claude: UI-Overhaul Phase 2 — alle Komponenten auf shadcn/Tailwind, Legacy-CSS raus + Exit-Flicker-Fix
 
 > Session-Fokus: Phase 2 des UI-Plans (`/home/legr/.claude/plans/giggly-munching-flame.md`) durchgezogen — restliche Dialoge/Sektionen migriert, nativer `<dialog>`-Stack + `App.css` final entfernt. Danach User-Sicht-Check: zwei WebKitGTK-Flacker-Bugs gefunden und gefixt. **User-Sign-off erteilt.** Committet, gepusht, nach `main` gemergt.

@@ -1,0 +1,43 @@
+<svg width="1400" height="360" viewBox="0 0 1400 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="markstroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5c58e8"/>
+      <stop offset="1" stop-color="#6360f8"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0b53f"/>
+      <stop offset="1" stop-color="#df911a"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1400" height="360" fill="#ffffff"/>
+
+  <!-- Mark -->
+  <g transform="translate(-100,-86)">
+    <g fill="none" stroke="url(#markstroke)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M 296,180 L 182,180 A 30,30 0 0 0 152,210 L 152,342 A 30,30 0 0 0 182,372 L 330,372 A 30,30 0 0 0 360,342 L 360,256"/>
+      <path d="M 200,160 L 200,196"/>
+      <path d="M 300,160 L 300,196"/>
+      <path d="M 296,180 C 348,176 368,198 368,238"/>
+    </g>
+    <path d="M 350,232 L 368,262 L 386,232 Z" fill="#5c58e8"/>
+    <g stroke="#b5710f" stroke-width="4">
+      <g fill="url(#coin)">
+        <ellipse cx="290" cy="322" rx="33" ry="12"/>
+        <ellipse cx="290" cy="302" rx="33" ry="12"/>
+        <ellipse cx="290" cy="282" rx="33" ry="12"/>
+        <ellipse cx="290" cy="262" rx="33" ry="12"/>
+      </g>
+      <g fill="url(#coin)">
+        <ellipse cx="222" cy="326" rx="33" ry="12"/>
+        <ellipse cx="222" cy="306" rx="33" ry="12"/>
+        <ellipse cx="222" cy="286" rx="33" ry="12"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- Wortmarke (Inter Bold) -->
+  <text x="312" y="238" font-family="Inter" font-weight="700" font-size="170" letter-spacing="-4">
+    <tspan fill="#5c58e8">Sub</tspan><tspan fill="#2b2c3d">Tracked</tspan>
+  </text>
+</svg>
