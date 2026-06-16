@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import vectorsJson from "../../tests/fixtures/recurrence-vectors.json";
+import type { CancelMode, CancelUnit, Subscription } from "../types";
+import { cancelDeadline } from "./cancellation";
 import { type Interval, nextDueDate } from "./recurrence";
 
 // Geteilte Testvektoren mit `src-tauri/src/recurrence.rs`. Drift zwischen den
@@ -39,7 +41,22 @@ function assertInterval(value: string, vectorName: string): Interval {
   );
 }
 
-const vectors = vectorsJson as { next_due_date: NextDueVectorRaw[] };
+interface CancelVectorRaw {
+  name: string;
+  mode: CancelMode | null;
+  period_value: number | null;
+  period_unit: CancelUnit | null;
+  cancel_date: string | null;
+  anchor: string;
+  interval: string;
+  from: string;
+  expected: string | null;
+}
+
+const vectors = vectorsJson as {
+  next_due_date: NextDueVectorRaw[];
+  cancel_deadline: CancelVectorRaw[];
+};
 
 // Lokale Mitternacht — Vitest setzt TZ=UTC, damit dieselben numerischen
 // Mitternacht-Werte rauskommen wie Rusts NaiveDate.
@@ -58,6 +75,34 @@ describe("shared recurrence vectors (TS-Seite)", () => {
       const interval = assertInterval(v.interval, v.name);
       const got = nextDueDate(parseDate(v.anchor), interval, parseDate(v.from));
       expect(got).toEqual(parseDate(v.expected));
+    });
+  }
+});
+
+describe("shared cancel-deadline vectors (TS-Seite)", () => {
+  it("fixtures-Datei enthaelt mindestens einen Cancel-Vektor", () => {
+    expect(vectors.cancel_deadline.length).toBeGreaterThan(0);
+  });
+
+  for (const v of vectors.cancel_deadline) {
+    it(v.name, () => {
+      const sub: Subscription = {
+        id: 1,
+        name: v.name,
+        amountCents: 0,
+        currency: "EUR",
+        accountId: null,
+        interval: assertInterval(v.interval, v.name),
+        anchorDate: v.anchor,
+        leadDays: 0,
+        active: true,
+        notify: true,
+        cancelMode: v.mode,
+        cancelPeriodValue: v.period_value,
+        cancelPeriodUnit: v.period_unit,
+        cancelDate: v.cancel_date,
+      };
+      expect(cancelDeadline(sub, parseDate(v.from))).toBe(v.expected);
     });
   }
 });

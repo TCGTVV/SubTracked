@@ -88,6 +88,63 @@ pub fn next_due_date(
     Ok(due)
 }
 
+/// Zieht eine Kündigungsfrist von einem Datum ab. Monate werden date-additiv
+/// (kalendarisch, mit Monatsende-Klemmung) abgezogen — parallel zu `subtractPeriod`
+/// in `src/lib/cancellation.ts`.
+fn subtract_period(date: NaiveDate, value: i64, unit: &str) -> Result<NaiveDate, String> {
+    let result = match unit {
+        "days" => date.checked_sub_signed(Duration::days(value)),
+        "weeks" => date.checked_sub_signed(Duration::days(value * 7)),
+        "months" => {
+            let months = u32::try_from(value)
+                .map_err(|_| format!("Kündigungsfrist außerhalb des gültigen Bereichs: {value}"))?;
+            date.checked_sub_months(Months::new(months))
+        }
+        other => return Err(format!("Ungültige Kündigungsfrist-Einheit: {other}")),
+    };
+    result.ok_or_else(|| "Datum-Overflow bei Kündigungsfrist".to_string())
+}
+
+/// Rust-Spiegel von `cancelDeadline` (`src/lib/cancellation.ts`): nächstes relevantes
+/// „kündigen bis"-Datum, oder None wenn keine Kündigung getrackt ist.
+///
+/// - mode "date": festes Stichdatum (auch wenn in der Vergangenheit).
+/// - mode "period": nächste Fälligkeit minus Frist; ist die Frist für den aktuellen
+///   Zyklus verstrichen, wird zur nächsten Fälligkeit weitergerückt.
+///
+/// Beide Implementierungen werden durch die geteilten Vektoren in
+/// `tests/fixtures/recurrence-vectors.json` gegen Drift abgesichert.
+pub fn cancel_deadline(
+    mode: Option<&str>,
+    period_value: Option<i64>,
+    period_unit: Option<&str>,
+    fixed_date: Option<&str>,
+    anchor: NaiveDate,
+    interval: &str,
+    from: NaiveDate,
+) -> Result<Option<NaiveDate>, String> {
+    match mode {
+        Some("date") => match fixed_date {
+            Some(date) => Ok(Some(parse_iso_date_strict(date)?)),
+            None => Ok(None),
+        },
+        Some("period") => {
+            let (value, unit) = match (period_value, period_unit) {
+                (Some(value), Some(unit)) => (value, unit),
+                _ => return Ok(None),
+            };
+            let mut renewal = next_due_date(anchor, interval, from)?;
+            let mut deadline = subtract_period(renewal, value, unit)?;
+            while deadline < from {
+                renewal = next_due_date(anchor, interval, renewal + Duration::days(1))?;
+                deadline = subtract_period(renewal, value, unit)?;
+            }
+            Ok(Some(deadline))
+        }
+        _ => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,9 +256,6 @@ mod tests {
         assert!(next_due_date(d(2025, 1, 1), "foobar", d(2025, 1, 1)).is_err());
     }
 
-    /// Geteilte Testvektoren mit `src/lib/recurrence.ts`. Drift zwischen den beiden
-    /// Implementierungen faellt damit auf, sobald eine Seite sich anders entscheidet.
-    /// Vektoren leben unter `tests/fixtures/recurrence-vectors.json` im Repo-Root.
     #[test]
     fn shared_vectors_match_typescript_impl() {
         #[derive(serde::Deserialize)]
@@ -213,8 +267,21 @@ mod tests {
             expected: String,
         }
         #[derive(serde::Deserialize)]
+        struct CancelVector {
+            name: String,
+            mode: Option<String>,
+            period_value: Option<i64>,
+            period_unit: Option<String>,
+            cancel_date: Option<String>,
+            anchor: String,
+            interval: String,
+            from: String,
+            expected: Option<String>,
+        }
+        #[derive(serde::Deserialize)]
         struct SharedVectors {
             next_due_date: Vec<NextDueVector>,
+            cancel_deadline: Vec<CancelVector>,
         }
         let json = include_str!("../../tests/fixtures/recurrence-vectors.json");
         let vectors: SharedVectors = serde_json::from_str(json).expect("parse fixtures");
@@ -232,6 +299,29 @@ mod tests {
             let got = next_due_date(anchor, &v.interval, from)
                 .unwrap_or_else(|e| panic!("{}: next_due_date err {e}", v.name));
             assert_eq!(got, expected, "vektor {}", v.name);
+        }
+
+        assert!(
+            !vectors.cancel_deadline.is_empty(),
+            "cancel-fixtures sollten min. einen Vektor enthalten"
+        );
+        for v in vectors.cancel_deadline {
+            let anchor = NaiveDate::parse_from_str(&v.anchor, "%Y-%m-%d")
+                .unwrap_or_else(|e| panic!("{}: anchor parse {e}", v.name));
+            let from = NaiveDate::parse_from_str(&v.from, "%Y-%m-%d")
+                .unwrap_or_else(|e| panic!("{}: from parse {e}", v.name));
+            let got = cancel_deadline(
+                v.mode.as_deref(),
+                v.period_value,
+                v.period_unit.as_deref(),
+                v.cancel_date.as_deref(),
+                anchor,
+                &v.interval,
+                from,
+            )
+            .unwrap_or_else(|e| panic!("{}: cancel_deadline err {e}", v.name));
+            let got = got.map(|d| d.format("%Y-%m-%d").to_string());
+            assert_eq!(got, v.expected, "cancel vektor {}", v.name);
         }
     }
 }
