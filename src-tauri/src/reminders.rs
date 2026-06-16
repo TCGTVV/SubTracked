@@ -293,6 +293,10 @@ mod tests {
             lead_days,
             active: true,
             notify,
+            cancel_mode: None,
+            cancel_period_value: None,
+            cancel_period_unit: None,
+            cancel_date: None,
         }
     }
 

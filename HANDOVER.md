@@ -9,6 +9,43 @@
 
 ---
 
+## 2026-06-16 — Claude: Kündigungsfrist / „kündigen bis"-Datum (BACKLOG-Item)
+
+> Session-Fokus: BACKLOG-Item „Kündigungsfrist / kündigen bis"-Datum komplett umgesetzt (vertikaler Schnitt Migration → Rust → TS → UI → Tests). User-Entscheidung vorab: **beides** (Frist *oder* festes Datum, pro Abo umschaltbar) + Frist als **Anzahl + Einheit** (Tage/Wochen/Monate, Monate date-additiv). **Reine Anzeige**, keine Kündigungs-Notification (entspricht Backlog-Text). User-Sicht-Check erteilt.
+
+### Datenmodell
+
+- Abo bekommt optionale Kündigung in drei Zuständen: `cancel_mode = NULL` (nicht getrackt), `'period'` (Frist: `cancel_period_value` + `cancel_period_unit`), `'date'` (festes `cancel_date`, ISO). Beide Modi schließen sich gegenseitig aus.
+- **Migration `0008_subscription_cancellation.sql`** — vier nullable Spalten via `ALTER TABLE ADD COLUMN` mit CHECK-Constraints. NULL erfüllt die CHECKs (`NULL IN (...)` ist UNKNOWN) → Bestandszeilen bleiben gültig.
+
+### Was passierte
+
+- **Rust:** `Subscription`/`NewSubscription` (db.rs) um die vier Felder erweitert. Neue `validate_cancellation(mode, value, unit, date)` in `validation.rs` (prüft Konsistenz + Bereich 1..=730, Einheiten-Whitelist, reused `validate_anchor_date` für das Datum), eingebunden in `add_subscription`, `update_subscription_in_db` **und** `restore_backup`. INSERT/UPDATE (beide Branches)/SELECT in `commands.rs` + collect/restore-SELECT/INSERT in `backup.rs` durchgezogen — **Backup deckt die Felder jetzt mit ab** (Format erweitert, alte Backups: Spalten fehlen → serde liefert None).
+- **TS:** `CancelMode`/`CancelUnit` + vier Felder in `types.ts`. Defensives Narrowing `parseCancelMode`/`parseCancelUnit` in `db.ts` (analog `parseInterval`, `SubFromRust` lockert die beiden String-Felder).
+- **Logik:** neues `src/lib/cancellation.ts` — `cancelDeadline(sub, from)`: bei `'date'` das Stichdatum unverändert; bei `'period'` nächste Fälligkeit (`nextDueDate`) minus Frist, date-additiv (Monate via `addMonths(-v)`); **rückt automatisch zur nächsten Verlängerung weiter, wenn die Frist für den aktuellen Zyklus schon verstrichen ist**. Plus `cancelDeadlineDisplay` (formatiert + `daysUntil` + status overdue/soon(≤30d)/ok).
+- **UI:** Kündigungs-Sektion im `SubscriptionDialog` (Modus-Select mit Sentinel `NO_CANCEL="none"` → Frist: Zahl + Einheit-Select / Datum: `DateField`; Validierung `cancelPeriod`/`cancelDate` + Fokus-Kette). `CancelNotice`-Komponente in `App.tsx` zeigt auf der aktiven Abo-Card „Kündigen bis TT.MM.JJJJ · in N Tagen/heute/morgen/Frist verstrichen" in `text-warning`/`text-destructive`/`text-muted-foreground`.
+
+### Verifikation (alle grün)
+
+- `cargo test` ✓ — **60 Tests** (4 neu: `cancellation_*` in validation + `update_subscription_roundtrips_period_cancellation`/`_fixed_date_then_clears`/`_rejects_inconsistent_cancellation`).
+- `cargo clippy --all-targets -- -D warnings` ✓, `cargo fmt` angewandt.
+- `pnpm test:run` ✓ — **15 Files / 197 Tests** (+8 in `cancellation.test.ts`).
+- `pnpm build` ✓ — JS 481 kB, CSS 67,8 kB. `pnpm lint` ✓ (nur das bekannte `noUselessFragments`-info).
+- **Manueller `pnpm tauri dev`:** User-Sicht-Check erteilt.
+
+### Gotchas / Notes
+
+- **Zwei Wahrheits-Quellen für die Frist-Obergrenze:** `MAX_CANCEL_PERIOD_VALUE = 730` in `validation.rs` **und** im `SubscriptionDialog.tsx` (Konstante). Bei Änderung beide anpassen.
+- **„Soon"-Schwelle = 30 Tage** (`CANCEL_SOON_DAYS` in `cancellation.ts`) ist bewusst getrennt von `leadDays` (Zahlungs-Vorlauf), semantisch anderes Fenster.
+- **Test-Sub-Builder:** acht Test-Files bauen `Subscription`-Objekte; alle um die vier Felder (`cancelMode: null` etc.) ergänzt — neue Felder am `Subscription`-Typ brechen sonst `tsc`.
+- Beim Helper-Text im Dialog auf **gerade `"`** in JS-Strings achten (hat den Biome-Parser gebrochen) — Text ohne eingebettete Anführungszeichen formuliert.
+
+### Offen für später
+
+- Optional: Kündigungs-**Erinnerung** über den Rust-Reminder-Scheduler (analog Zahlungs-Reminder) — dann müsste die Deadline-Logik nach `recurrence.rs`/`reminders.rs` gespiegelt werden (TS+Rust-Testvektoren konsistent halten).
+
+---
+
 ## 2026-06-16 — Claude: Rebrand auf neue Palette + Release v0.2.0
 
 > Direkt nach Phase 2: Logo/Icons an den neuen Look angepasst und die Version auf 0.2.0 gehoben (großer UI-Overhaul = Minor-Bump). Auf User-Wunsch als getaggter Release.

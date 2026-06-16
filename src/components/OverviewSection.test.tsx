@@ -36,6 +36,10 @@ function makeSub(overrides: Partial<Subscription> = {}): Subscription {
     leadDays: 7,
     active: true,
     notify: true,
+    cancelMode: null,
+    cancelPeriodValue: null,
+    cancelPeriodUnit: null,
+    cancelDate: null,
     ...overrides,
   };
 }

@@ -108,6 +108,10 @@ describe("App", () => {
       leadDays: 3,
       active: false,
       notify: true,
+      cancelMode: null,
+      cancelPeriodValue: null,
+      cancelPeriodUnit: null,
+      cancelDate: null,
     };
     mockUseSubscriptions.mockReturnValue({
       subs: [archivedSub],

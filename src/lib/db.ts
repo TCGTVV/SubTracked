@@ -1,5 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Account, Income, Interval, PriceHistoryEntry, Subscription } from "../types";
+import type {
+  Account,
+  CancelMode,
+  CancelUnit,
+  Income,
+  Interval,
+  PriceHistoryEntry,
+  Subscription,
+} from "../types";
 
 export interface AppInfo {
   version: string;
@@ -11,9 +19,14 @@ export async function getAppInfo(): Promise<AppInfo> {
   return invoke<AppInfo>("get_app_info");
 }
 
-// Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`
-// kommt als String und muss zum engen `Interval`-Union narrowed werden.
-type SubFromRust = Omit<Subscription, "interval"> & { interval: string };
+// Rust-Side liefert Subscription via Tauri-Command in camelCase, aber `interval`/
+// `cancelMode`/`cancelPeriodUnit` kommen als String und müssen zu den engen Unions
+// narrowed werden (Defense-in-Depth gegen DB-Manipulation von außen).
+type SubFromRust = Omit<Subscription, "interval" | "cancelMode" | "cancelPeriodUnit"> & {
+  interval: string;
+  cancelMode: string | null;
+  cancelPeriodUnit: string | null;
+};
 
 function parseInterval(s: string): Interval {
   if (s !== "monthly" && s !== "biweekly" && s !== "quarterly" && s !== "yearly") {
@@ -22,8 +35,29 @@ function parseInterval(s: string): Interval {
   return s;
 }
 
+function parseCancelMode(s: string | null): CancelMode | null {
+  if (s === null) return null;
+  if (s !== "period" && s !== "date") {
+    throw new Error(`Unbekannter Kündigungsmodus aus DB: ${s}`);
+  }
+  return s;
+}
+
+function parseCancelUnit(s: string | null): CancelUnit | null {
+  if (s === null) return null;
+  if (s !== "days" && s !== "weeks" && s !== "months") {
+    throw new Error(`Unbekannte Kündigungsfrist-Einheit aus DB: ${s}`);
+  }
+  return s;
+}
+
 function narrowSub(s: SubFromRust): Subscription {
-  return { ...s, interval: parseInterval(s.interval) };
+  return {
+    ...s,
+    interval: parseInterval(s.interval),
+    cancelMode: parseCancelMode(s.cancelMode),
+    cancelPeriodUnit: parseCancelUnit(s.cancelPeriodUnit),
+  };
 }
 
 // --- Accounts --------------------------------------------------------------

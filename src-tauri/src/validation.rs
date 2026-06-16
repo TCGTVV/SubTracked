@@ -80,6 +80,54 @@ pub fn validate_subscription_fields(
     Ok(())
 }
 
+/// Erlaubte Einheiten für die Kündigungsfrist (cancel_mode = "period").
+pub const CANCEL_PERIOD_UNITS: [&str; 3] = ["days", "weeks", "months"];
+/// Obergrenze für die Kündigungsfrist (Sanity-Limit, gilt für jede Einheit).
+pub const MAX_CANCEL_PERIOD_VALUE: i64 = 730;
+
+/// Prüft die optionalen Kündigungsangaben auf Konsistenz. Die drei gültigen Zustände:
+///   - mode = None              -> alle übrigen Felder müssen None sein.
+///   - mode = Some("period")    -> value (1..=MAX) + unit gesetzt, date None.
+///   - mode = Some("date")      -> date (gültiges ISO-Datum) gesetzt, value/unit None.
+pub fn validate_cancellation(
+    mode: Option<&str>,
+    period_value: Option<i64>,
+    period_unit: Option<&str>,
+    date: Option<&str>,
+) -> Result<(), String> {
+    match mode {
+        None => {
+            if period_value.is_some() || period_unit.is_some() || date.is_some() {
+                return Err("Kündigungsangaben ohne Kündigungsmodus".into());
+            }
+        }
+        Some("period") => {
+            let value = period_value.ok_or("Kündigungsfrist fehlt")?;
+            if !(1..=MAX_CANCEL_PERIOD_VALUE).contains(&value) {
+                return Err(format!(
+                    "Kündigungsfrist muss zwischen 1 und {MAX_CANCEL_PERIOD_VALUE} liegen"
+                ));
+            }
+            match period_unit {
+                Some(unit) if CANCEL_PERIOD_UNITS.contains(&unit) => {}
+                _ => return Err("Ungültige Einheit der Kündigungsfrist".into()),
+            }
+            if date.is_some() {
+                return Err("Festes Kündigungsdatum im Frist-Modus nicht erlaubt".into());
+            }
+        }
+        Some("date") => {
+            let date = date.ok_or("Kündigungsdatum fehlt")?;
+            validate_anchor_date(date)?;
+            if period_value.is_some() || period_unit.is_some() {
+                return Err("Kündigungsfrist im Datums-Modus nicht erlaubt".into());
+            }
+        }
+        Some(_) => return Err("Ungültiger Kündigungsmodus".into()),
+    }
+    Ok(())
+}
+
 pub fn validate_account_fields(
     name: &str,
     currency: &str,
@@ -121,6 +169,65 @@ mod tests {
         assert!(validate_name("\t\n").is_err());
         assert!(validate_name("Netflix").is_ok());
         assert!(validate_name("  Spotify  ").is_ok());
+    }
+
+    #[test]
+    fn cancellation_none_requires_all_empty() {
+        assert!(validate_cancellation(None, None, None, None).is_ok());
+        assert!(validate_cancellation(None, Some(3), None, None).is_err());
+        assert!(validate_cancellation(None, None, Some("months"), None).is_err());
+        assert!(validate_cancellation(None, None, None, Some("2026-12-01")).is_err());
+    }
+
+    #[test]
+    fn cancellation_period_validates_value_and_unit() {
+        assert!(validate_cancellation(Some("period"), Some(3), Some("months"), None).is_ok());
+        assert!(validate_cancellation(Some("period"), Some(1), Some("days"), None).is_ok());
+        assert!(validate_cancellation(
+            Some("period"),
+            Some(MAX_CANCEL_PERIOD_VALUE),
+            Some("weeks"),
+            None
+        )
+        .is_ok());
+        // fehlender Wert / Einheit
+        assert!(validate_cancellation(Some("period"), None, Some("months"), None).is_err());
+        assert!(validate_cancellation(Some("period"), Some(3), None, None).is_err());
+        // außerhalb des Bereichs
+        assert!(validate_cancellation(Some("period"), Some(0), Some("months"), None).is_err());
+        assert!(validate_cancellation(
+            Some("period"),
+            Some(MAX_CANCEL_PERIOD_VALUE + 1),
+            Some("months"),
+            None
+        )
+        .is_err());
+        // ungültige Einheit
+        assert!(validate_cancellation(Some("period"), Some(3), Some("years"), None).is_err());
+        // festes Datum im Frist-Modus verboten
+        assert!(
+            validate_cancellation(Some("period"), Some(3), Some("months"), Some("2026-12-01"))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn cancellation_date_validates_iso_and_exclusivity() {
+        assert!(validate_cancellation(Some("date"), None, None, Some("2026-12-01")).is_ok());
+        // fehlendes / ungültiges Datum
+        assert!(validate_cancellation(Some("date"), None, None, None).is_err());
+        assert!(validate_cancellation(Some("date"), None, None, Some("2026-13-01")).is_err());
+        assert!(validate_cancellation(Some("date"), None, None, Some("nope")).is_err());
+        // Frist im Datums-Modus verboten
+        assert!(validate_cancellation(Some("date"), Some(3), None, Some("2026-12-01")).is_err());
+        assert!(
+            validate_cancellation(Some("date"), None, Some("months"), Some("2026-12-01")).is_err()
+        );
+    }
+
+    #[test]
+    fn cancellation_rejects_unknown_mode() {
+        assert!(validate_cancellation(Some("weird"), None, None, None).is_err());
     }
 
     #[test]
