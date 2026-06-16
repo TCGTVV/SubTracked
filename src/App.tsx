@@ -1,5 +1,5 @@
 import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Wallet } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { AppSidebar, type DashboardView } from "./components/AppSidebar";
 import { IncomeDialog } from "./components/IncomeDialog";
@@ -123,19 +123,15 @@ function App() {
 
   const [view, setView] = useState<DashboardView>("overview");
   const [editingSub, setEditingSub] = useState<Subscription | null>(null);
+  const [subOpen, setSubOpen] = useState(false);
   const [subOpenSeq, setSubOpenSeq] = useState(0);
   const [editingIncome, setEditingIncome] = useState<Income | null>(null);
   const [incomeOpen, setIncomeOpen] = useState(false);
-  const [settingsOpenSeq, setSettingsOpenSeq] = useState(0);
+  const [incomeOpenSeq, setIncomeOpenSeq] = useState(0);
+  const [accountsOpen, setAccountsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
-  const subDialogRef = useRef<HTMLDialogElement>(null);
-  const accountsDialogRef = useRef<HTMLDialogElement>(null);
-  const settingsDialogRef = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    if (subOpenSeq > 0) subDialogRef.current?.showModal();
-  }, [subOpenSeq]);
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
   const activeIncomes = useMemo(() => incomes.filter((i) => i.active), [incomes]);
@@ -150,20 +146,24 @@ function App() {
   function startNew() {
     setEditingSub(null);
     setSubOpenSeq((s) => s + 1);
+    setSubOpen(true);
   }
 
   function startEdit(sub: Subscription) {
     setEditingSub(sub);
     setSubOpenSeq((s) => s + 1);
+    setSubOpen(true);
   }
 
   function startNewIncome() {
     setEditingIncome(null);
+    setIncomeOpenSeq((s) => s + 1);
     setIncomeOpen(true);
   }
 
   function startEditIncome(income: Income) {
     setEditingIncome(income);
+    setIncomeOpenSeq((s) => s + 1);
     setIncomeOpen(true);
   }
 
@@ -192,16 +192,15 @@ function App() {
   }
 
   function openAccounts() {
-    accountsDialogRef.current?.showModal();
+    setAccountsOpen(true);
   }
 
   function openSettings() {
-    setSettingsOpenSeq((s) => s + 1);
-    settingsDialogRef.current?.showModal();
+    setSettingsOpen(true);
   }
 
   function handleSubSaved() {
-    subDialogRef.current?.close();
+    setSubOpen(false);
     void reloadAll();
   }
 
@@ -454,23 +453,30 @@ function App() {
       </main>
 
       <SubscriptionDialog
-        key={`${editingSub?.id ?? "new"}-${subOpenSeq}`}
-        ref={subDialogRef}
+        key={`sub-${editingSub?.id ?? "new"}-${subOpenSeq}`}
+        open={subOpen}
         subscription={editingSub}
         accounts={accounts}
+        onClose={() => setSubOpen(false)}
         onSaved={handleSubSaved}
       />
       <IncomeDialog
+        key={`income-${editingIncome?.id ?? "new"}-${incomeOpenSeq}`}
         open={incomeOpen}
         income={editingIncome}
         accounts={accounts}
         onClose={() => setIncomeOpen(false)}
         onSaved={handleIncomeSaved}
       />
-      <AccountsDialog ref={accountsDialogRef} accounts={accounts} onChanged={reloadAccounts} />
+      <AccountsDialog
+        open={accountsOpen}
+        accounts={accounts}
+        onChanged={reloadAccounts}
+        onClose={() => setAccountsOpen(false)}
+      />
       <SettingsDialog
-        ref={settingsDialogRef}
-        openSeq={settingsOpenSeq}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
         onDataReplaced={reloadAll}
       />
     </div>

@@ -1,8 +1,10 @@
 import { format, isValid, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { type Ref, useEffect, useRef, useState } from "react";
-import { DayPicker } from "react-day-picker";
-import "react-day-picker/style.css";
+import { CalendarIcon } from "lucide-react";
+import { type Ref, useState } from "react";
+import { cn } from "@/lib/utils";
+import { Calendar } from "./ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 interface Props {
   ariaDescribedBy?: string;
@@ -15,28 +17,6 @@ interface Props {
 
 export function DateField({ ariaDescribedBy, ariaInvalid, buttonRef, id, value, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function handlePointerDown(e: PointerEvent) {
-      if (containerRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
-      setOpen(false);
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown, true);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown, true);
-    };
-  }, [open]);
 
   const parsed = value ? parseISO(value) : undefined;
   const selected = parsed && isValid(parsed) ? parsed : undefined;
@@ -45,37 +25,38 @@ export function DateField({ ariaDescribedBy, ariaInvalid, buttonRef, id, value, 
     : value || "Datum wählen …";
 
   return (
-    <div className="date-field" ref={containerRef}>
-      <button
-        id={id}
-        ref={buttonRef}
-        type="button"
-        className="date-trigger flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm shadow-xs transition-colors hover:bg-accent/5 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-invalid:border-destructive"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-invalid={ariaInvalid || undefined}
-        aria-describedby={ariaDescribedBy}
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="date-popover" role="dialog" aria-label="Kalender">
-          <DayPicker
-            mode="single"
-            selected={selected}
-            onSelect={(d) => {
-              if (!d) return;
-              onChange(format(d, "yyyy-MM-dd"));
-              setOpen(false);
-            }}
-            locale={de}
-            weekStartsOn={1}
-            showOutsideDays
-            autoFocus
-          />
-        </div>
-      )}
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          id={id}
+          ref={buttonRef}
+          type="button"
+          className={cn(
+            "flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm shadow-xs transition-colors hover:bg-accent/5 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-invalid:border-destructive",
+            !selected && "text-muted-foreground",
+          )}
+          aria-invalid={ariaInvalid || undefined}
+          aria-describedby={ariaDescribedBy}
+        >
+          {label}
+          <CalendarIcon className="size-4 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(d) => {
+            if (!d) return;
+            onChange(format(d, "yyyy-MM-dd"));
+            setOpen(false);
+          }}
+          locale={de}
+          weekStartsOn={1}
+          showOutsideDays
+          autoFocus
+        />
+      </PopoverContent>
+    </Popover>
   );
 }

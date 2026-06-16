@@ -1,33 +1,23 @@
-# UI-Vision (langfristig)
+# UI-Vision (Stand 2026-06-16 — realisiert)
 
-Vorlage: **arsnova.eu** (https://arsnova.eu/de, https://github.com/kqc-real/arsnova.eu). User-Wunsch, dass SubTracked optisch in diese Richtung wandert. **Nicht für die laufende MVP-Phase**, sondern als Designziel für ein späteres UI-Overhaul.
+Das UI-Overhaul ist **umgesetzt**. Die ursprüngliche arsnova.eu/Material-3-Vorlage (Teal, MUI) wurde nach einem gescheiterten MUI-v9-Pilot **verworfen**; stattdessen ein eigener Dashboard-Look auf Tailwind v4 + shadcn/ui. Historie siehe HANDOVER-Einträge 2026-06-12 (MUI-Pilot), 2026-06-15 (Pivot Phase 0+1), 2026-06-16 (Phase 2 + Abschluss).
 
-## Design-Tokens, die übernommen werden sollen
+## Realisierter Look
 
-- **Material 3 / Material You** als Designsprache (arsnova nutzt Angular Material 3).
-- **Teal/Petrol-Akzentfamilie** als Primärfarbe — sichtbar in den Repo-Badges: `#0f766e`, `#007A8A`, `#2596be`, neutraler Sekundär-Slate `#2D3748`.
-- **Card-Layout** mit abgerundeten Ecken, dezenter Elevation, klar getrennten Bereichen.
-- **Material Symbols / Material Icons** als Hauptikonografie (statt Emoji/Text-Buttons).
-- **Light + Dark Mode in voller Parität**, Toggle prominent.
-- **Sans-Serif-Typografie**, klare Größenhierarchie, großzügiger Whitespace.
-- **App-Feel statt Web-Formular**: schnelle, semantische Übergänge, klare Primär-CTAs pro Screen.
-- **Persönlichkeit dezent dosiert** (arsnova hat verspielte Emojis fürs Gamification-Element; SubTracked eher zurückhaltend mit dezenten Status-Icons/Badges).
+- **Stack:** Tailwind CSS v4 + shadcn/ui (radix-ui-Umbrella) + lucide-react. Details: `mem:tech_stack`.
+- **Layout:** Dashboard mit linker **Sidebar** (`AppSidebar`: Wordmark, View-Nav Übersicht/Abos/Einnahmen, Konten-Liste mit Salden, Footer mit Theme-Toggle + Einstellungen) und scrollendem Content-Grid rechts (`grid-cols-[var(--sidebar-w)_1fr]`). Referenz war Actual Budget / Spotify.
+- **Farbe:** Warm/bunt — **Indigo/Violett** als Primary, **Koralle/Rose** als Accent, Multi-Hue-Kategorie-Akzente (`chart-1..5`), `success`/`warning`. Weg vom Teal. Tokens in `src/index.css` (oklch) für Light + `.dark`.
+- **Dark-Mode:** folgt System **+** Hell/Dunkel/System-Umschalter (`useColorScheme`, setzt `.dark` auf `<html>`).
+- **„Dynamisch" = CSS-Technik:** Fluid-Tokens via `clamp()` (`--text-fluid-*`, `--sidebar-w`, `--card-min`) + `auto-fill`-Card-Grid, das auf Fensterbreite reagiert.
+- **Icons:** lucide (SVG-in-JS), kein Material-Symbols-Font mehr.
+- Card-Layout mit abgerundeten Ecken, dezenter Elevation/Hover-Lift; Cashflow-Karten mit buntem Links-Akzentstreifen je `id % 5`.
 
-## Was *nicht* übernommen wird
+## Was bewusst nicht passiert ist
 
-- Stack-Wahl: arsnova ist Angular 21 + Angular Material 3 + tRPC + Prisma + PostgreSQL. SubTracked bleibt React + Tauri + SQLite. **Nur das Look-and-Feel ist Vorlage**, nicht der Tech-Stack.
-- Multi-User/Server-Aspekte (Sessions, Token, Rollen, MOTD): irrelevant für eine Single-User-Desktop-App.
+- Kein Routing (View-Wechsel = `useState`), Konten/Einstellungen bleiben Dialoge.
+- Kein „echtes" Material 3 / kein arsnova-Klon — eigener Charakter.
+- Deutsche UI-Strings bleiben (siehe `mem:conventions`).
 
-## Implementation-Vorüberlegung (vor Umsetzung evaluieren)
+## Offene Design-Ideen (Backlog, nicht zwingend)
 
-Für Material 3 in React kommen u.a. in Frage:
-- **MUI v6+** (offiziell Material You / M3-Support).
-- **Material Web Components** (von Google, mit React-Wrappern).
-- **shadcn/ui + custom Tokens** (radix-basiert, sehr flexibel, kein nativer M3-Look ohne Anpassung).
-- **Tailwind + M3-Color-Tokens** (eigenes Theme-System; pflegeintensiv).
-
-Vor dem Sprung **eine Lib auswählen + Migrations-Plan**, nicht halbherzig drei kombinieren. Bundle-Size auf einem Desktop-Tauri-Build ist weniger kritisch als im Web, also können auch "schwerere" Libs in Betracht kommen.
-
-## Bezug zum aktuellen Stand
-
-Aktuell hat SubTracked eine **funktionale, vanilla-CSS-getragene UI**: einfache Karten, blauer Akzent (`#396cd8`), dunkler Hintergrund im Dark Mode. Schon brauchbar als MVP, aber weit weg vom angepeilten App-Look. Backlog-Eintrag "UI-Redesign Richtung arsnova.eu" markiert das Ziel.
+- Risiko-/Status-Priorisierung in der Übersicht (Risiko zuerst, Listen danach), destruktives Löschen weniger prominent, perspektivisch Risiko-Timeline / Kontostand-Chart (BACKLOG „Später").

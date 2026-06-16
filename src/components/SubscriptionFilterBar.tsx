@@ -8,6 +8,8 @@ import {
   uniqueCurrencies,
 } from "../lib/subscription-list";
 import type { Account, Subscription } from "../types";
+import { Label } from "./ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface Props {
   /** Die *vor* Filtern sichtbaren Subs (also nach Archiv-Toggle) — bestimmt die Optionen. */
@@ -26,6 +28,10 @@ const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
   { value: "amount-desc", label: "Betrag (absteigend)" },
 ];
 
+/** Sentinel für „Alle" — Radix-Select erlaubt keinen leeren Item-Wert. */
+const ALL = "__all__";
+const NONE = "__none__";
+
 export function SubscriptionFilterBar({ subs, accounts, options, onChange }: Props) {
   const accountId = useId();
   const currencyId = useId();
@@ -42,14 +48,14 @@ export function SubscriptionFilterBar({ subs, accounts, options, onChange }: Pro
   const showCurrencyFilter = currencies.length > 1;
 
   function accountValue(): string {
-    if (options.account === null) return "";
-    if (options.account === "none") return "__none__";
+    if (options.account === null) return ALL;
+    if (options.account === "none") return NONE;
     return String(options.account);
   }
 
   function parseAccount(value: string): AccountFilter {
-    if (value === "") return null;
-    if (value === "__none__") return "none";
+    if (value === ALL) return null;
+    if (value === NONE) return "none";
     return Number(value);
   }
 
@@ -59,73 +65,95 @@ export function SubscriptionFilterBar({ subs, accounts, options, onChange }: Pro
   }
 
   return (
-    <div className="filter-bar">
+    <div className="flex flex-wrap items-end gap-3">
       {showAccountFilter && (
-        <label className="filter-field">
-          <span>Konto</span>
-          <select
-            id={accountId}
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={accountId} className="text-xs text-muted-foreground">
+            Konto
+          </Label>
+          <Select
             value={accountValue()}
-            onChange={(e) => onChange({ ...options, account: parseAccount(e.target.value) })}
+            onValueChange={(v) => onChange({ ...options, account: parseAccount(v) })}
           >
-            <option value="">Alle</option>
-            {visibleAccounts.map((a) => (
-              <option key={a.id} value={String(a.id)}>
-                {a.name}
-              </option>
-            ))}
-            {showUnassigned && <option value="__none__">(kein Konto)</option>}
-          </select>
-        </label>
+            <SelectTrigger id={accountId} size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Alle</SelectItem>
+              {visibleAccounts.map((a) => (
+                <SelectItem key={a.id} value={String(a.id)}>
+                  {a.name}
+                </SelectItem>
+              ))}
+              {showUnassigned && <SelectItem value={NONE}>(kein Konto)</SelectItem>}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       {showCurrencyFilter && (
-        <label className="filter-field">
-          <span>Währung</span>
-          <select
-            id={currencyId}
-            value={options.currency ?? ""}
-            onChange={(e) =>
-              onChange({ ...options, currency: e.target.value === "" ? null : e.target.value })
-            }
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={currencyId} className="text-xs text-muted-foreground">
+            Währung
+          </Label>
+          <Select
+            value={options.currency ?? ALL}
+            onValueChange={(v) => onChange({ ...options, currency: v === ALL ? null : v })}
           >
-            <option value="">Alle</option>
-            {currencies.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger id={currencyId} size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Alle</SelectItem>
+              {currencies.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
-      <label className="filter-field">
-        <span>Erinnerungen</span>
-        <select
-          id={notifyId}
-          value={options.notify ?? ""}
-          onChange={(e) => onChange({ ...options, notify: parseNotify(e.target.value) })}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={notifyId} className="text-xs text-muted-foreground">
+          Erinnerungen
+        </Label>
+        <Select
+          value={options.notify ?? ALL}
+          onValueChange={(v) => onChange({ ...options, notify: parseNotify(v) })}
         >
-          <option value="">Alle</option>
-          <option value="on">Mit Erinnerung</option>
-          <option value="off">Stumm</option>
-        </select>
-      </label>
+          <SelectTrigger id={notifyId} size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Alle</SelectItem>
+            <SelectItem value="on">Mit Erinnerung</SelectItem>
+            <SelectItem value="off">Stumm</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-      <label className="filter-field">
-        <span>Sortierung</span>
-        <select
-          id={sortId}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={sortId} className="text-xs text-muted-foreground">
+          Sortierung
+        </Label>
+        <Select
           value={options.sort}
-          onChange={(e) => onChange({ ...options, sort: e.target.value as SortKey })}
+          onValueChange={(v) => onChange({ ...options, sort: v as SortKey })}
         >
-          {SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
+          <SelectTrigger id={sortId} size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

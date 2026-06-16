@@ -1,8 +1,9 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { type Ref, useCallback, useEffect, useId, useState } from "react";
+import { Settings } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   type AppInfo,
   exportBackup,
@@ -12,11 +13,15 @@ import {
   type ReminderStatus,
   sendTestNotification,
 } from "../lib/db";
-import { Dialog } from "./Dialog";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Label } from "./ui/label";
+import { Switch } from "./ui/switch";
 
 interface Props {
-  ref: Ref<HTMLDialogElement>;
-  openSeq?: number;
+  open: boolean;
+  onClose: () => void;
   /** Wird nach erfolgreichem Import aufgerufen, damit die App ihre Daten neu lädt. */
   onDataReplaced?: () => void | Promise<void>;
 }
@@ -38,7 +43,7 @@ function formatInterval(secs: number): string {
   return `${minutes} Minuten`;
 }
 
-export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
+export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
   const autostartId = useId();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
@@ -95,9 +100,16 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
     };
   }, [loadAppInfo, loadReminderStatus]);
 
+  // Beim Öffnen (open false→true) den Reminder-Status neu laden — aber nicht beim
+  // initialen Mount, da der Mount-Effect oben das bereits einmalig erledigt.
+  const skipInitialOpen = useRef(true);
   useEffect(() => {
-    if (openSeq > 0) void loadReminderStatus();
-  }, [loadReminderStatus, openSeq]);
+    if (skipInitialOpen.current) {
+      skipInitialOpen.current = false;
+      return;
+    }
+    if (open) void loadReminderStatus();
+  }, [loadReminderStatus, open]);
 
   async function handleToggle(next: boolean) {
     setPending(true);
@@ -151,7 +163,7 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
     setBackupMessage(null);
     setBackupError(null);
     try {
-      const selected = await open({
+      const selected = await openFileDialog({
         multiple: false,
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
@@ -186,189 +198,233 @@ export function SettingsDialog({ ref, openSeq = 0, onDataReplaced }: Props) {
       : null;
 
   return (
-    <Dialog ref={ref}>
-      <div className="settings-dialog">
-        <h2>Einstellungen</h2>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-fluid-lg">
+            <Settings className="size-5 text-primary" />
+            Einstellungen
+          </DialogTitle>
+        </DialogHeader>
 
-        <div className="setting-row">
-          <label htmlFor={autostartId} className="setting-label">
-            <input
-              id={autostartId}
-              type="checkbox"
-              checked={autostart === true}
-              disabled={autostart === null || pending}
-              onChange={(e) => void handleToggle(e.target.checked)}
-            />
-            <span>Beim Login starten</span>
-          </label>
-          <p className="setting-hint">
-            SubTracked startet nach dem Anmelden automatisch im Hintergrund. Zusammen mit dem
-            Tray-Icon laufen Erinnerungen so ohne manuellen Start.
-          </p>
-        </div>
+        <div className="flex flex-col gap-6 py-4">
+          <section className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor={autostartId} className="font-medium">
+                Beim Login starten
+              </Label>
+              <Switch
+                id={autostartId}
+                checked={autostart === true}
+                disabled={autostart === null || pending}
+                onCheckedChange={(checked) => void handleToggle(checked)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              SubTracked startet nach dem Anmelden automatisch im Hintergrund. Zusammen mit dem
+              Tray-Icon laufen Erinnerungen so ohne manuellen Start.
+            </p>
+          </section>
 
-        <div className="setting-row">
-          <h3 className="setting-subheading">Erinnerungen testen</h3>
-          <p className="setting-hint">
-            Sendet sofort eine Test-Notification — zeigt, ob Berechtigung, OS-Integration und der
-            sichtbare Toast richtig zusammenspielen.
-          </p>
-          <div className="setting-action-row">
-            <button
-              type="button"
-              onClick={() => void handleTestNotification()}
-              disabled={testNotificationPending}
-            >
-              {testNotificationPending ? "Sende …" : "Test-Erinnerung senden"}
-            </button>
-            {testNotificationSent && (
-              <span className="setting-confirm" role="status">
-                ✓ Gesendet — siehst du den Toast?
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="setting-row">
-          <h3 className="setting-subheading">Erinnerungs-Status</h3>
-          {reminderStatus ? (
-            <dl className="reminder-status">
-              <dt>Intervall</dt>
-              <dd>alle {formatInterval(reminderStatus.intervalSecs)}</dd>
-              <dt>Letzte Prüfung</dt>
-              <dd>
-                {reminderStatus.lastCheckAt
-                  ? formatDateTime(reminderStatus.lastCheckAt)
-                  : "noch keine"}
-              </dd>
-              <dt>Nächste Prüfung</dt>
-              <dd>{nextCheck ? formatDateTime(nextCheck) : "—"}</dd>
-              <dt>Letzte Erinnerung</dt>
-              <dd>
-                {reminderStatus.lastSent ? (
-                  <>
-                    {reminderStatus.lastSent.subscriptionName} (fällig{" "}
-                    {formatDate(reminderStatus.lastSent.dueDate)})
-                  </>
-                ) : (
-                  "noch keine"
-                )}
-              </dd>
-            </dl>
-          ) : (
-            <p className="setting-hint">Lade …</p>
-          )}
-          <div className="setting-action-row">
-            <button type="button" onClick={() => void loadReminderStatus()}>
-              Aktualisieren
-            </button>
-          </div>
-        </div>
-
-        <div className="setting-row">
-          <h3 className="setting-subheading">App / Support</h3>
-          {appInfo ? (
-            <dl className="app-info">
-              <dt>Version</dt>
-              <dd>{appInfo.version}</dd>
-              <dt>Datenordner</dt>
-              <dd>
-                <code>{appInfo.configDir}</code>
-                <button type="button" onClick={() => void copyPath("config", appInfo.configDir)}>
-                  Kopieren
-                </button>
-                {copiedPath === "config" && <span role="status">kopiert</span>}
-              </dd>
-              <dt>Log-Ordner</dt>
-              <dd>
-                <code>{appInfo.logDir}</code>
-                <button type="button" onClick={() => void copyPath("log", appInfo.logDir)}>
-                  Kopieren
-                </button>
-                {copiedPath === "log" && <span role="status">kopiert</span>}
-              </dd>
-            </dl>
-          ) : (
-            <p className="setting-hint">Lade …</p>
-          )}
-        </div>
-
-        <div className="setting-row">
-          <h3 className="setting-subheading">Daten / Backup</h3>
-          <p className="setting-hint">
-            Alle Daten liegen nur lokal auf diesem Gerät. Ein Backup sichert Konten, Abos, Einnahmen
-            und Verlauf als JSON-Datei. Beim Import wird der gesamte aktuelle Bestand durch das
-            Backup <strong>ersetzt</strong>.
-          </p>
-          <div className="setting-action-row">
-            <button type="button" onClick={() => void handleExport()} disabled={backupPending}>
-              {backupPending ? "Arbeite …" : "Backup exportieren"}
-            </button>
-            {!confirmingImport && (
-              <button
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">Erinnerungen testen</h3>
+            <p className="text-xs text-muted-foreground">
+              Sendet sofort eine Test-Notification — zeigt, ob Berechtigung, OS-Integration und der
+              sichtbare Toast richtig zusammenspielen.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
                 type="button"
-                onClick={() => {
-                  setBackupMessage(null);
-                  setBackupError(null);
-                  setConfirmingImport(true);
-                }}
+                variant="outline"
+                size="sm"
+                onClick={() => void handleTestNotification()}
+                disabled={testNotificationPending}
+              >
+                {testNotificationPending ? "Sende …" : "Test-Erinnerung senden"}
+              </Button>
+              {testNotificationSent && (
+                <span className="text-sm text-success" role="status">
+                  ✓ Gesendet — siehst du den Toast?
+                </span>
+              )}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">Erinnerungs-Status</h3>
+            {reminderStatus ? (
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">Intervall</dt>
+                <dd>alle {formatInterval(reminderStatus.intervalSecs)}</dd>
+                <dt className="text-muted-foreground">Letzte Prüfung</dt>
+                <dd>
+                  {reminderStatus.lastCheckAt
+                    ? formatDateTime(reminderStatus.lastCheckAt)
+                    : "noch keine"}
+                </dd>
+                <dt className="text-muted-foreground">Nächste Prüfung</dt>
+                <dd>{nextCheck ? formatDateTime(nextCheck) : "—"}</dd>
+                <dt className="text-muted-foreground">Letzte Erinnerung</dt>
+                <dd>
+                  {reminderStatus.lastSent ? (
+                    <>
+                      {reminderStatus.lastSent.subscriptionName} (fällig{" "}
+                      {formatDate(reminderStatus.lastSent.dueDate)})
+                    </>
+                  ) : (
+                    "noch keine"
+                  )}
+                </dd>
+              </dl>
+            ) : (
+              <p className="text-xs text-muted-foreground">Lade …</p>
+            )}
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadReminderStatus()}
+              >
+                Aktualisieren
+              </Button>
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">App / Support</h3>
+            {appInfo ? (
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Version</dt>
+                <dd>{appInfo.version}</dd>
+                <dt className="text-muted-foreground">Datenordner</dt>
+                <dd className="flex flex-wrap items-center gap-2">
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                    {appInfo.configDir}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => void copyPath("config", appInfo.configDir)}
+                  >
+                    Kopieren
+                  </Button>
+                  {copiedPath === "config" && (
+                    <span className="text-xs text-success" role="status">
+                      kopiert
+                    </span>
+                  )}
+                </dd>
+                <dt className="text-muted-foreground">Log-Ordner</dt>
+                <dd className="flex flex-wrap items-center gap-2">
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{appInfo.logDir}</code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => void copyPath("log", appInfo.logDir)}
+                  >
+                    Kopieren
+                  </Button>
+                  {copiedPath === "log" && (
+                    <span className="text-xs text-success" role="status">
+                      kopiert
+                    </span>
+                  )}
+                </dd>
+              </dl>
+            ) : (
+              <p className="text-xs text-muted-foreground">Lade …</p>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">Daten / Backup</h3>
+            <p className="text-xs text-muted-foreground">
+              Alle Daten liegen nur lokal auf diesem Gerät. Ein Backup sichert Konten, Abos,
+              Einnahmen und Verlauf als JSON-Datei. Beim Import wird der gesamte aktuelle Bestand
+              durch das Backup <strong>ersetzt</strong>.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleExport()}
                 disabled={backupPending}
               >
-                Backup importieren
-              </button>
-            )}
-          </div>
-
-          {confirmingImport && (
-            <div className="setting-confirm-box" role="alertdialog" aria-label="Import bestätigen">
-              <p>
-                <strong>Wirklich importieren?</strong> Alle aktuellen Konten, Abos und Einnahmen
-                gehen verloren und werden durch das Backup ersetzt.
-              </p>
-              <div className="setting-action-row">
-                <button
+                {backupPending ? "Arbeite …" : "Backup exportieren"}
+              </Button>
+              {!confirmingImport && (
+                <Button
                   type="button"
-                  className="danger"
-                  onClick={() => void handleImportConfirmed()}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setBackupMessage(null);
+                    setBackupError(null);
+                    setConfirmingImport(true);
+                  }}
                   disabled={backupPending}
                 >
-                  {backupPending ? "Stelle wieder her …" : "Ja, ersetzen"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingImport(false)}
-                  disabled={backupPending}
-                >
-                  Abbrechen
-                </button>
-              </div>
+                  Backup importieren
+                </Button>
+              )}
             </div>
-          )}
 
-          {backupMessage && (
-            <span className="setting-confirm" role="status">
-              {backupMessage}
-            </span>
-          )}
-          {backupError && (
-            <p className="error" role="alert">
-              Fehler: {backupError}
-            </p>
+            {confirmingImport && (
+              <div
+                className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3"
+                role="alertdialog"
+                aria-label="Import bestätigen"
+              >
+                <p className="text-sm">
+                  <strong>Wirklich importieren?</strong> Alle aktuellen Konten, Abos und Einnahmen
+                  gehen verloren und werden durch das Backup ersetzt.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => void handleImportConfirmed()}
+                    disabled={backupPending}
+                  >
+                    {backupPending ? "Stelle wieder her …" : "Ja, ersetzen"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmingImport(false)}
+                    disabled={backupPending}
+                  >
+                    Abbrechen
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {backupMessage && (
+              <span className="text-sm text-success" role="status">
+                {backupMessage}
+              </span>
+            )}
+            {backupError && (
+              <Alert variant="destructive">
+                <AlertDescription>Fehler: {backupError}</AlertDescription>
+              </Alert>
+            )}
+          </section>
+
+          {(error || reminderError || appInfoError) && (
+            <Alert variant="destructive">
+              <AlertDescription>Fehler: {error ?? reminderError ?? appInfoError}</AlertDescription>
+            </Alert>
           )}
         </div>
-
-        {(error || reminderError || appInfoError) && (
-          <p className="error" role="alert">
-            Fehler: {error ?? reminderError ?? appInfoError}
-          </p>
-        )}
-
-        <div className="form-actions">
-          <button type="button" onClick={(e) => e.currentTarget.closest("dialog")?.close()}>
-            Schließen
-          </button>
-        </div>
-      </div>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -208,3 +208,16 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   Exit-Animation-Flackern fixen (Radix-Overlays/Dropdowns).
+   tw-animate-css' `exit`-Keyframe läuft mit fill-mode `none`: nach dem
+   animationend springt das Element kurz auf opacity:1 zurück, bevor Radix es
+   unmountet — das sichtbare Aufblitzen (besonders in WebKitGTK). `forwards`
+   hält den Endzustand (unsichtbar) bis zum Unmount. Unlayered, damit es die
+   utility-getriebene `animation`-Shorthand sicher überschreibt.
+---------------------------------------------------------------------------- */
+[data-state="closed"] {
+  --tw-animation-fill-mode: forwards;
+  animation-fill-mode: forwards;
+}
