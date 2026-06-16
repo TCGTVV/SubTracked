@@ -24,6 +24,8 @@
 
 - Version an **vier** Stellen gehoben: `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`, `Cargo.lock` (`subtracked`-Eintrag). In-App-`getAppInfo` liest aus `tauri.conf.json` → Einstellungen zeigen `0.2.0`.
 - Commit → Push → Merge `main` → **Tag `v0.2.0`** gepusht → triggert `release.yml` (tauri-action, baut alle Installer + Draft-Release, wie bei v0.1.0).
+- **Release v0.2.0 vom User veröffentlicht** (war Draft, 9 Assets: Win `.msi`/`.exe`, macOS Intel+ARM `.dmg`/`.app.tar.gz`, Linux `.deb`/`.rpm`/`.AppImage`).
+- **Nachzügler-Fix (Commit `fd4bd11`, `main`):** `release.yml` hatte die Download-Dateinamen in der `releaseBody` hartcodiert auf `0.1.0`. Jetzt via neuem Step `Resolve version from tag` (`${GITHUB_REF_NAME#v}`) dynamisch → künftige Releases stimmen automatisch. Der v0.2.0-Draft-Body wurde noch manuell per `gh release edit` auf `0.2.0` korrigiert (der laufende Build nutzte ja noch die alte yml-Version).
 
 ---
 
