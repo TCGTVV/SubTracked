@@ -16,7 +16,30 @@ Tabellen reichen für eine Liste von Abos. Sie werden aber schnell mühsam, soba
 
 SubTracked ist für genau diesen Blick gebaut: Was geht demnächst ab, von welchem Konto, und wo wird es eng? Die Daten bleiben lokal auf deinem Rechner — keine Synchronisierung mit einem Server, kein SaaS, kein Tracking.
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/screenshots/uebersicht.png" alt="SubTracked-Übersicht: Deckungs-Status, „Demnächst (30 Tage)“, monatliche Baseline und 6-Monats-Cashflow" width="820">
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/abo1.png" alt="Abo-Dialog mit Intervall- und Kündigungsfrist-Optionen"><br><sub><b>Abo anlegen</b> — Intervall plus optionale Kündigungsfrist (Tage/Wochen/Monate) oder festes Stichdatum.</sub></td>
+    <td width="50%"><img src="assets/screenshots/abo2.png" alt="Abo-Liste mit farbcodierten Karten und Kündigen-bis-Hinweis"><br><sub><b>Abo-Liste</b> — Karten mit „Kündigen bis“-Hinweis, dazu Filter und Sortierung.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/dark.png" alt="SubTracked-Übersicht im dunklen Modus"><br><sub><b>Dunkler Modus</b> — umschaltbar zwischen Hell, Dunkel und System.</sub></td>
+    <td width="50%"><img src="assets/screenshots/einnahme.png" alt="Einnahmen-Ansicht mit wiederkehrender Einnahme"><br><sub><b>Einnahmen</b> — wiederkehrende und einmalige Zuflüsse fließen in den Forecast ein.</sub></td>
+  </tr>
+</table>
+
 ## Funktionen
+
+### Oberfläche
+
+- **Dashboard-Layout** mit fester Seitenleiste (Navigation, Konten-Salden, Theme-Umschalter) und fluid-responsivem Karten-Grid, das sich an die Fensterbreite anpasst.
+- **Hell-/Dunkel-Modus** mit Drei-Wege-Umschalter (Hell / Dunkel / System) — folgt auf Wunsch automatisch dem Betriebssystem.
+- **Durchgehend deutschsprachige Oberfläche** mit klaren Anlege-Dialogen und sofortiger Feldvalidierung.
 
 ### Konten + Deckung
 
@@ -26,7 +49,9 @@ SubTracked ist für genau diesen Blick gebaut: Was geht demnächst ab, von welch
 
 ### Abos
 
-- **Verwalten** mit Name, Betrag, Konto, Intervall (monatlich / zweiwöchentlich / quartalsweise / jährlich) und erster Fälligkeit. Toleranter Betrags-Parser (akzeptiert `12,99`, `12.99`, `1.234,56`).
+- **Verwalten** mit Name, Betrag, Konto, Intervall und erster Fälligkeit. Toleranter Betrags-Parser (akzeptiert `12,99`, `12.99`, `1.234,56`).
+- **Flexible Intervalle**: wöchentlich, zweiwöchentlich, monatlich, alle 2 Monate, quartalsweise, halbjährlich und jährlich. Die Fälligkeitsberechnung ist anker-additiv — ein Abo am 31. driftet nicht auf den 28., sondern fällt in jedem Monat mit 31 Tagen wieder korrekt auf den 31.
+- **Kündigung im Blick**: pro Abo optional eine Kündigungsfrist (Anzahl + Tage/Wochen/Monate) **oder** ein festes Stichdatum. Die App zeigt automatisch, bis wann gekündigt werden muss, und hebt nahende oder verstrichene Fristen hervor.
 - **Demnächst (30 Tage)**: kompakte Liste aller Fälligkeiten im nächsten Monat — der tägliche Arbeitsmodus.
 - **Filter und Sortierung** für die Abo-Liste (nach Konto, Währung, Erinnerungs-Status; sortierbar nach Name, Fälligkeit, Betrag).
 - **Archivieren statt Löschen**: gekündigte oder pausierte Abos verschwinden aus dem Forecast, lassen sich aber jederzeit reaktivieren.
@@ -65,26 +90,26 @@ Das passt zur Domäne: Abo- und Kontodaten sind private Finanzdaten. Die App sol
 
 ## Status
 
-Frühe, funktionale Version für lokale Nutzung (Stand 2026-06-11). Entwickelt und aktiv genutzt auf Linux (KDE/Cachyos). Windows und macOS wurden vor `v0.1.0` per Smoke-Test geprüft.
+Funktionale, aktiv genutzte Version (Stand 2026-06-16, aktuelles Release `v0.2.0`). Entwickelt und täglich genutzt auf Linux (KDE/CachyOS). Windows und macOS werden vor jedem Release per Smoke-Test geprüft.
 
-Die erste echte Release-Version ist `v0.1.0`. Die Installer werden über GitHub Actions für Linux, Windows und macOS gebaut und als GitHub-Release veröffentlicht.
+`v0.2.0` brachte einen kompletten UI-Overhaul (Dashboard-Layout, Hell-/Dunkel-Modus, neues Branding) sowie variable Intervalle und Kündigungsfristen. Die Installer werden über GitHub Actions für Linux, Windows und macOS gebaut und als GitHub-Release veröffentlicht.
 
 ## Download
 
-Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases/latest). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen.
+Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases/latest). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen. Die Dateinamen tragen jeweils die aktuelle Versionsnummer (unten am Beispiel `0.2.0`).
 
 | System | Empfohlener Download | Hinweis |
 | --- | --- | --- |
-| **Windows** | `SubTracked_0.1.0_x64_en-US.msi` | Alternativ `SubTracked_0.1.0_x64-setup.exe`. |
-| **macOS Apple Silicon** | `SubTracked_0.1.0_aarch64.dmg` | Für Macs mit M1/M2/M3/M4. |
-| **macOS Intel** | `SubTracked_0.1.0_x64.dmg` | Für ältere Intel-Macs. |
-| **Linux Debian/Ubuntu** | `SubTracked_0.1.0_amd64.deb` | Für Debian-, Ubuntu- und verwandte Systeme. |
-| **Linux Fedora/openSUSE/RHEL** | `SubTracked-0.1.0-1.x86_64.rpm` | Für RPM-basierte Distributionen. |
-| **Linux universell** | `SubTracked_0.1.0_amd64.AppImage` | Kann ohne Installation gestartet werden. |
+| **Windows** | `SubTracked_0.2.0_x64_en-US.msi` | Alternativ `SubTracked_0.2.0_x64-setup.exe`. |
+| **macOS Apple Silicon** | `SubTracked_0.2.0_aarch64.dmg` | Für Macs mit M1/M2/M3/M4. |
+| **macOS Intel** | `SubTracked_0.2.0_x64.dmg` | Für ältere Intel-Macs. |
+| **Linux Debian/Ubuntu** | `SubTracked_0.2.0_amd64.deb` | Für Debian-, Ubuntu- und verwandte Systeme. |
+| **Linux Fedora/openSUSE/RHEL** | `SubTracked-0.2.0-1.x86_64.rpm` | Für RPM-basierte Distributionen. |
+| **Linux universell** | `SubTracked_0.2.0_amd64.AppImage` | Kann ohne Installation gestartet werden. |
 
 ### Hinweis zu unsignierten Builds
 
-`v0.1.0` ist noch nicht code-signiert. macOS Gatekeeper und Windows SmartScreen können beim ersten Start warnen. Das ist bei dieser frühen Version erwartet:
+Die Builds sind noch nicht code-signiert. macOS Gatekeeper und Windows SmartScreen können beim ersten Start warnen. Das ist bei dieser frühen Version erwartet:
 
 - **macOS:** `.dmg` öffnen, App nach `Applications` ziehen, dann im Finder per Rechtsklick → **Öffnen** starten.
 - **Windows:** SmartScreen → **Weitere Informationen** → **Trotzdem ausführen**.
@@ -95,10 +120,10 @@ Die App speichert ihre Daten lokal in einer SQLite-Datenbank im App-Verzeichnis 
 
 Die nächsten sinnvollen Schritte:
 
-- **Updater** für spätere Versionen, sobald die Release-Pipeline stabil signiert ist.
-- **Mehr Komfort in den Einstellungen**, z.B. App-Version, Log-Ordner und Datenbank-/Backup-Pfade.
-- **UI-Polish und besseres Onboarding**, damit der erste Start schneller zum Nutzen führt.
-- **Weitere Auswertungen**, z.B. Kategorien, Kündigungsfristen oder zusätzliche Exportformate.
+- **In-App-Updater** für spätere Versionen, sobald die Release-Pipeline signiert ist.
+- **Kategorien/Tags für Abos** für Auswertungen und Filterung.
+- **CSV-Export** der Abos zusätzlich zum bestehenden JSON-Backup.
+- **Besseres Onboarding**, damit der erste Start schneller zum Nutzen führt.
 
 Details stehen in [BACKLOG.md](./BACKLOG.md).
 
@@ -106,6 +131,7 @@ Details stehen in [BACKLOG.md](./BACKLOG.md).
 
 - **[Tauri 2](https://tauri.app/)** (Rust-Kern, System-WebView)
 - **React 19** + **TypeScript** (strict)
+- **Tailwind CSS v4** + **shadcn/ui** (auf `radix-ui`) + **lucide-react** für die Oberfläche, mit Hell-/Dunkel-Theming
 - **SQLite** über eigenen [`sqlx`](https://github.com/launchbadge/sqlx)-Pool im Rust-Hauptprozess (WAL-Mode, Migrations via `sqlx::migrate!`)
 - **Reminder-Loop** in Rust mit `tokio` + `chrono`, sendet native OS-Notifications über [`tauri-plugin-notification`](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/notification)
 - **Biome** für Lint + Format
