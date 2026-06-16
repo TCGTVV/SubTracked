@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { Archive, ArchiveRestore, CalendarX, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { AppSidebar, type DashboardView } from "./components/AppSidebar";
@@ -14,6 +14,7 @@ import { Button } from "./components/ui/button";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
+import { cancelDeadlineDisplay } from "./lib/cancellation";
 import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
 import { formatAmount, formatNextDue } from "./lib/format";
 import {
@@ -64,6 +65,32 @@ function CardActions({ onEdit, onToggle, onDelete, active, name }: CardActionsPr
         <Trash2 />
       </Button>
     </div>
+  );
+}
+
+function CancelNotice({ sub }: { sub: Subscription }) {
+  if (!sub.active) return null;
+  const cd = cancelDeadlineDisplay(sub);
+  if (!cd) return null;
+  const tone =
+    cd.status === "overdue"
+      ? "text-destructive"
+      : cd.status === "soon"
+        ? "text-warning"
+        : "text-muted-foreground";
+  const suffix =
+    cd.status === "overdue"
+      ? "Frist verstrichen"
+      : cd.daysUntil === 0
+        ? "heute"
+        : cd.daysUntil === 1
+          ? "morgen"
+          : `in ${cd.daysUntil} Tagen`;
+  return (
+    <p className={cn("flex items-center gap-1.5 text-xs", tone)}>
+      <CalendarX className="size-3.5 shrink-0" />
+      Kündigen bis {cd.formatted} · {suffix}
+    </p>
   );
 }
 
@@ -387,6 +414,7 @@ function App() {
                           </>
                         }
                       >
+                        <CancelNotice sub={sub} />
                         <CardActions
                           name={sub.name}
                           active={sub.active}

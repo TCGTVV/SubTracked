@@ -20,8 +20,8 @@ use tauri::State;
 
 use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription};
 use crate::validation::{
-    validate_account_fields, validate_amount_cents, validate_anchor_date, validate_currency,
-    validate_interval, validate_name, validate_subscription_fields,
+    validate_account_fields, validate_amount_cents, validate_anchor_date, validate_cancellation,
+    validate_currency, validate_interval, validate_name, validate_subscription_fields,
 };
 
 /// Aktuelle Backup-Format-Version. Bei Schema-Änderungen nach Release hochzählen
@@ -67,7 +67,8 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
 
     let subscriptions = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify FROM subscriptions ORDER BY id",
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
+         cancel_date FROM subscriptions ORDER BY id",
     )
     .fetch_all(db)
     .await
@@ -204,6 +205,13 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             s.lead_days,
         )
         .map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
+        validate_cancellation(
+            s.cancel_mode.as_deref(),
+            s.cancel_period_value,
+            s.cancel_period_unit.as_deref(),
+            s.cancel_date.as_deref(),
+        )
+        .map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
         if let Some(account_id) = s.account_id {
             validate_existing_id(&account_ids, account_id, &label, "Konto")?;
         }
@@ -290,8 +298,9 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
         sqlx::query(
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
-                lead_days, active, notify) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                lead_days, active, notify, cancel_mode, cancel_period_value, \
+                cancel_period_unit, cancel_date) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(s.id)
         .bind(&s.name)
@@ -303,6 +312,10 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
         .bind(s.lead_days)
         .bind(s.active)
         .bind(s.notify)
+        .bind(&s.cancel_mode)
+        .bind(s.cancel_period_value)
+        .bind(&s.cancel_period_unit)
+        .bind(&s.cancel_date)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

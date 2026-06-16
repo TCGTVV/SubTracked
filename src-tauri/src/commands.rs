@@ -7,7 +7,8 @@ use crate::db::{
     ReminderState, Subscription,
 };
 use crate::validation::{
-    validate_account_exists, validate_account_fields, validate_subscription_fields,
+    validate_account_exists, validate_account_fields, validate_cancellation,
+    validate_subscription_fields,
 };
 
 #[tauri::command]
@@ -29,10 +30,12 @@ pub async fn list_subscriptions(
     let only_active = only_active.unwrap_or(true);
     let sql = if only_active {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify FROM subscriptions WHERE active = 1 ORDER BY name"
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date \
+         FROM subscriptions WHERE active = 1 ORDER BY name"
     } else {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify FROM subscriptions ORDER BY name"
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date \
+         FROM subscriptions ORDER BY name"
     };
     sqlx::query_as::<_, Subscription>(sql)
         .fetch_all(&state.db)
@@ -64,13 +67,20 @@ pub async fn add_subscription(
         &sub.anchor_date,
         sub.lead_days,
     )?;
+    validate_cancellation(
+        sub.cancel_mode.as_deref(),
+        sub.cancel_period_value,
+        sub.cancel_period_unit.as_deref(),
+        sub.cancel_date.as_deref(),
+    )?;
     if let Some(account_id) = sub.account_id {
         validate_account_exists(&state.db, account_id).await?;
     }
     let res = sqlx::query(
         "INSERT INTO subscriptions \
-           (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+           (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, \
+            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&sub.name)
     .bind(sub.amount_cents)
@@ -81,6 +91,10 @@ pub async fn add_subscription(
     .bind(sub.lead_days)
     .bind(sub.active.unwrap_or(true))
     .bind(sub.notify.unwrap_or(true))
+    .bind(&sub.cancel_mode)
+    .bind(sub.cancel_period_value)
+    .bind(&sub.cancel_period_unit)
+    .bind(&sub.cancel_date)
     .execute(&state.db)
     .await
     .map_err(|e| e.to_string())?;
@@ -241,6 +255,12 @@ pub(crate) async fn update_subscription_in_db(
         &sub.anchor_date,
         sub.lead_days,
     )?;
+    validate_cancellation(
+        sub.cancel_mode.as_deref(),
+        sub.cancel_period_value,
+        sub.cancel_period_unit.as_deref(),
+        sub.cancel_date.as_deref(),
+    )?;
     let current: Option<(Option<i64>, i64, String)> =
         sqlx::query_as("SELECT account_id, amount_cents, currency FROM subscriptions WHERE id = ?")
             .bind(sub.id)
@@ -259,7 +279,8 @@ pub(crate) async fn update_subscription_in_db(
         sqlx::query(
             "UPDATE subscriptions \
              SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
-                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
+                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
+                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -271,6 +292,10 @@ pub(crate) async fn update_subscription_in_db(
         .bind(sub.lead_days)
         .bind(sub.active)
         .bind(sub.notify)
+        .bind(&sub.cancel_mode)
+        .bind(sub.cancel_period_value)
+        .bind(&sub.cancel_period_unit)
+        .bind(&sub.cancel_date)
         .bind(sub.id)
         .execute(db)
         .await
@@ -279,7 +304,8 @@ pub(crate) async fn update_subscription_in_db(
         sqlx::query(
             "UPDATE subscriptions \
              SET name = ?, amount_cents = ?, currency = ?, \
-                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ? \
+                 interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
+                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -290,6 +316,10 @@ pub(crate) async fn update_subscription_in_db(
         .bind(sub.lead_days)
         .bind(sub.active)
         .bind(sub.notify)
+        .bind(&sub.cancel_mode)
+        .bind(sub.cancel_period_value)
+        .bind(&sub.cancel_period_unit)
+        .bind(&sub.cancel_date)
         .bind(sub.id)
         .execute(db)
         .await
@@ -597,6 +627,10 @@ mod tests {
             lead_days: 7,
             active: true,
             notify: true,
+            cancel_mode: None,
+            cancel_period_value: None,
+            cancel_period_unit: None,
+            cancel_date: None,
         }
     }
 
@@ -698,5 +732,75 @@ mod tests {
             .expect("account_id auf null darf nicht blockiert sein");
 
         assert_eq!(fetch_account_id(&db, sub.id).await, None);
+    }
+
+    #[tokio::test]
+    async fn update_subscription_roundtrips_period_cancellation() {
+        let db = test_pool().await;
+        let mut sub = insert_sub(&db, None).await;
+        sub.cancel_mode = Some("period".into());
+        sub.cancel_period_value = Some(3);
+        sub.cancel_period_unit = Some("months".into());
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("period cancellation sollte durchgehen");
+
+        let row: (Option<String>, Option<i64>, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT cancel_mode, cancel_period_value, cancel_period_unit, cancel_date \
+             FROM subscriptions WHERE id = ?",
+        )
+        .bind(sub.id)
+        .fetch_one(&db)
+        .await
+        .expect("fetch cancel fields");
+        assert_eq!(
+            row,
+            (Some("period".into()), Some(3), Some("months".into()), None)
+        );
+    }
+
+    #[tokio::test]
+    async fn update_subscription_roundtrips_fixed_date_then_clears() {
+        let db = test_pool().await;
+        let mut sub = insert_sub(&db, None).await;
+        sub.cancel_mode = Some("date".into());
+        sub.cancel_date = Some("2026-12-01".into());
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("date cancellation sollte durchgehen");
+
+        let (mode, date): (Option<String>, Option<String>) =
+            sqlx::query_as("SELECT cancel_mode, cancel_date FROM subscriptions WHERE id = ?")
+                .bind(sub.id)
+                .fetch_one(&db)
+                .await
+                .expect("fetch date cancellation");
+        assert_eq!(mode.as_deref(), Some("date"));
+        assert_eq!(date.as_deref(), Some("2026-12-01"));
+
+        // Zurueck auf None loescht alle Kuendigungsfelder.
+        sub.cancel_mode = None;
+        sub.cancel_date = None;
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("clear cancellation sollte durchgehen");
+        let (mode2,): (Option<String>,) =
+            sqlx::query_as("SELECT cancel_mode FROM subscriptions WHERE id = ?")
+                .bind(sub.id)
+                .fetch_one(&db)
+                .await
+                .expect("fetch cleared cancellation");
+        assert_eq!(mode2, None);
+    }
+
+    #[tokio::test]
+    async fn update_subscription_rejects_inconsistent_cancellation() {
+        let db = test_pool().await;
+        let mut sub = insert_sub(&db, None).await;
+        sub.cancel_mode = Some("period".into()); // ohne value/unit
+        let err = update_subscription_in_db(&db, &sub)
+            .await
+            .expect_err("period ohne Frist muss abgelehnt werden");
+        assert!(err.contains("Kündigungsfrist"), "Fehlertext: {err}");
     }
 }

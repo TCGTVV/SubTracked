@@ -1,5 +1,10 @@
 export type Interval = "monthly" | "biweekly" | "quarterly" | "yearly";
 
+/** Kündigungsmodus eines Abos: Frist (relativ zur Fälligkeit) oder festes Stichdatum. */
+export type CancelMode = "period" | "date";
+/** Einheit der Kündigungsfrist (cancelMode === "period"). */
+export type CancelUnit = "days" | "weeks" | "months";
+
 export interface Account {
   id: number;
   name: string;
@@ -34,6 +39,14 @@ export interface Subscription {
   leadDays: number;
   active: boolean;
   notify: boolean;
+  /** Kündigungsmodus; null = keine Kündigung getrackt. */
+  cancelMode: CancelMode | null;
+  /** Anzahl bei cancelMode === "period", sonst null. */
+  cancelPeriodValue: number | null;
+  /** Einheit bei cancelMode === "period", sonst null. */
+  cancelPeriodUnit: CancelUnit | null;
+  /** Festes Stichdatum (ISO "YYYY-MM-DD") bei cancelMode === "date", sonst null. */
+  cancelDate: string | null;
 }
 
 export interface PriceHistoryEntry {

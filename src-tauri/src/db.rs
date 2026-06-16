@@ -61,6 +61,11 @@ pub struct Subscription {
     pub lead_days: i64,
     pub active: bool,
     pub notify: bool,
+    /// Kündigungsmodus: None = nicht getrackt, "period" = Frist, "date" = festes Datum.
+    pub cancel_mode: Option<String>,
+    pub cancel_period_value: Option<i64>,
+    pub cancel_period_unit: Option<String>,
+    pub cancel_date: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
@@ -117,6 +122,10 @@ pub struct NewSubscription {
     pub lead_days: i64,
     pub active: Option<bool>,
     pub notify: Option<bool>,
+    pub cancel_mode: Option<String>,
+    pub cancel_period_value: Option<i64>,
+    pub cancel_period_unit: Option<String>,
+    pub cancel_date: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]

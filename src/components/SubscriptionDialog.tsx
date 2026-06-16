@@ -1,4 +1,4 @@
-import { Bell, FolderClock, Pencil, Plus, Save, X } from "lucide-react";
+import { Bell, CalendarX, FolderClock, Pencil, Plus, Save, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import {
@@ -11,7 +11,14 @@ import {
   todayISO,
 } from "../lib/format";
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
-import type { Account, Interval, PriceHistoryEntry, Subscription } from "../types";
+import type {
+  Account,
+  CancelMode,
+  CancelUnit,
+  Interval,
+  PriceHistoryEntry,
+  Subscription,
+} from "../types";
 import { DateField } from "./DateField";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
@@ -35,7 +42,14 @@ interface FieldErrors {
   currency?: string;
   anchorDate?: string;
   leadDays?: string;
+  cancelPeriod?: string;
+  cancelDate?: string;
 }
+
+/** Sentinel für „keine Kündigung tracken" — Auswahl im Kündigungs-Select. */
+const NO_CANCEL = "none";
+/** Obergrenze der Kündigungsfrist, parallel zu MAX_CANCEL_PERIOD_VALUE im Rust-Backend. */
+const MAX_CANCEL_PERIOD_VALUE = 730;
 
 /** Sentinel für „kein Konto" — Radix-Select erlaubt keinen leeren Item-Wert. */
 const NO_ACCOUNT = "none";
@@ -119,12 +133,16 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const currencyErrorId = useId();
   const anchorErrorId = useId();
   const leadErrorId = useId();
+  const cancelPeriodErrorId = useId();
+  const cancelDateErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const currencyRef = useRef<HTMLButtonElement>(null);
   const anchorRef = useRef<HTMLButtonElement>(null);
   const leadRef = useRef<HTMLInputElement>(null);
+  const cancelPeriodRef = useRef<HTMLInputElement>(null);
+  const cancelDateRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(subscription?.name ?? "");
   const [amount, setAmount] = useState(
@@ -136,6 +154,14 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const [anchorDate, setAnchorDate] = useState(subscription?.anchorDate ?? todayISO());
   const [leadDays, setLeadDays] = useState(subscription?.leadDays ?? 60);
   const [notify, setNotify] = useState(subscription?.notify ?? true);
+  const [cancelMode, setCancelMode] = useState<typeof NO_CANCEL | CancelMode>(
+    subscription?.cancelMode ?? NO_CANCEL,
+  );
+  const [cancelPeriodValue, setCancelPeriodValue] = useState(subscription?.cancelPeriodValue ?? 3);
+  const [cancelPeriodUnit, setCancelPeriodUnit] = useState<CancelUnit>(
+    subscription?.cancelPeriodUnit ?? "months",
+  );
+  const [cancelDate, setCancelDate] = useState(subscription?.cancelDate ?? todayISO());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -188,6 +214,18 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       next.leadDays = "Vorlauf muss zwischen 0 und 365 Tagen liegen.";
     }
 
+    if (cancelMode === "period") {
+      if (
+        !Number.isInteger(cancelPeriodValue) ||
+        cancelPeriodValue < 1 ||
+        cancelPeriodValue > MAX_CANCEL_PERIOD_VALUE
+      ) {
+        next.cancelPeriod = `Kündigungsfrist muss zwischen 1 und ${MAX_CANCEL_PERIOD_VALUE} liegen.`;
+      }
+    } else if (cancelMode === "date" && !isStrictISODate(cancelDate)) {
+      next.cancelDate = "Kündigungsdatum muss ein gültiges Datum im Format YYYY-MM-DD sein.";
+    }
+
     return { errors: next, amountNumber };
   }
 
@@ -202,6 +240,8 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       else if (validation.currency) currencyRef.current?.focus();
       else if (validation.anchorDate) anchorRef.current?.focus();
       else if (validation.leadDays) leadRef.current?.focus();
+      else if (validation.cancelPeriod) cancelPeriodRef.current?.focus();
+      else if (validation.cancelDate) cancelDateRef.current?.focus();
       return;
     }
 
@@ -219,6 +259,10 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
         anchorDate,
         leadDays,
         notify,
+        cancelMode: cancelMode === NO_CANCEL ? null : cancelMode,
+        cancelPeriodValue: cancelMode === "period" ? cancelPeriodValue : null,
+        cancelPeriodUnit: cancelMode === "period" ? cancelPeriodUnit : null,
+        cancelDate: cancelMode === "date" ? cancelDate : null,
       };
       if (isEdit && subscription) {
         await updateSubscription({
@@ -423,6 +467,113 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
                 <Bell className="size-4 text-muted-foreground" />
                 Erinnerungen für dieses Abo
               </Label>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+              <div className="flex flex-col gap-1.5">
+                <Label
+                  htmlFor={`${anchorId}-cancel-mode`}
+                  className="flex items-center gap-1.5 font-medium"
+                >
+                  <CalendarX className="size-4 text-muted-foreground" />
+                  Kündigung
+                </Label>
+                <Select
+                  value={cancelMode}
+                  onValueChange={(v) => {
+                    setCancelMode(v as typeof NO_CANCEL | CancelMode);
+                    clearFieldError("cancelPeriod");
+                    clearFieldError("cancelDate");
+                  }}
+                >
+                  <SelectTrigger id={`${anchorId}-cancel-mode`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_CANCEL}>Keine Kündigung tracken</SelectItem>
+                    <SelectItem value="period">Kündigungsfrist (vor Fälligkeit)</SelectItem>
+                    <SelectItem value="date">Festes Kündigungsdatum</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {cancelMode === "period" && (
+                <div className="grid grid-cols-[6rem_1fr] gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={`${anchorId}-cancel-value`}>Frist</Label>
+                    <Input
+                      id={`${anchorId}-cancel-value`}
+                      ref={cancelPeriodRef}
+                      type="number"
+                      min={1}
+                      max={MAX_CANCEL_PERIOD_VALUE}
+                      step={1}
+                      value={cancelPeriodValue}
+                      onChange={(e) => {
+                        setCancelPeriodValue(Number(e.target.value));
+                        clearFieldError("cancelPeriod");
+                      }}
+                      aria-invalid={!!errors.cancelPeriod}
+                      aria-describedby={errors.cancelPeriod ? cancelPeriodErrorId : undefined}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={`${anchorId}-cancel-unit`}>Einheit</Label>
+                    <Select
+                      value={cancelPeriodUnit}
+                      onValueChange={(v) => setCancelPeriodUnit(v as CancelUnit)}
+                    >
+                      <SelectTrigger id={`${anchorId}-cancel-unit`} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="days">Tage</SelectItem>
+                        <SelectItem value="weeks">Wochen</SelectItem>
+                        <SelectItem value="months">Monate</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {errors.cancelPeriod && (
+                    <p
+                      id={cancelPeriodErrorId}
+                      className="col-span-2 text-sm text-destructive"
+                      role="alert"
+                    >
+                      {errors.cancelPeriod}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {cancelMode === "date" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`${anchorId}-cancel-date`}>Kündigen bis</Label>
+                  <DateField
+                    id={`${anchorId}-cancel-date`}
+                    buttonRef={cancelDateRef}
+                    value={cancelDate}
+                    onChange={(value) => {
+                      setCancelDate(value);
+                      clearFieldError("cancelDate");
+                    }}
+                    ariaInvalid={errors.cancelDate ? true : undefined}
+                    ariaDescribedBy={errors.cancelDate ? cancelDateErrorId : undefined}
+                  />
+                  {errors.cancelDate && (
+                    <p id={cancelDateErrorId} className="text-sm text-destructive" role="alert">
+                      {errors.cancelDate}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                {cancelMode === "period"
+                  ? "Die App berechnet das Kündigungsdatum automatisch aus der nächsten Fälligkeit minus Frist."
+                  : cancelMode === "date"
+                    ? "Fester Stichtag, bis zu dem gekündigt werden muss."
+                    : "Optional: Frist oder Stichtag tracken, um eine Kündigung nicht zu verpassen."}
+              </p>
             </div>
 
             {error && (
