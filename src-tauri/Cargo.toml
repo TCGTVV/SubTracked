@@ -1,10 +1,12 @@
 [package]
 name = "subtracked"
 version = "0.2.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Lokaler Liquiditäts-Radar für wiederkehrende Zahlungen: Abos, Konten-Deckungsforecast und Erinnerungen — ohne Cloud."
+authors = ["TCGTVV"]
 edition = "2021"
 rust-version = "1.80"
+license = "MIT"
+repository = "https://github.com/TCGTVV/SubTracked"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

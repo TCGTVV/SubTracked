@@ -178,6 +178,28 @@ User hat am 2026-06-05 explizit eine Architektur-Diskussion angestoßen, weil ei
 - [ ] **▶ Kategorien/Tags für Abos** (NÄCHSTES). Streaming, Versicherung, Hosting, Mobilfunk, Finanzen etc. Für Filterung und — als Fundament — die Aufschlüsselung im Kosten-Überblick (deshalb VOR diesem bauen). Umfang: Schema (Spalte `category` an `subscriptions`, neue Migration), Rust-Struct/Commands/Validation, `db.ts`-Bridge, SubscriptionDialog (Select mit gängigen Kategorien + ggf. Freitext), SubscriptionFilterBar (Kategorie-Filter), Card-Anzeige. Test-Sub-Builder in 8 Test-Files mitziehen (wie bei cancel-Feldern).
 - [ ] **Abo-Kosten-Überblick.** Prominente Kennzahl „X €/Monat · Y €/Jahr" über alle aktiven Abos + „teuerste Abos" + (mit Kategorien) Aufschlüsselung pro Kategorie. Großteils Frontend — `monthlyEquivalentCents` in [coverage.ts](src/lib/coverage.ts) ist der Baustein; neue Übersichts-Komponente. Mehrwährung beachten (pro Währung getrennt summieren, nicht heimlich umrechnen — siehe bestehende Coverage-Konvention).
 - [ ] **Einmalige Ausgaben.** Analog zu einmaligen Einnahmen (`incomes.one_time`), aber als Ausgabe, für genaueren Deckungs-Forecast. Umfang: Datenmodell (eigene Tabelle ODER one-time-Ausgaben-Konzept), Rust + Commands, `coverage.ts` (in den Forecast einrechnen), UI-Dialog. Recurrence nicht betroffen (einmalig).
+
+### Externe Review — Härtung & Vertrauen (Stand 2026-06-16)
+
+Unabhängiges KI-Repo-Review (auf älterem Stand — sah README noch v0.1.0). **Bereits erledigt, nicht erneut aufmachen:** README/Release auf v0.2.0 + Screenshots ✓, Kündigungs-Workflow (Frist/Datum + Erinnerungen) ✓, Cargo.toml-Metadaten (Beschreibung/Autor/License/Repo) ✓. Einmalige Ausgaben + Kategorien stehen oben unter „Geplante Features". Updater/Signing = Item weiter unten. Offene, valide Punkte:
+
+**P0 — Vertrauen/Sicherheit:**
+- [ ] **Auto-Backup vor jeder Migration + Integritätscheck.** Vor `sqlx::migrate!` eine Kopie der DB anlegen (z.B. `subtracker.db.bak-<ts>`), `PRAGMA integrity_check` + `foreign_key_check` vor/nach laufen lassen, Recovery in der Doku beschreiben. Hintergrund: die Tabellen-Rebuild-Migrationen (0007/0009/0010) sind der SQLite-Standard-12-Schritt-Weg (ok), ABER es gibt kein Pre-Migration-Backup → ein Kill mitten im Rebuild kann Daten verlieren. Das ist der eigentliche Härtungs-Hebel.
+- [ ] **SECURITY.md + Privacy/Threat-Model** und **SHA256-Checksummen je Release-Asset** (in `release.yml` erzeugen + an den Release hängen).
+- [ ] **Backup-Klartext kennzeichnen** (sofort: deutlicher UI-Hinweis „Backup ist unverschlüsselt") und später **optional passwortverschlüsseltes Backup**.
+- [ ] **Dependency-/Security-Automatik in CI:** Dependabot oder Renovate + `cargo audit` + `npm audit`/OSV-Scanner, optional CodeQL.
+
+**P1 — Forecast-Nutzen:**
+- [ ] **Kontostand-Frische-Warnung.** `balance_updated_at` auswerten und bei veraltetem Saldo prominent warnen („Saldo seit N Tagen nicht aktualisiert – Forecast unsicher") + schnelle „Saldo aktualisieren"-Aktion. Adressiert die Scheinsicherheit bei manuell gepflegten Salden.
+- [ ] **CSV-Import** (Kontoauszug/Abbuchungen) — ergänzt den schon offenen CSV-Export.
+- [ ] **Trial-/Probeabo + zukünftige Preisänderung mit Wirksamkeitsdatum** („ab 01.09. kostet es 14,99 €", „wird ab Datum X kostenpflichtig"). Erweitert die Preis-Historie um die Zukunft.
+- [ ] **Demo-Datensatz + 60-Sekunden-Onboarding-Flow** (Nutzen eines Liquiditätsradars ist nicht sofort offensichtlich).
+
+**P2 — Feinschliff:**
+- [ ] **Multi-Currency mit Kurslogik** (manueller/fixer Kurs pro Abo, optional Auto-Kurse) — nie still umrechnen, immer kennzeichnen. Aktuell werden Fremdwährungen bewusst aus der Coverage ausgeschlossen.
+- [ ] **Skip/Pause einzelner Abbuchungen** (Dienste pausieren/verschieben).
+- [ ] **Wochenend-/Feiertags-Verschiebung** der Fälligkeit (kann für Liquidität einen Tag ausmachen).
+- [ ] **Bessere Fehlertexte** statt roher technischer Strings; Accessibility-Tests; E2E-Tests für echte Nutzerflows.
 - [x] **Südkoreanischer Won (KRW)** (2026-06-06) — komplett: KRW in `CURRENCY_OPTIONS`, neue `CURRENCY_SUBDIVISIONS`-Map und `getCurrencySubdivisor()`-Helper in [format.ts](src/lib/format.ts) (EUR/USD/GBP/CHF → 100, KRW → 1, Default 100), `formatAmount` nutzt den Helper. Im SubscriptionDialog ist das Betrags-Input conditional: bei Subdivisor 1 (KRW) `step="1"` + `min="1"` und keine Decimal-Stellen im `centsToInput`, sonst wie gehabt `step="0.01"`. Speicherung in DB: `Math.round(amountNumber * subdivisor)` — `amount_cents` ist semantisch „smallest currency unit", bei KRW direkt Won, bei EUR Cent. Visuell verifiziert (Anlegen, Liste, Edit-Roundtrip, EUR-Sanity-Check). Vitest-Spec deckt KRW-Formatierung.
 - [ ] Optionale weitere Kanäle (z.B. Telegram) als Alternative zu nativen Notifications
 - [x] Waisen-Reminder beim Löschen eines Abos verhindern (2026-06-06) — gelöst in der Application-Logik des neuen `delete_subscription`-Commands (Architektur ➌): Transaktion löscht zuerst alle Reminders des Abos, dann das Abo selbst. Schöne Konsequenz: der FK-Constraint, der vorher schweigend im Schema schlief und unter dem strikteren sqlx-Pool plötzlich aktiv wurde, wird jetzt sauber bedient — ohne Schema-Rebuild via `ON DELETE CASCADE` (der unter sqlx::migrate! durch die Auto-Transaction-Semantik mit `PRAGMA foreign_keys=OFF` umständlich gewesen wäre).
