@@ -286,6 +286,14 @@ describe("SettingsDialog", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/Backup gespeichert/);
   });
 
+  it("weist darauf hin, dass Backup-Dateien unverschlüsselt sind", async () => {
+    mockIsEnabled.mockResolvedValue(false);
+    renderDialog();
+
+    expect(screen.getByText("Backup ist unverschlüsselt")).toBeInTheDocument();
+    expect(screen.getByText(/Finanzdaten im Klartext/)).toBeInTheDocument();
+  });
+
   it("exportiert nicht, wenn der Speichern-Dialog abgebrochen wird", async () => {
     mockIsEnabled.mockResolvedValue(false);
     mockSave.mockResolvedValue(null);

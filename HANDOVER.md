@@ -9,6 +9,194 @@
 
 ---
 
+## 2026-06-18 — Codex: Abschluss P0-Härtung CI/Release/Backup + Serena-Setup
+
+> Abschluss-/Commit-Handover für diese Codex-Session. User bat erst um Serena-Aktivierung, dann um BACKLOG-Zeilen 192, 193, 194, anschließend „handover detailliert dokumentieren und dann commit und push".
+
+### Kontext / Serena
+
+- Projektregel aus [CLAUDE.md](CLAUDE.md) gelesen: Serena soll Default sein. In dieser laufenden Codex-Session waren `mcp__serena__...`-Tools aber nicht dynamisch verfügbar (`tool_search` weiter 0 Treffer).
+- Serena wurde global für Codex registriert in `~/.codex/config.toml`:
+  - `uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context codex --project /Users/leopoldgrund/projects/SubTracked`
+- Serena-Dashboard läuft stabil in detached `screen`-Session `subtracked-serena`.
+  - Verifiziert: `lsof` lauscht auf `127.0.0.1:24282`, `/get_config_overview` liefert `200 OK`.
+  - Praktischer Backend-Test: `POST /get_memory {"memory_name":"core"}` liefert `200 OK` und `mem:core`.
+- Wichtiger Nachtrag: Für echte Codex-MCP-Toolcalls vermutlich neuen Codex-Chat/App-Session starten; diese Unterhaltung sieht Serena noch nicht als Tool.
+
+### Umgesetzt: BACKLOG-Zeile 192 — SHA256SUMS je Release-Asset
+
+- [release.yml](.github/workflows/release.yml) erweitert um Job `checksums` mit `needs: publish`.
+- Ablauf: Draft-Assets per `gh release download` holen, altes `SHA256SUMS.txt` entfernen, `sha256sum * | sort -k2 > SHA256SUMS.txt`, danach `gh release upload --clobber`.
+- Release-Body erwähnt `SHA256SUMS.txt`.
+- Lokal verifiziert: YAML-Parse und Checksum-Generierung mit Dummy-Dateien. E2E erst beim nächsten `v*`-Tag-Push möglich.
+
+### Umgesetzt: BACKLOG-Zeile 193 — Backup-Klartext-Hinweis
+
+- [SettingsDialog.tsx](src/components/SettingsDialog.tsx): Sichtbarer Hinweis im Bereich „Daten / Backup": JSON-Backups sind unverschlüsselt und enthalten Finanzdaten im Klartext.
+- Semantik bewusst `role="note"` statt `role="alert"`, damit der permanente Hinweis nicht mit echten Fehler-Alerts kollidiert.
+- [SettingsDialog.test.tsx](src/components/SettingsDialog.test.tsx): Test für den Hinweis ergänzt.
+- [README.md](README.md): JSON-Backup/Restore und Datensicherung um Klartext-/Unverschlüsselt-Hinweis ergänzt.
+- Follow-up bleibt fachlich offen: optional passwortverschlüsseltes Backup.
+
+### Umgesetzt: BACKLOG-Zeile 194 — Dependency-/Security-Automatik
+
+- Neue [dependabot.yml](.github/dependabot.yml):
+  - `npm`/pnpm, `cargo`, GitHub Actions.
+  - Wöchentlich montags, Patch/Minor gruppiert, Major-Updates bewusst ignoriert.
+- Neuer [security.yml](.github/workflows/security.yml):
+  - `js-audit`: `pnpm install --frozen-lockfile` + `pnpm audit --audit-level low`.
+  - `rust-audit`: Rust stable + `cargo install cargo-audit --locked` + `cargo audit` in `src-tauri`.
+  - Trigger: `push`, `pull_request`, Wochenplan, `workflow_dispatch`.
+- [pnpm-workspace.yaml](pnpm-workspace.yaml) ergänzt:
+  - `esbuild >=0.28.1`
+  - `undici 7.28.0`
+- Wichtig: `undici >=7.28.0` löste zunächst auf `8.5.0` auf und brach Vitest/jsdom (`Cannot find module 'undici/lib/handler/wrap-handler.js'`). Deshalb absichtlich `undici 7.28.0` gepinnt: gepatcht und mit `jsdom@29.1.1` kompatibel.
+- [pnpm-lock.yaml](pnpm-lock.yaml) aktualisiert; `pnpm audit` ist jetzt grün.
+- `cargo audit` lokal installiert und ausgeführt. Exit 0, aber Warnungen bleiben: transitive GTK3/Tauri-Stack-Crates (`atk`, `gdk`, `gtk`, `glib` usw.) und ein paar unmaintained Unicode/proc-macro-Crates. Der Audit behandelt sie als allowed warnings, kein roter Befund.
+
+### Backlog / Doku
+
+- [BACKLOG.md](BACKLOG.md): P0-Zeilen 192-194 abgehakt und mit Umsetzungsdetails ersetzt.
+- Einzelne Detail-Handover-Einträge stehen direkt unter diesem Rollup.
+- Projekt-Konvention `/code-review high`: In dieser Codex-Sitzung kein Slash-Review verfügbar. Subagent-Review wurde nicht genutzt, weil die Tool-Regel Subagents nur bei expliziter User-Delegation erlaubt. Das ist im Handover dokumentiert.
+
+### Verifikation
+
+- `ruby -e 'require "yaml"; ...'` für `security.yml`, `dependabot.yml`, `release.yml`, `checks.yml` ✓.
+- `pnpm install --frozen-lockfile` ✓.
+- `pnpm audit --audit-level low` ✓ `No known vulnerabilities found`.
+- `cargo audit` ✓ Exit 0, nur allowed warnings wie oben.
+- `pnpm vitest run src/components/SettingsDialog.test.tsx` ✓ 20 Tests.
+- `pnpm test:run` ✓ 232 Tests.
+- `pnpm build` ✓.
+- `pnpm lint` ✓ mit bekannter vorbestehender Biome-Info `src/App.tsx:438 noUselessFragments`.
+
+### Nächste Schritte
+
+- Commit + Push dieser Session.
+- Nach neuem Codex-Start prüfen, ob Serena-Tools wirklich als `mcp__serena__...` verfügbar sind.
+- Beim nächsten Release-Draft prüfen, ob `SHA256SUMS.txt` korrekt angehängt wurde.
+- Organisatorisch offen: GitHub „Private vulnerability reporting" aktivieren.
+- Fachlich nächstes großes Feature: BACKLOG „Einmalige Ausgaben".
+
+## 2026-06-18 — Codex: Dependency-/Security-Automatik in CI
+
+> User bat: „dann jetzt zeile 194 im backlog". Gemeint war BACKLOG-P0 „Dependency-/Security-Automatik in CI".
+
+### Was passierte
+
+- Neue [dependabot.yml](.github/dependabot.yml): wöchentliche Updates für `npm`/pnpm, `cargo` und GitHub Actions; Patch/Minor gruppiert, Major-Updates bewusst ignoriert (passend zur besprochenen Policy: Majors gezielt/testen).
+- Neuer [security.yml](.github/workflows/security.yml):
+  - `js-audit`: `pnpm install --frozen-lockfile` + `pnpm audit --audit-level low`.
+  - `rust-audit`: Rust stable + `cargo install cargo-audit --locked` + `cargo audit` in `src-tauri`.
+  - Läuft auf `push`/`pull_request`, wöchentlich montags und manuell (`workflow_dispatch`).
+- JS-Audit-Funde behoben über [pnpm-workspace.yaml](pnpm-workspace.yaml) `overrides`: `esbuild >=0.28.1`, `undici 7.28.0`.
+  - Wichtig: erster Versuch mit `undici >=7.28.0` löste auf `undici@8.5.0` auf, aber `jsdom@29.1.1` importiert noch `undici/lib/handler/wrap-handler.js`; Tests brachen mit `MODULE_NOT_FOUND`. Deshalb bewusst kompatibel auf **7.28.0** gepinnt.
+- [pnpm-lock.yaml](pnpm-lock.yaml) aktualisiert; `pnpm audit` ist jetzt lokal grün.
+- [BACKLOG.md](BACKLOG.md) Item abgehakt.
+
+### Verifikation
+
+- YAML parse für `security.yml`, `dependabot.yml`, `release.yml`, `checks.yml` ✓.
+- `pnpm install --frozen-lockfile` ✓.
+- `pnpm audit --audit-level low` ✓ `No known vulnerabilities found`.
+- `cargo audit` ✓ Exit 0; meldet nur erlaubte RustSec-Warnungen zu transitive GTK3/Tauri-Stack-Crates (`atk`, `gdk`, `gtk`, `glib` usw.) und einigen unmaintained Unicode/proc-macro-Crates.
+- `pnpm test:run` ✓ 232 Tests.
+- `pnpm build` ✓.
+- `pnpm lint` ✓ mit bekannter vorbestehender Biome-Info `noUselessFragments` in `src/App.tsx:438`.
+
+### Nächster Schritt
+
+- P0-Härtung ist damit weitgehend durch; offen bleiben organisatorisch GitHub „Private vulnerability reporting" aktivieren und beim nächsten Release `SHA256SUMS.txt` am Draft prüfen. Fachlich als nächstes Feature-Roadmap #4 „Einmalige Ausgaben".
+
+## 2026-06-18 — Codex: Backup-Klartext-Hinweis
+
+> User bat: „dann jetzt zeile 193 im backlog". Gemeint war BACKLOG-P0 „Backup-Klartext kennzeichnen".
+
+### Was passierte
+
+- [SettingsDialog.tsx](src/components/SettingsDialog.tsx): Im Bereich „Daten / Backup" steht jetzt ein sichtbarer Hinweis „Backup ist unverschlüsselt" mit Klartext-Erklärung: JSON-Datei enthält Finanzdaten im Klartext, nur an vertrauenswürdigen Orten speichern und nicht ungeschützt teilen.
+- Semantik bewusst `role="note"` statt `role="alert"`, damit der permanente Sicherheitshinweis nicht mit echten Fehler-Alerts kollidiert.
+- [SettingsDialog.test.tsx](src/components/SettingsDialog.test.tsx): Test ergänzt, der Titel und Klartext-Hinweis absichert.
+- [README.md](README.md): JSON-Backup/Restore und Datensicherung um den unverschlüsselten Klartext-Hinweis ergänzt.
+- [BACKLOG.md](BACKLOG.md): Item abgehakt; Follow-up „optional passwortverschlüsseltes Backup" bleibt im Text offen.
+
+### Verifikation
+
+- `pnpm vitest run src/components/SettingsDialog.test.tsx` ✓ 20 Tests.
+- `pnpm test:run` ✓ 232 Tests.
+- `pnpm build` ✓.
+- `pnpm lint` ✓ mit bekannter vorbestehender Biome-Info `noUselessFragments` in `src/App.tsx:438`.
+
+### Nächster Schritt
+
+- P0 weiter: „Dependency-/Security-Automatik in CI" oder fachlich Feature-Roadmap #4 „Einmalige Ausgaben".
+
+## 2026-06-18 — Codex: SHA256SUMS für Release-Assets
+
+> User bat: „mache jetzt backlog zeile 192". Gemeint war BACKLOG-P0 „SHA256-Checksummen je Release-Asset".
+
+### Was passierte
+
+- [release.yml](.github/workflows/release.yml) erweitert: neuer Job `checksums` mit `needs: publish`, läuft auf `ubuntu-22.04`, `permissions.contents: write`.
+- Ablauf: `gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --dir release-assets` → `rm -f SHA256SUMS.txt` (Re-Run-sicher) → `sha256sum * | sort -k2 > SHA256SUMS.txt` → `gh release upload "${GITHUB_REF_NAME}" release-assets/SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --clobber`.
+- Release-Body ergänzt um Hinweis, dass `SHA256SUMS.txt` die Prüfsummen aller Release-Assets enthält.
+- [BACKLOG.md](BACKLOG.md) Item abgehakt und mit Umsetzungsnotiz aktualisiert.
+
+### Verifikation
+
+- YAML lokal per Ruby geparst: `yaml ok`.
+- Checksum-Generierung lokal mit Dummy-Dateien simuliert; altes `SHA256SUMS.txt` wird korrekt ausgeschlossen.
+- `actionlint` ist lokal nicht installiert.
+- Echte Ende-zu-Ende-Verifikation bleibt erst beim nächsten `v*`-Tag-Push möglich, weil sie reale Draft-Release-Assets auf GitHub braucht.
+- Projekt-Konvention „/code-review high" für nicht-triviale Änderung: in dieser Codex-Sitzung kein Slash-Review verfügbar; Subagent-Review nicht genutzt, weil Tool-Regel Subagents nur bei expliziter User-Delegation erlaubt.
+
+### Nächster Schritt
+
+- Beim nächsten Release prüfen, ob `SHA256SUMS.txt` am Draft hängt und die erwarteten Asset-Namen enthält.
+- P0 weiter: „Backup-Klartext kennzeichnen" oder „Dependency-/Security-Automatik in CI".
+
+## 2026-06-18 — Codex: Serena für Codex aktiviert
+
+> User bat nach dem ersten Startcheck: „dann tue alles um serena nutzen zu können". Kein Projektcode geändert; globale Codex-MCP-Konfiguration angepasst.
+
+### Was passierte
+
+- Projektlage geprüft: `.mcp.json` enthält bereits einen Serena-Server für `claude-code`; `.serena/project.yml` und Memories sind vorhanden.
+- Serena war in Codex zunächst nicht als MCP verfügbar (`tool_search` fand 0 Treffer), weil `~/.codex/config.toml` nur `node_repl` registriert hatte.
+- `uvx` ist installiert (`uvx 0.11.18`). Erster Starttest scheiterte nur an Sandbox-Zugriff auf `~/.cache/uv`; mit Freigabe konnte Serena geladen werden.
+- Globalen Codex-MCP-Server registriert:
+  - `codex mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context codex --project /Users/leopoldgrund/projects/SubTracked`
+  - Danach `codex mcp list`/`get serena` geprüft: `serena` ist `enabled`, Transport `stdio`, Kontext `codex`.
+- Kurzstart des Servers erfolgreich: Serena `1.5.4.dev0`, Projekt `SubTracked` aktiviert, TS/Rust-LSP gestartet, **22 Tools exponiert** (`initial_instructions`, Memories, Symbolsuche/-edits, Diagnostics usw.). Testprozess danach beendet.
+
+### Wichtiger Hinweis
+
+- Die laufende Codex-Unterhaltung sieht neu registrierte MCP-Tools nicht dynamisch; `tool_search` fand nach der Registrierung weiterhin 0 Serena-Tools. Vermutlich ist ein neuer Codex-Chat bzw. App-/Session-Neustart nötig, damit die `mcp__serena__...`-Tools in der Toolliste erscheinen.
+- Die projektlokale `.mcp.json` wurde bewusst **nicht** geändert, weil sie `--context claude-code` nutzt und damit wahrscheinlich für Claude-Code korrekt ist. Für Codex steht die globale Registrierung in `~/.codex/config.toml`.
+- Nach User-Hinweis „ich sehe nur error auf dem web interface": Ursache war zunächst der beendete Testprozess. Serena wurde danach stabil in einer detached `screen`-Session gestartet: `screen -dmS subtracked-serena /Users/leopoldgrund/.local/bin/uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context codex --project /Users/leopoldgrund/projects/SubTracked --log-level INFO`. Verifiziert: `screen -ls` zeigt `subtracked-serena`, `lsof` lauscht auf `127.0.0.1:24282`, `/get_config_overview` liefert `200 OK`.
+- Auf User-Wunsch zusätzlich praktisch getestet: In der laufenden Codex-Session sind die `mcp__serena__...`-Tools noch nicht dynamisch sichtbar (`tool_search` weiter 0 Treffer), aber ein konkreter Serena-Backend-Aufruf funktioniert: `POST /get_memory {"memory_name":"core"}` liefert `200 OK` und den Inhalt von `mem:core`.
+
+## 2026-06-18 — Codex: Session-Start-Kontext gelesen, Serena nicht verfügbar
+
+> User bat: „aktiviere serena, lies die claude.md und dann alle handover einträge vom 18.06, also heute". Kein Code geändert.
+
+### Was passierte
+
+- [CLAUDE.md](CLAUDE.md) vollständig gelesen. Wichtigster Punkt: Serena soll laut Projektregel Default für Datei-Operationen sein; Session-Start-Reihenfolge wäre `mcp__serena__initial_instructions`, Memories (`core`, `conventions`, `tech_stack`) und dann HANDOVER-Top-Eintrag.
+- Serena konnte in dieser Codex-Umgebung **nicht aktiviert** werden: `tool_search` nach Serena ergab 0 Treffer; die Liste installierbarer Plugins enthielt ebenfalls keinen Serena-Eintrag.
+- Alle heutigen HANDOVER-Einträge vom **2026-06-18** gelesen:
+  - Dependency-Audit-Stand gesichtet + im Backlog vermerkt
+  - SECURITY.md + PRIVACY.md (P0-Härtung, Doku)
+  - Release v0.2.1
+  - Auto-Backup + Integritätscheck vor Migration
+  - Abo-Kosten-Überblick
+  - Kategorien/Tags für Abos
+
+### Nächster Schritt
+
+- Wenn Serena in einer späteren Umgebung verfügbar ist: zuerst die CLAUDE-Startsequenz mit `mcp__serena__initial_instructions` + Memories nachholen. In dieser Session steht als nächstes fachlich weiterhin BACKLOG/Feature-Roadmap #4 „Einmalige Ausgaben" bzw. offene P0-Härtung (SHA256-Checksummen, CI-Security-Automatik) an.
+
 ## 2026-06-18 — Claude: Dependency-Audit-Stand gesichtet + im Backlog vermerkt
 
 > Kein Code/keine Doku-Datei geändert außer BACKLOG — User fragte, ob „immer neueste Versionen" sinnvoll ist und wie der aktuelle Stand ist. Ergebnis als Unterpunkt unter dem offenen P0-Item „Dependency-/Security-Automatik in CI" festgehalten.

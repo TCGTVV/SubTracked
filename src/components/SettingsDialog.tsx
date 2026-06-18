@@ -2,7 +2,7 @@ import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
-import { Settings } from "lucide-react";
+import { AlertTriangle, Settings } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   type AppInfo,
@@ -13,7 +13,7 @@ import {
   type ReminderStatus,
   sendTestNotification,
 } from "../lib/db";
-import { Alert, AlertDescription } from "./ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Label } from "./ui/label";
@@ -346,6 +346,14 @@ export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
               Einnahmen und Verlauf als JSON-Datei. Beim Import wird der gesamte aktuelle Bestand
               durch das Backup <strong>ersetzt</strong>.
             </p>
+            <Alert role="note">
+              <AlertTriangle aria-hidden="true" />
+              <AlertTitle>Backup ist unverschlüsselt</AlertTitle>
+              <AlertDescription>
+                Die JSON-Datei enthält deine Finanzdaten im Klartext. Speichere sie nur an
+                vertrauenswürdigen Orten und teile sie nicht ungeschützt.
+              </AlertDescription>
+            </Alert>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"

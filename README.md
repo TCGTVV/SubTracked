@@ -61,7 +61,7 @@ SubTracked ist für genau diesen Blick gebaut: Was geht demnächst ab, von welch
 
 - **Wiederkehrende Einnahmen** fließen in den Cashflow-Forecast ein, damit nicht nur Abbuchungen, sondern auch Gehalt und andere Zuflüsse berücksichtigt werden.
 - **Einmalige Einnahmen** wie Bonus, Erstattung oder Verkaufserlös können genau an einem Datum eingeplant werden.
-- **JSON-Backup / Restore** über die Einstellungen: vollständiger lokaler Datenexport inklusive Konten, Abos, Einnahmen, Preis-Historie und Reminder-Metadaten.
+- **JSON-Backup / Restore** über die Einstellungen: vollständiger lokaler Datenexport inklusive Konten, Abos, Einnahmen, Preis-Historie und Reminder-Metadaten. Backup-Dateien sind aktuell unverschlüsselt und enthalten deine Finanzdaten im Klartext.
 
 ### Erinnerungen
 
@@ -96,7 +96,7 @@ Schema-Migrationen sind der heikelste Moment für die lokale Datenbank. Vor **je
 
 - **Ablageort:** `<App-Konfig-Verzeichnis>/backups/subtracker-pre-migrate-<zeitstempel>.db` (macOS: `~/Library/Application Support/com.tcgtvv.subtracked/`, Linux: `~/.config/com.tcgtvv.subtracked/` bzw. `~/.local/share/...`). Die letzten 5 Backups werden behalten, ältere automatisch gelöscht.
 - **Wiederherstellen:** App schließen → in `backups/` die gewünschte `subtracker-pre-migrate-<zeitstempel>.db` nach oben kopieren und in `subtracker.db` umbenennen (vorhandene `subtracker.db`, `subtracker.db-wal`, `subtracker.db-shm` vorher entfernen oder zur Seite legen) → App neu starten.
-- Zusätzlich kannst du jederzeit über **Einstellungen → Backup** einen vollständigen JSON-Export/-Import deiner Daten machen.
+- Zusätzlich kannst du jederzeit über **Einstellungen → Backup** einen vollständigen JSON-Export/-Import deiner Daten machen. Diese JSON-Backups sind aktuell unverschlüsselt; speichere sie nur an vertrauenswürdigen Orten und teile sie nicht ungeschützt.
 
 ## Status
 
