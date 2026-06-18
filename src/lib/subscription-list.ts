@@ -20,6 +20,8 @@ export interface SubListOptions {
   account: AccountFilter;
   /** null = alle, sonst ISO-4217-Code wie "EUR". */
   currency: string | null;
+  /** null = alle, sonst exakter Kategorie-Name. */
+  category: string | null;
   notify: NotifyFilter;
   sort: SortKey;
 }
@@ -27,6 +29,7 @@ export interface SubListOptions {
 export const DEFAULT_SUB_LIST_OPTIONS: SubListOptions = {
   account: null,
   currency: null,
+  category: null,
   notify: null,
   sort: "name-asc",
 };
@@ -44,6 +47,7 @@ export function applyFilterAndSort(
     if (options.account === "none" && s.accountId !== null) return false;
     if (typeof options.account === "number" && s.accountId !== options.account) return false;
     if (options.currency !== null && s.currency !== options.currency) return false;
+    if (options.category !== null && s.category !== options.category) return false;
     if (options.notify === "on" && !s.notify) return false;
     if (options.notify === "off" && s.notify) return false;
     return true;
@@ -97,6 +101,13 @@ export function applyFilterAndSort(
 /** Liefert die in den Subs vorkommenden Waehrungen, alphabetisch sortiert. */
 export function uniqueCurrencies(subs: Subscription[]): string[] {
   return [...new Set(subs.map((s) => s.currency))].sort();
+}
+
+/** Liefert die in den Subs vorkommenden Kategorien (ohne null), alphabetisch sortiert. */
+export function uniqueCategories(subs: Subscription[]): string[] {
+  return [...new Set(subs.map((s) => s.category).filter((c): c is string => c !== null))].sort(
+    (a, b) => a.localeCompare(b, "de"),
+  );
 }
 
 /** Sind in der Liste Subs ohne Konto-Zuordnung? */

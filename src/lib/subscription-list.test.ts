@@ -4,6 +4,7 @@ import {
   applyFilterAndSort,
   DEFAULT_SUB_LIST_OPTIONS,
   hasUnassignedSubs,
+  uniqueCategories,
   uniqueCurrencies,
 } from "./subscription-list";
 
@@ -22,6 +23,7 @@ const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   cancelPeriodValue: null,
   cancelPeriodUnit: null,
   cancelDate: null,
+  category: null,
   ...overrides,
 });
 
@@ -74,6 +76,20 @@ describe("applyFilterAndSort", () => {
         NOW,
       );
       expect(result.map((s) => s.name)).toEqual(["A", "C"]);
+    });
+
+    it("filtert nach Kategorie", () => {
+      const subs = [
+        sub({ id: 1, name: "A", category: "Streaming" }),
+        sub({ id: 2, name: "B", category: "Versicherung" }),
+        sub({ id: 3, name: "C", category: null }),
+      ];
+      const result = applyFilterAndSort(
+        subs,
+        { ...DEFAULT_SUB_LIST_OPTIONS, category: "Streaming" },
+        NOW,
+      );
+      expect(result.map((s) => s.name)).toEqual(["A"]);
     });
 
     it("filter notify='on' liefert nur Subs mit Erinnerung", () => {
@@ -213,6 +229,22 @@ describe("uniqueCurrencies", () => {
 
   it("liefert leeres Array bei leerer Liste", () => {
     expect(uniqueCurrencies([])).toEqual([]);
+  });
+});
+
+describe("uniqueCategories", () => {
+  it("liefert vorkommende Kategorien ohne null, alphabetisch", () => {
+    const subs = [
+      sub({ id: 1, category: "Streaming" }),
+      sub({ id: 2, category: "Versicherung" }),
+      sub({ id: 3, category: "Streaming" }),
+      sub({ id: 4, category: null }),
+    ];
+    expect(uniqueCategories(subs)).toEqual(["Streaming", "Versicherung"]);
+  });
+
+  it("liefert [] wenn keine Kategorien gesetzt sind", () => {
+    expect(uniqueCategories([sub({ category: null })])).toEqual([]);
   });
 });
 

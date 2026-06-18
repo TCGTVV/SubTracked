@@ -1,4 +1,4 @@
-import { Bell, CalendarX, FolderClock, Pencil, Plus, Save, X } from "lucide-react";
+import { Bell, CalendarX, FolderClock, Pencil, Plus, Save, Tag, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
 import {
@@ -44,6 +44,7 @@ interface FieldErrors {
   leadDays?: string;
   cancelPeriod?: string;
   cancelDate?: string;
+  category?: string;
 }
 
 /** Sentinel für „keine Kündigung tracken" — Auswahl im Kündigungs-Select. */
@@ -53,6 +54,19 @@ const MAX_CANCEL_PERIOD_VALUE = 730;
 
 /** Sentinel für „kein Konto" — Radix-Select erlaubt keinen leeren Item-Wert. */
 const NO_ACCOUNT = "none";
+
+/** Sentinel für „keine Kategorie" bzw. „eigene eingeben" im Kategorie-Select. */
+const NO_CATEGORY = "none";
+const CUSTOM_CATEGORY = "__custom__";
+/** Gängige Kategorie-Vorschläge; Freitext via „Eigene…" bleibt möglich. */
+const CATEGORY_PRESETS = [
+  "Streaming",
+  "Versicherung",
+  "Hosting/Domains",
+  "Mobilfunk/Internet",
+] as const;
+/** Obergrenze der Kategorie-Länge, parallel zu MAX_CATEGORY_LENGTH im Rust-Backend. */
+const MAX_CATEGORY_LENGTH = 60;
 
 function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
   const chronological = [...entries].reverse();
@@ -135,6 +149,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const leadErrorId = useId();
   const cancelPeriodErrorId = useId();
   const cancelDateErrorId = useId();
+  const categoryErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -143,6 +158,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const leadRef = useRef<HTMLInputElement>(null);
   const cancelPeriodRef = useRef<HTMLInputElement>(null);
   const cancelDateRef = useRef<HTMLButtonElement>(null);
+  const categoryCustomRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(subscription?.name ?? "");
   const [amount, setAmount] = useState(
@@ -162,6 +178,19 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
     subscription?.cancelPeriodUnit ?? "months",
   );
   const [cancelDate, setCancelDate] = useState(subscription?.cancelDate ?? todayISO());
+  const initialCategory = subscription?.category ?? null;
+  const initialCategoryIsPreset =
+    initialCategory !== null && (CATEGORY_PRESETS as readonly string[]).includes(initialCategory);
+  const [categorySelect, setCategorySelect] = useState<string>(
+    initialCategory === null
+      ? NO_CATEGORY
+      : initialCategoryIsPreset
+        ? initialCategory
+        : CUSTOM_CATEGORY,
+  );
+  const [categoryCustom, setCategoryCustom] = useState<string>(
+    initialCategory !== null && !initialCategoryIsPreset ? initialCategory : "",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -226,6 +255,10 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       next.cancelDate = "Kündigungsdatum muss ein gültiges Datum im Format YYYY-MM-DD sein.";
     }
 
+    if (categorySelect === CUSTOM_CATEGORY && categoryCustom.trim().length > MAX_CATEGORY_LENGTH) {
+      next.category = `Kategorie darf höchstens ${MAX_CATEGORY_LENGTH} Zeichen lang sein.`;
+    }
+
     return { errors: next, amountNumber };
   }
 
@@ -242,6 +275,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       else if (validation.leadDays) leadRef.current?.focus();
       else if (validation.cancelPeriod) cancelPeriodRef.current?.focus();
       else if (validation.cancelDate) cancelDateRef.current?.focus();
+      else if (validation.category) categoryCustomRef.current?.focus();
       return;
     }
 
@@ -263,6 +297,12 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
         cancelPeriodValue: cancelMode === "period" ? cancelPeriodValue : null,
         cancelPeriodUnit: cancelMode === "period" ? cancelPeriodUnit : null,
         cancelDate: cancelMode === "date" ? cancelDate : null,
+        category:
+          categorySelect === NO_CATEGORY
+            ? null
+            : categorySelect === CUSTOM_CATEGORY
+              ? categoryCustom.trim() || null
+              : categorySelect,
       };
       if (isEdit && subscription) {
         await updateSubscription({
@@ -390,6 +430,52 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`${anchorId}-category`} className="flex items-center gap-1.5">
+                <Tag className="size-4 text-muted-foreground" />
+                Kategorie
+              </Label>
+              <Select
+                value={categorySelect}
+                onValueChange={(v) => {
+                  setCategorySelect(v);
+                  clearFieldError("category");
+                }}
+              >
+                <SelectTrigger id={`${anchorId}-category`} className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CATEGORY}>Keine Kategorie</SelectItem>
+                  {CATEGORY_PRESETS.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM_CATEGORY}>Eigene…</SelectItem>
+                </SelectContent>
+              </Select>
+              {categorySelect === CUSTOM_CATEGORY && (
+                <Input
+                  ref={categoryCustomRef}
+                  value={categoryCustom}
+                  onChange={(e) => {
+                    setCategoryCustom(e.target.value);
+                    clearFieldError("category");
+                  }}
+                  placeholder="z.B. Fitness"
+                  autoComplete="off"
+                  aria-invalid={!!errors.category}
+                  aria-describedby={errors.category ? categoryErrorId : undefined}
+                />
+              )}
+              {errors.category && (
+                <p id={categoryErrorId} className="text-sm text-destructive" role="alert">
+                  {errors.category}
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">

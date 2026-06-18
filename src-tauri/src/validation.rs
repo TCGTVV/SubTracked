@@ -13,6 +13,22 @@ pub fn validate_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Obergrenze für die (optionale) Kategorie.
+/// Gespiegelt im Frontend: `MAX_CATEGORY_LENGTH` in `src/components/SubscriptionDialog.tsx`.
+pub const MAX_CATEGORY_LENGTH: usize = 60;
+
+/// Optionale Kategorie (Freitext): None/leer ist erlaubt, sonst nur eine Längen-Sanity.
+pub fn validate_category(category: Option<&str>) -> Result<(), String> {
+    if let Some(c) = category {
+        if c.chars().count() > MAX_CATEGORY_LENGTH {
+            return Err(format!(
+                "Kategorie darf höchstens {MAX_CATEGORY_LENGTH} Zeichen lang sein."
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub fn validate_currency(currency: &str) -> Result<(), String> {
     if !currencies::is_allowed(currency) {
         return Err(format!(
@@ -70,6 +86,7 @@ pub fn validate_subscription_fields(
     interval: &str,
     anchor_date: &str,
     lead_days: i64,
+    category: Option<&str>,
 ) -> Result<(), String> {
     validate_name(name)?;
     validate_amount_cents(amount_cents)?;
@@ -77,6 +94,7 @@ pub fn validate_subscription_fields(
     validate_interval(interval)?;
     validate_anchor_date(anchor_date)?;
     validate_lead_days(lead_days)?;
+    validate_category(category)?;
     Ok(())
 }
 
@@ -302,42 +320,79 @@ mod tests {
 
     #[test]
     fn subscription_fields_composed_check() {
-        assert!(
-            validate_subscription_fields("Netflix", 1_799, "EUR", "monthly", "2026-06-01", 7)
-                .is_ok()
-        );
-        assert!(
-            validate_subscription_fields("", 1_799, "EUR", "monthly", "2026-06-01", 7).is_err()
-        );
-        assert!(
-            validate_subscription_fields("Netflix", 0, "EUR", "monthly", "2026-06-01", 7).is_err()
-        );
-        assert!(
-            validate_subscription_fields("Netflix", 1_799, "XYZ", "monthly", "2026-06-01", 7)
-                .is_err()
-        );
-        assert!(validate_subscription_fields(
-            "Netflix",
-            1_799,
-            "EUR",
-            "fortnightly",
-            "2026-06-01",
-            7
-        )
-        .is_err());
-        assert!(
-            validate_subscription_fields("Netflix", 1_799, "EUR", "monthly", "08.06.2026", 7)
-                .is_err()
-        );
         assert!(validate_subscription_fields(
             "Netflix",
             1_799,
             "EUR",
             "monthly",
             "2026-06-01",
-            400
+            7,
+            None
+        )
+        .is_ok());
+        assert!(
+            validate_subscription_fields("", 1_799, "EUR", "monthly", "2026-06-01", 7, None)
+                .is_err()
+        );
+        assert!(validate_subscription_fields(
+            "Netflix",
+            0,
+            "EUR",
+            "monthly",
+            "2026-06-01",
+            7,
+            None
         )
         .is_err());
+        assert!(validate_subscription_fields(
+            "Netflix",
+            1_799,
+            "XYZ",
+            "monthly",
+            "2026-06-01",
+            7,
+            None
+        )
+        .is_err());
+        assert!(validate_subscription_fields(
+            "Netflix",
+            1_799,
+            "EUR",
+            "fortnightly",
+            "2026-06-01",
+            7,
+            None
+        )
+        .is_err());
+        assert!(validate_subscription_fields(
+            "Netflix",
+            1_799,
+            "EUR",
+            "monthly",
+            "08.06.2026",
+            7,
+            None
+        )
+        .is_err());
+        assert!(validate_subscription_fields(
+            "Netflix",
+            1_799,
+            "EUR",
+            "monthly",
+            "2026-06-01",
+            400,
+            None
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn category_validation() {
+        assert!(validate_category(None).is_ok());
+        assert!(validate_category(Some("")).is_ok());
+        assert!(validate_category(Some("Streaming")).is_ok());
+        assert!(validate_category(Some(&"x".repeat(MAX_CATEGORY_LENGTH))).is_ok());
+        assert!(validate_category(Some(&"x".repeat(MAX_CATEGORY_LENGTH + 1))).is_err());
     }
 
     #[test]

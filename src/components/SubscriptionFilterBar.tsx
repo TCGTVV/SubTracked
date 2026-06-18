@@ -5,6 +5,7 @@ import {
   type NotifyFilter,
   type SortKey,
   type SubListOptions,
+  uniqueCategories,
   uniqueCurrencies,
 } from "../lib/subscription-list";
 import type { Account, Subscription } from "../types";
@@ -35,10 +36,13 @@ const NONE = "__none__";
 export function SubscriptionFilterBar({ subs, accounts, options, onChange }: Props) {
   const accountId = useId();
   const currencyId = useId();
+  const categoryId = useId();
   const notifyId = useId();
   const sortId = useId();
 
   const currencies = uniqueCurrencies(subs);
+  const categories = uniqueCategories(subs);
+  const showCategoryFilter = categories.length > 1;
   const referencedAccountIds = new Set(
     subs.map((s) => s.accountId).filter((id): id is number => id != null),
   );
@@ -106,6 +110,30 @@ export function SubscriptionFilterBar({ subs, accounts, options, onChange }: Pro
             <SelectContent>
               <SelectItem value={ALL}>Alle</SelectItem>
               {currencies.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {showCategoryFilter && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={categoryId} className="text-xs text-muted-foreground">
+            Kategorie
+          </Label>
+          <Select
+            value={options.category ?? ALL}
+            onValueChange={(v) => onChange({ ...options, category: v === ALL ? null : v })}
+          >
+            <SelectTrigger id={categoryId} size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Alle</SelectItem>
+              {categories.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>
