@@ -113,6 +113,7 @@ jobs:
             - Linux universell: `SubTracked_${{ steps.version.outputs.value }}_amd64.AppImage`
 
             Die `.app.tar.gz`-Assets für macOS werden für spätere Updater-/Automationspfade mitgebaut; normale Nutzer nehmen die `.dmg`.
+            `SHA256SUMS.txt` enthält die Prüfsummen aller Release-Assets.
 
             ## Hinweis zu unsignierten Builds
 
@@ -134,3 +135,37 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  checksums:
+    name: Attach SHA256 checksums
+    needs: publish
+    runs-on: ubuntu-22.04
+    permissions:
+      # gh lädt die Draft-Assets herunter und hängt SHA256SUMS.txt wieder an.
+      contents: write
+
+    steps:
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p release-assets
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir release-assets
+
+      - name: Generate SHA256SUMS.txt
+        working-directory: release-assets
+        run: |
+          rm -f SHA256SUMS.txt
+          sha256sum * | sort -k2 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            release-assets/SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
