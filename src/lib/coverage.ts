@@ -247,6 +247,92 @@ export function computeMonthlyBaseline(
     .sort((a, b) => b.monthlyCents - a.monthlyCents);
 }
 
+/** Kosten-Aufschlüsselung einer Kategorie (auf Monatsbasis normiert). */
+export interface CategoryCost {
+  /** Kategorie-Label; null = ohne Kategorie. */
+  category: string | null;
+  monthlyCents: number;
+  count: number;
+}
+
+/** Ein teures Abo im Kosten-Überblick (auf Monatsbasis normiert). */
+export interface TopSubscriptionCost {
+  id: number;
+  name: string;
+  monthlyCents: number;
+}
+
+/** Kosten-Überblick pro Währung. */
+export interface CurrencyCostSummary {
+  currency: string;
+  monthlyCents: number;
+  yearlyCents: number;
+  subscriptionCount: number;
+  /** Teuerste Abos (Monatsbasis), absteigend, auf `topN` gekürzt. */
+  top: TopSubscriptionCost[];
+  /** Aufschlüsselung pro Kategorie, absteigend nach Monatsbetrag. */
+  categories: CategoryCost[];
+}
+
+/**
+ * Kosten-Überblick über die übergebenen Abos: monatliches und jährliches Äquivalent,
+ * teuerste Abos und Aufschlüsselung pro Kategorie.
+ *
+ * Multi-Currency wie bei `computeCoverage`: pro Währung getrennt summiert, nie heimlich
+ * umgerechnet. Jahreswert = Monatswert × 12 (konsistent mit der Monatszahl).
+ *
+ * Nur aktive Abos einzurechnen ist Aufrufer-Verantwortung (archivierte vorher rausfiltern).
+ */
+export function computeCostSummary(subscriptions: Subscription[], topN = 5): CurrencyCostSummary[] {
+  const byCurrency = new Map<
+    string,
+    {
+      monthly: number;
+      count: number;
+      categories: Map<string | null, { monthly: number; count: number }>;
+      subs: TopSubscriptionCost[];
+    }
+  >();
+
+  for (const sub of subscriptions) {
+    const monthly = monthlyEquivalentCents(sub);
+    let entry = byCurrency.get(sub.currency);
+    if (!entry) {
+      entry = { monthly: 0, count: 0, categories: new Map(), subs: [] };
+      byCurrency.set(sub.currency, entry);
+    }
+    entry.monthly += monthly;
+    entry.count += 1;
+    entry.subs.push({ id: sub.id, name: sub.name, monthlyCents: monthly });
+
+    const catKey = sub.category ?? null;
+    const cat = entry.categories.get(catKey) ?? { monthly: 0, count: 0 };
+    cat.monthly += monthly;
+    cat.count += 1;
+    entry.categories.set(catKey, cat);
+  }
+
+  return [...byCurrency.entries()]
+    .map(([currency, e]) => ({
+      currency,
+      monthlyCents: Math.round(e.monthly),
+      yearlyCents: Math.round(e.monthly * 12),
+      subscriptionCount: e.count,
+      top: e.subs
+        .sort((a, b) => b.monthlyCents - a.monthlyCents)
+        .slice(0, topN)
+        .map((s) => ({ ...s, monthlyCents: Math.round(s.monthlyCents) })),
+      categories: [...e.categories.entries()]
+        .map(([category, c]) => ({
+          category,
+          monthlyCents: Math.round(c.monthly),
+          count: c.count,
+        }))
+        .sort((a, b) => b.monthlyCents - a.monthlyCents),
+    }))
+    .sort((a, b) => b.monthlyCents - a.monthlyCents);
+}
+
 export interface UpcomingItem {
   type: "outflow" | "income";
   subscriptionId: number;
