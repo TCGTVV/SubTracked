@@ -9,6 +9,50 @@
 
 ---
 
+## 2026-06-18 — Claude: Release v0.2.1
+
+> Patch-Release mit den heutigen Änderungen. Version in [package.json](package.json), [Cargo.toml](src-tauri/Cargo.toml), [tauri.conf.json](src-tauri/tauri.conf.json) auf **0.2.1** gebumpt (Cargo.lock via `cargo check` mitgezogen), README-Status + Download-Beispiele auf 0.2.1 aktualisiert (historische „v0.2.0 brachte…"-Zeile bewusst belassen). Tag `v0.2.1` getriggert den Release-Build (`release.yml`, `on: push tags v*`).
+
+### Inhalt von v0.2.1
+
+- **Abo-Kosten-Überblick** (Roadmap #3) — Commit `1980b79`, bereits heute gepusht.
+- **Auto-Backup + Integritätscheck vor Migration** (P0-Härtung) — siehe Eintrag direkt darunter.
+
+### Release-Strategie (mit User besprochen, 2026-06-18)
+
+- **Abstand:** nicht nach Kalender, sondern wert-/risiko-getrieben. Patches (0.2.x) für Fixes/Härtung zügig; Minors (0.x.0) wenn ein sichtbares Feature fertig ist (~alle 2–4 Wochen bei aktiver Entwicklung). Kleine Sachen bündeln — jedes Release kostet manuellen Win/macOS-Smoke-Test.
+- **1.0-Gate = Vertrauen/Stabilität, nicht Feature-Zahl:** restlicher P0-Härtungs-Cluster durch (SECURITY.md + SHA256-Checksummen, Backup-Klartext-Hinweis, Dependency-/Audit-CI), Datenformat battle-tested, eine Weile ohne Datenverlust, Kern „vollständig genug" (idealerweise inkl. #4 Einmalige Ausgaben), klare Signing-Story. Nicht-Blocker für 1.0: CSV-Import, Multi-Currency-Kurse, Telegram.
+
+---
+
+## 2026-06-18 — Claude: Auto-Backup + Integritätscheck vor Migration (P0-Härtung)
+
+> BACKLOG-P0 „Auto-Backup vor jeder Migration + Integritätscheck" umgesetzt. **User-Entscheidungen vorab:** bei beschädigter DB vor Migration → **Start abbrechen** (Backup trotzdem anlegen); Aufbewahrung **letzte 5**.
+
+### Was passierte
+
+- **Neues Modul [db_backup.rs](src-tauri/src/db_backup.rs)** mit zwei öffentlichen Funktionen, eingehängt in [lib.rs](src-tauri/src/lib.rs) im Setup-Block rund um die Migration: `let migrator = sqlx::migrate!(...)` → `db_backup::before_migrations(&pool, &db_path, &migrator)` → `migrator.run(&pool)` → `db_backup::verify_after_migrations(&pool)`.
+- **`before_migrations`**: nur aktiv, wenn Migrationen anstehen (Vergleich `_sqlx_migrations`-Versionen vs. `migrator.iter()`) **und** die DB bereits Daten hat (`has_applied_migrations` → frische Installation überspringt das Backup, nichts zu verlieren). Dann `PRAGMA integrity_check`; bei `!= "ok"` wird trotzdem ein Backup angelegt und mit Error abgebrochen (kein `migrator.run`). Sonst Snapshot + Prune.
+- **Backup via `VACUUM INTO`**, NICHT `fs::copy` — die DB läuft im WAL-Modus, ein nacktes Copy von `subtracker.db` würde nicht eingecheckte `-wal`-Seiten verpassen. Ziel: `<config_dir>/backups/subtracker-pre-migrate-<YYYYMMDDTHHMMSSmmmZ>.db`. Pfad ist app-kontrolliert + Quotes escaped → `sqlx::AssertSqlSafe` (sqlx 0.9 lässt für `query()` nur `&'static str` zu; VACUUM INTO erlaubt keine Bind-Parameter fürs Ziel).
+- **Prune** behält die letzten 5 (Zeitstempel-Dateinamen sind lexikographisch sortierbar), Fremddateien bleiben unangetastet.
+- **`verify_after_migrations`**: `integrity_check` + `foreign_key_check` nach der Migration; Auffälligkeiten als Error geloggt (kein Abbruch — die Migration lief schon, das Backup ist das Netz).
+- **Recovery dokumentiert** in [README](README.md) unter „Datensicherung & Wiederherstellung" (Ablageort je OS, Wiederherstellungs-Schritte, Verweis auf JSON-Export).
+
+### Verifikation (alle grün)
+
+- `cargo fmt` ✓, `cargo clippy --all-targets -D warnings` ✓, `cargo test` ✓ **69** (+3: `integrity_check_ok_on_fresh_db`, `backup_writes_consistent_snapshot`, `prune_keeps_only_last_five`).
+- **Gegen Kopie der echten DB**: `PRAGMA integrity_check` = ok, `foreign_key_check` leer, `VACUUM INTO` erzeugt lesbaren Snapshot mit Daten (2 Abos, 1 Konto). Frontend unberührt → kein `pnpm`-Lauf nötig.
+
+### Beobachtung am Rande
+
+- Die **echte User-DB steht inzwischen auf Migration 11** (nicht mehr 8 wie im 0010-Eintrag) — der User hat zwischenzeitlich gestartet, 9–11 sind angewandt. Damit ist der alte „weekly/bimonthly real speichern"-Check de facto durch die Migration selbst erledigt; ein expliziter UI-Speichertest eines weekly-Abos schadet aber nicht. Beim nächsten Start legt das neue Backup-Modul **kein** Backup an (nichts pending) — das ist korrektes Verhalten.
+
+### Nächster Schritt
+
+- Weiter in BACKLOG „Externe Review — Härtung": restliche P0 (SECURITY.md + SHA256-Checksummen je Release-Asset, Backup-Klartext-Hinweis, CI-Security-Automatik). Feature-Roadmap #4 „Einmalige Ausgaben" steht weiterhin unter „Geplante Features".
+
+---
+
 ## 2026-06-18 — Claude: Abo-Kosten-Überblick
 
 > Feature-Roadmap #3 „Abo-Kosten-Überblick" umgesetzt — **reines Frontend** (kein Rust/DB/Migration, Kategorie-Spalte existierte schon aus dem Kategorien-Feature). User-Sicht-Check erteilt.

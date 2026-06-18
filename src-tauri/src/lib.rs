@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod currencies;
 mod db;
+mod db_backup;
 mod recurrence;
 mod reminders;
 mod validation;
@@ -113,7 +114,12 @@ pub fn run() {
                 // damit Legacy-Orphans nicht am FK-Check scheitern).
                 .foreign_keys(true);
                 let pool = SqlitePool::connect_with(options).await?;
-                sqlx::migrate!("./migrations").run(&pool).await?;
+                // Vor der Migration: Pre-Migration-Backup + Integritäts-Tor (Abbruch bei
+                // Schaden), danach Kontrolle via integrity_check/foreign_key_check.
+                let migrator = sqlx::migrate!("./migrations");
+                db_backup::before_migrations(&pool, &db_path, &migrator).await?;
+                migrator.run(&pool).await?;
+                db_backup::verify_after_migrations(&pool).await?;
                 Ok::<SqlitePool, Box<dyn std::error::Error>>(pool)
             })?;
             app.manage(AppState { db: pool.clone() });
