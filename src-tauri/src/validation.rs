@@ -83,6 +83,7 @@ pub fn validate_subscription_fields(
 /// Erlaubte Einheiten für die Kündigungsfrist (cancel_mode = "period").
 pub const CANCEL_PERIOD_UNITS: [&str; 3] = ["days", "weeks", "months"];
 /// Obergrenze für die Kündigungsfrist (Sanity-Limit, gilt für jede Einheit).
+/// Gespiegelt im Frontend: `MAX_CANCEL_PERIOD_VALUE` in `src/components/SubscriptionDialog.tsx` — bei Änderung beide anpassen.
 pub const MAX_CANCEL_PERIOD_VALUE: i64 = 730;
 
 /// Prüft die optionalen Kündigungsangaben auf Konsistenz. Die drei gültigen Zustände:
