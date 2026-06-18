@@ -88,6 +88,8 @@ SubTracked ist bewusst als lokale Desktop-App gebaut:
 
 Das passt zur Domäne: Abo- und Kontodaten sind private Finanzdaten. Die App soll dir helfen, sie im Blick zu behalten, ohne sie irgendwo hochzuladen.
 
+Details dazu, was wo gespeichert wird, stehen in [PRIVACY.md](PRIVACY.md); das Sicherheitsmodell und der Melde-Weg für Lücken in [SECURITY.md](SECURITY.md).
+
 ### Datensicherung & Wiederherstellung
 
 Schema-Migrationen sind der heikelste Moment für die lokale Datenbank. Vor **jeder** ausstehenden Migration legt SubTracked deshalb automatisch einen konsistenten Snapshot an (`VACUUM INTO`, WAL-sicher) und prüft die DB mit `PRAGMA integrity_check`. Ist die Datenbank bereits beschädigt, wird die Migration **nicht** ausgeführt und der Start abgebrochen — das beschädigte File wird aber trotzdem noch gesichert. Nach der Migration laufen `integrity_check` und `foreign_key_check` als Kontrolle (Auffälligkeiten landen im Log).
