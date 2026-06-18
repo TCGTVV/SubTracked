@@ -9,6 +9,44 @@
 
 ---
 
+## 2026-06-18 — Claude: Dependency-Audit-Stand gesichtet + im Backlog vermerkt
+
+> Kein Code/keine Doku-Datei geändert außer BACKLOG — User fragte, ob „immer neueste Versionen" sinnvoll ist und wie der aktuelle Stand ist. Ergebnis als Unterpunkt unter dem offenen P0-Item „Dependency-/Security-Automatik in CI" festgehalten.
+
+### Befund (`pnpm audit`, `pnpm outdated`)
+
+- **3 Audit-Funde, alle dev-/build-only** — landen NICHT im ausgelieferten App-Binary (Tauri liefert Rust-Kern + gebaute Webview-Assets, nicht vite/esbuild/vitest/jsdom/undici): `undici` **high** (TLS-Cert-Bypass) + **moderate** (Info-Disclosure) via `vitest → jsdom`; `esbuild` **low** (Datei-Lesen über Dev-Server) via `vite`. Nutzer-Risiko effektiv null, Restrisiko nur Dev-Rechner. Fix: vitest/vite bumpen bzw. `pnpm.overrides` (undici ≥7.28.0, esbuild ≥0.28.1).
+- **lefthook 2.1.9 = aktuell.** Einige Deps hängen zurück (Patch/Minor: @tauri-apps/api, vitest, biome, lucide, radix; **Major**: TypeScript 6, Vite 8, plugin-react 6) — Majors bewusst NICHT mitziehen.
+- `cargo-audit`/`cargo-outdated` lokal nicht installiert.
+
+### Linie (mit User besprochen)
+
+- „Unterstützte Versionen" in SECURITY.md = SubTracked-**Releases** (newest only), nicht Dependencies — für ein Solo-0.x-Projekt korrekt.
+- Dependency-Politik: Patches/Minors (Security) zeitnah, **Majors gezielt/getestet**. „Veraltet ≠ verwundbar". Der echte Hebel ist die CI-Automatik (BACKLOG-P0), nicht manuelles Hinterherrennen.
+
+---
+
+## 2026-06-18 — Claude: SECURITY.md + PRIVACY.md (P0-Härtung, Doku)
+
+> BACKLOG-P0-Punkt „SECURITY.md + Privacy/Threat-Model" umgesetzt. Vorab im Backlog vom Geschwister-Punkt **SHA256-Checksummen je Release-Asset** getrennt (der bleibt offen — nur an einem echten Tag-Push verifizierbar, daher an den nächsten Release gekoppelt). **User-Entscheidung:** Melde-Weg = GitHub Security Advisories (privat) + E-Mail-Fallback.
+
+### Was passierte (reine Doku, kein Code)
+
+- **[SECURITY.md](SECURITY.md):** unterstützte Versionen (nur jeweils neuestes Release, 0.x ohne Backports), Melde-Weg (privates GitHub-„Report a vulnerability" + Fallback `elreydelorbe@pm.me`), Reaktions-Erwartung (Best Effort, Eingangsbestätigung ~7 Tage, kein SLA), Sicherheitsmodell. Threat-Model bewusst kurz, weil local-first: Transport-/Server-Angriffsfläche entfällt; reale Restrisiken = unsignierte Builds, Klartext-Backup, lokaler Dateizugriff, gebündelte Dependencies. Diese sind als Roadmap-Punkte markiert (Signing, Backup-Verschlüsselung, Dependency-Scanning).
+- **[PRIVACY.md](PRIVACY.md):** „nichts wird gesammelt" (keine Telemetrie/Analytics/Tracker), was wo gespeichert wird je OS (`com.tcgtvv.subtracked`-Verzeichnis, `subtracker.db`, `backups/`, Logs 7 Tage), keine Netzwerkverbindungen im Normalbetrieb, vollständige Löschung = Verzeichnis entfernen.
+- Beide aus [README](README.md) („Lokal-first") verlinkt.
+
+### Offen / TODO User
+
+- **„Private vulnerability reporting" im GitHub-Repo aktivieren** (Settings → Security), sonst läuft der Advisory-Link in SECURITY.md ins Leere.
+- Geschwister-Punkt **SHA256-Checksummen** (neuer `release.yml`-Job `needs: publish`, `gh release download`/`upload` auf den Draft) bleibt für den nächsten echten Release.
+
+### Verifikation
+
+- Keine Tests nötig (reine Markdown-Doku). Pfade/Versions-Bezüge gegen den realen Stand geprüft (DB unter `~/Library/Application Support/com.tcgtvv.subtracked/`, Log-Retention 7 Tage aus lib.rs, aktuelles Release `v0.2.1`).
+
+---
+
 ## 2026-06-18 — Claude: Release v0.2.1
 
 > Patch-Release mit den heutigen Änderungen. Version in [package.json](package.json), [Cargo.toml](src-tauri/Cargo.toml), [tauri.conf.json](src-tauri/tauri.conf.json) auf **0.2.1** gebumpt (Cargo.lock via `cargo check` mitgezogen), README-Status + Download-Beispiele auf 0.2.1 aktualisiert (historische „v0.2.0 brachte…"-Zeile bewusst belassen). Tag `v0.2.1` getriggert den Release-Build (`release.yml`, `on: push tags v*`).
