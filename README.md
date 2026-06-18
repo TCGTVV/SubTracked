@@ -88,24 +88,32 @@ SubTracked ist bewusst als lokale Desktop-App gebaut:
 
 Das passt zur Domäne: Abo- und Kontodaten sind private Finanzdaten. Die App soll dir helfen, sie im Blick zu behalten, ohne sie irgendwo hochzuladen.
 
+### Datensicherung & Wiederherstellung
+
+Schema-Migrationen sind der heikelste Moment für die lokale Datenbank. Vor **jeder** ausstehenden Migration legt SubTracked deshalb automatisch einen konsistenten Snapshot an (`VACUUM INTO`, WAL-sicher) und prüft die DB mit `PRAGMA integrity_check`. Ist die Datenbank bereits beschädigt, wird die Migration **nicht** ausgeführt und der Start abgebrochen — das beschädigte File wird aber trotzdem noch gesichert. Nach der Migration laufen `integrity_check` und `foreign_key_check` als Kontrolle (Auffälligkeiten landen im Log).
+
+- **Ablageort:** `<App-Konfig-Verzeichnis>/backups/subtracker-pre-migrate-<zeitstempel>.db` (macOS: `~/Library/Application Support/com.tcgtvv.subtracked/`, Linux: `~/.config/com.tcgtvv.subtracked/` bzw. `~/.local/share/...`). Die letzten 5 Backups werden behalten, ältere automatisch gelöscht.
+- **Wiederherstellen:** App schließen → in `backups/` die gewünschte `subtracker-pre-migrate-<zeitstempel>.db` nach oben kopieren und in `subtracker.db` umbenennen (vorhandene `subtracker.db`, `subtracker.db-wal`, `subtracker.db-shm` vorher entfernen oder zur Seite legen) → App neu starten.
+- Zusätzlich kannst du jederzeit über **Einstellungen → Backup** einen vollständigen JSON-Export/-Import deiner Daten machen.
+
 ## Status
 
-Funktionale, aktiv genutzte Version (Stand 2026-06-16, aktuelles Release `v0.2.0`). Entwickelt und täglich genutzt auf Linux (KDE/CachyOS). Windows und macOS werden vor jedem Release per Smoke-Test geprüft.
+Funktionale, aktiv genutzte Version (Stand 2026-06-18, aktuelles Release `v0.2.1`). Entwickelt und täglich genutzt auf Linux (KDE/CachyOS). Windows und macOS werden vor jedem Release per Smoke-Test geprüft.
 
-`v0.2.0` brachte einen kompletten UI-Overhaul (Dashboard-Layout, Hell-/Dunkel-Modus, neues Branding) sowie variable Intervalle und Kündigungsfristen. Die Installer werden über GitHub Actions für Linux, Windows und macOS gebaut und als GitHub-Release veröffentlicht.
+`v0.2.0` brachte einen kompletten UI-Overhaul (Dashboard-Layout, Hell-/Dunkel-Modus, neues Branding) sowie variable Intervalle und Kündigungsfristen. `v0.2.1` ergänzt einen Abo-Kosten-Überblick (€/Monat · €/Jahr, teuerste Abos, Aufschlüsselung nach Kategorie) und härtet die Datensicherheit: automatisches Backup samt Integritätsprüfung vor jeder Schema-Migration. Die Installer werden über GitHub Actions für Linux, Windows und macOS gebaut und als GitHub-Release veröffentlicht.
 
 ## Download
 
-Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases/latest). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen. Die Dateinamen tragen jeweils die aktuelle Versionsnummer (unten am Beispiel `0.2.0`).
+Die aktuellen Installer findest du auf der [GitHub-Releases-Seite](https://github.com/TCGTVV/SubTracked/releases/latest). Für normale Nutzung brauchst du **nicht** aus dem Quellcode zu bauen. Die Dateinamen tragen jeweils die aktuelle Versionsnummer (unten am Beispiel `0.2.1`).
 
 | System | Empfohlener Download | Hinweis |
 | --- | --- | --- |
-| **Windows** | `SubTracked_0.2.0_x64_en-US.msi` | Alternativ `SubTracked_0.2.0_x64-setup.exe`. |
-| **macOS Apple Silicon** | `SubTracked_0.2.0_aarch64.dmg` | Für Macs mit M1/M2/M3/M4. |
-| **macOS Intel** | `SubTracked_0.2.0_x64.dmg` | Für ältere Intel-Macs. |
-| **Linux Debian/Ubuntu** | `SubTracked_0.2.0_amd64.deb` | Für Debian-, Ubuntu- und verwandte Systeme. |
-| **Linux Fedora/openSUSE/RHEL** | `SubTracked-0.2.0-1.x86_64.rpm` | Für RPM-basierte Distributionen. |
-| **Linux universell** | `SubTracked_0.2.0_amd64.AppImage` | Kann ohne Installation gestartet werden. |
+| **Windows** | `SubTracked_0.2.1_x64_en-US.msi` | Alternativ `SubTracked_0.2.1_x64-setup.exe`. |
+| **macOS Apple Silicon** | `SubTracked_0.2.1_aarch64.dmg` | Für Macs mit M1/M2/M3/M4. |
+| **macOS Intel** | `SubTracked_0.2.1_x64.dmg` | Für ältere Intel-Macs. |
+| **Linux Debian/Ubuntu** | `SubTracked_0.2.1_amd64.deb` | Für Debian-, Ubuntu- und verwandte Systeme. |
+| **Linux Fedora/openSUSE/RHEL** | `SubTracked-0.2.1-1.x86_64.rpm` | Für RPM-basierte Distributionen. |
+| **Linux universell** | `SubTracked_0.2.1_amd64.AppImage` | Kann ohne Installation gestartet werden. |
 
 ### Hinweis zu unsignierten Builds
 
