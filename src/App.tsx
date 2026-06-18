@@ -2,6 +2,7 @@ import { Archive, ArchiveRestore, CalendarX, Pencil, Plus, Trash2, Wallet } from
 import { type ReactNode, useMemo, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { AppSidebar, type DashboardView } from "./components/AppSidebar";
+import { CostSummarySection } from "./components/CostSummarySection";
 import { IncomeDialog } from "./components/IncomeDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
@@ -339,6 +340,7 @@ function App() {
                   incomes={activeIncomes}
                 />
               )}
+              {activeSubs.length > 0 && <CostSummarySection subscriptions={activeSubs} />}
               {hasActiveCashflow && (
                 <UpcomingSection
                   subscriptions={activeSubs}

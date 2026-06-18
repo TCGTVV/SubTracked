@@ -9,6 +9,27 @@
 
 ---
 
+## 2026-06-18 — Claude: Abo-Kosten-Überblick
+
+> Feature-Roadmap #3 „Abo-Kosten-Überblick" umgesetzt — **reines Frontend** (kein Rust/DB/Migration, Kategorie-Spalte existierte schon aus dem Kategorien-Feature). User-Sicht-Check erteilt.
+
+### Was passierte
+
+- **Logik:** neue reine Funktion `computeCostSummary(subscriptions, topN = 5)` in [coverage.ts](src/lib/coverage.ts) + Interfaces `CurrencyCostSummary`/`CategoryCost`/`TopSubscriptionCost`. Nutzt das bestehende (private) `monthlyEquivalentCents`. **Pro Währung getrennt** summiert (gleiche Konvention wie `computeCoverage`/`computeMonthlyBaseline` — keine heimliche Umrechnung). Jahr = Monat × 12 (konsistent mit der Monatszahl). Liefert: Monats-/Jahressumme, `subscriptionCount`, `top` (teuerste Abos auf Monatsbasis, absteigend, auf topN gekürzt), `categories` (Aufschlüsselung, `null` = ohne Kategorie, absteigend). Nur-aktive-Subs ist Aufrufer-Verantwortung (wie `computeUpcoming`, im Doc vermerkt).
+- **UI:** neue [CostSummarySection.tsx](src/components/CostSummarySection.tsx), in [App.tsx](src/App.tsx) in der Overview-View **direkt unter StatusCard, über UpcomingSection** gerendert (`activeSubs.length > 0`). Karte pro Währung: große Kennzahl `…/Monat · …/Jahr` (`text-fluid-2xl`), „Teuerste Abos"-Liste, „Nach Kategorie"-Liste **erst ab > 1 Kategorie** (analog zur FilterBar-Logik). Mehrwährung → Titel bekommt `(WÄHRUNG)`-Suffix. Styling über bestehende Token (`bg-card`, `divide-y`, `tabular-nums` …), kein neues CSS.
+
+### Verifikation (alle grün)
+
+- `pnpm test:run` ✓ **231** (+12: 6 `computeCostSummary` in coverage.test.ts inkl. Intervall-Normierung/weekly/Währungstrennung/topN/Kategorie-Sortierung, 6 `CostSummarySection`), `pnpm build` ✓, `pnpm lint` ✓ (nur die **vorbestehende** `noUselessFragments`-Info in App.tsx:438 — nicht aus diesem Diff). Kein `cargo` nötig (kein Rust berührt).
+- Ein selbst eingeführtes `noUselessFragments` (Fragment im Titel) wurde gleich aufgelöst (Template-String statt `<>…</>`).
+
+### Nächster Schritt (Feature-Roadmap)
+
+- #1 ✅ Kündigung, #2 ✅ Kategorien, #3 ✅ Kosten-Überblick. **▶ NÄCHSTES: #4 Einmalige Ausgaben** (analog `incomes.one_time`, aber als Ausgabe — Migration + Rust + `coverage.ts`-Forecast + UI). BACKLOG „Geplante Features".
+- **Weiter offen (aus 0009/0010-Einträgen):** echter App-Start-Test, dass ein weekly/bimonthly-Abo sich speichern lässt (User-DB stand auf Migration 8, läuft beim nächsten Start auf 9–11 hoch).
+
+---
+
 ## 2026-06-18 — Claude: Kategorien/Tags für Abos
 
 > BACKLOG-Item „Kategorien/Tags für Abos" (war als #2 der Feature-Roadmap das NÄCHSTE) komplett umgesetzt — vertikaler Schnitt Migration → Rust → TS → UI → Tests. User-Entscheidung vorab: **Presets + Freitext** (Select mit gängigen Kategorien, eigene tippbar), Presets = Streaming / Versicherung / Hosting-Domains / Mobilfunk-Internet. User-Sicht-Check erteilt.

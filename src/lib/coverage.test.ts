@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Account, Income, Subscription } from "../types";
-import { computeCoverage, computeMonthlyBaseline, computeUpcoming } from "./coverage";
+import {
+  computeCostSummary,
+  computeCoverage,
+  computeMonthlyBaseline,
+  computeUpcoming,
+} from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   id: 1,
@@ -290,5 +295,66 @@ describe("computeUpcoming", () => {
       income({ name: "Alter Bonus", anchorDate: "2025-12-31", oneTime: true }),
     ]);
     expect(past).toHaveLength(0);
+  });
+});
+
+describe("computeCostSummary", () => {
+  it("liefert leeres Array ohne Abos", () => {
+    expect(computeCostSummary([])).toEqual([]);
+  });
+
+  it("normiert Intervalle auf Monats- und Jahresbasis", () => {
+    const result = computeCostSummary([
+      sub({ id: 1, amountCents: 1200, interval: "monthly" }),
+      sub({ id: 2, amountCents: 1200, interval: "yearly" }), // 100/Monat
+      sub({ id: 3, amountCents: 1300, interval: "quarterly" }), // ~433.33/Monat → round
+    ]);
+    expect(result).toHaveLength(1);
+    const eur = result[0];
+    expect(eur.currency).toBe("EUR");
+    expect(eur.subscriptionCount).toBe(3);
+    // 1200 + 100 + 433.33 = 1733.33 → 1733
+    expect(eur.monthlyCents).toBe(1733);
+    expect(eur.yearlyCents).toBe(Math.round((1200 + 1200 / 12 + 1300 / 3) * 12));
+  });
+
+  it("rechnet weekly/biweekly korrekt aufs Monatsmittel", () => {
+    const result = computeCostSummary([sub({ amountCents: 1000, interval: "weekly" })]);
+    // 1000 * 52 / 12 = 4333.33 → 4333
+    expect(result[0].monthlyCents).toBe(Math.round((1000 * 52) / 12));
+  });
+
+  it("trennt Währungen, summiert nicht über Kurse hinweg", () => {
+    const result = computeCostSummary([
+      sub({ id: 1, amountCents: 1000, currency: "EUR" }),
+      sub({ id: 2, amountCents: 500000, currency: "KRW" }),
+    ]);
+    expect(result.map((r) => r.currency).sort()).toEqual(["EUR", "KRW"]);
+    // Sortierung: höchster Monatsbetrag zuerst → KRW (500000) vor EUR (1000)
+    expect(result[0].currency).toBe("KRW");
+  });
+
+  it("listet die teuersten Abos absteigend, gekürzt auf topN", () => {
+    const subs = [
+      sub({ id: 1, name: "A", amountCents: 100 }),
+      sub({ id: 2, name: "B", amountCents: 900 }),
+      sub({ id: 3, name: "C", amountCents: 500 }),
+    ];
+    const result = computeCostSummary(subs, 2);
+    expect(result[0].top.map((t) => t.name)).toEqual(["B", "C"]);
+    expect(result[0].top).toHaveLength(2);
+  });
+
+  it("schlüsselt nach Kategorie auf (null = ohne Kategorie), absteigend", () => {
+    const result = computeCostSummary([
+      sub({ id: 1, amountCents: 300, category: "Streaming" }),
+      sub({ id: 2, amountCents: 700, category: "Streaming" }),
+      sub({ id: 3, amountCents: 500, category: null }),
+    ]);
+    const cats = result[0].categories;
+    expect(cats.map((c) => [c.category, c.monthlyCents, c.count])).toEqual([
+      ["Streaming", 1000, 2],
+      [null, 500, 1],
+    ]);
   });
 });
