@@ -30,11 +30,11 @@ pub async fn list_subscriptions(
     let only_active = only_active.unwrap_or(true);
     let sql = if only_active {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category \
          FROM subscriptions WHERE active = 1 ORDER BY name"
     } else {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category \
          FROM subscriptions ORDER BY name"
     };
     sqlx::query_as::<_, Subscription>(sql)
@@ -66,6 +66,7 @@ pub async fn add_subscription(
         &sub.interval,
         &sub.anchor_date,
         sub.lead_days,
+        sub.category.as_deref(),
     )?;
     validate_cancellation(
         sub.cancel_mode.as_deref(),
@@ -79,8 +80,8 @@ pub async fn add_subscription(
     let res = sqlx::query(
         "INSERT INTO subscriptions \
            (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, \
-            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&sub.name)
     .bind(sub.amount_cents)
@@ -95,6 +96,7 @@ pub async fn add_subscription(
     .bind(sub.cancel_period_value)
     .bind(&sub.cancel_period_unit)
     .bind(&sub.cancel_date)
+    .bind(&sub.category)
     .execute(&state.db)
     .await
     .map_err(|e| e.to_string())?;
@@ -254,6 +256,7 @@ pub(crate) async fn update_subscription_in_db(
         &sub.interval,
         &sub.anchor_date,
         sub.lead_days,
+        sub.category.as_deref(),
     )?;
     validate_cancellation(
         sub.cancel_mode.as_deref(),
@@ -280,7 +283,8 @@ pub(crate) async fn update_subscription_in_db(
             "UPDATE subscriptions \
              SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
-                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ? \
+                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
+                 category = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -296,6 +300,7 @@ pub(crate) async fn update_subscription_in_db(
         .bind(sub.cancel_period_value)
         .bind(&sub.cancel_period_unit)
         .bind(&sub.cancel_date)
+        .bind(&sub.category)
         .bind(sub.id)
         .execute(db)
         .await
@@ -305,7 +310,8 @@ pub(crate) async fn update_subscription_in_db(
             "UPDATE subscriptions \
              SET name = ?, amount_cents = ?, currency = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
-                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ? \
+                 cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
+                 category = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -320,6 +326,7 @@ pub(crate) async fn update_subscription_in_db(
         .bind(sub.cancel_period_value)
         .bind(&sub.cancel_period_unit)
         .bind(&sub.cancel_date)
+        .bind(&sub.category)
         .bind(sub.id)
         .execute(db)
         .await
@@ -631,6 +638,7 @@ mod tests {
             cancel_period_value: None,
             cancel_period_unit: None,
             cancel_date: None,
+            category: None,
         }
     }
 

@@ -112,6 +112,7 @@ describe("App", () => {
       cancelPeriodValue: null,
       cancelPeriodUnit: null,
       cancelDate: null,
+      category: null,
     };
     mockUseSubscriptions.mockReturnValue({
       subs: [archivedSub],

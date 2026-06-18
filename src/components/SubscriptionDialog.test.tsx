@@ -50,6 +50,7 @@ const existingSub: Subscription = {
   cancelPeriodValue: null,
   cancelPeriodUnit: null,
   cancelDate: null,
+  category: null,
 };
 
 function renderDialog(subscription: Subscription | null = null, onSaved = vi.fn()) {

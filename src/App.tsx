@@ -410,6 +410,7 @@ function App() {
                               <>archiviert</>
                             )}
                             {account && <> · {account}</>}
+                            {sub.category && <> · {sub.category}</>}
                             {sub.active && !sub.notify && <> · stumm</>}
                           </>
                         }

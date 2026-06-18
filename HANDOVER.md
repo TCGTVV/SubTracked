@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-06-18 — Claude: Kategorien/Tags für Abos
+
+> BACKLOG-Item „Kategorien/Tags für Abos" (war als #2 der Feature-Roadmap das NÄCHSTE) komplett umgesetzt — vertikaler Schnitt Migration → Rust → TS → UI → Tests. User-Entscheidung vorab: **Presets + Freitext** (Select mit gängigen Kategorien, eigene tippbar), Presets = Streaming / Versicherung / Hosting-Domains / Mobilfunk-Internet. User-Sicht-Check erteilt.
+
+### Datenmodell
+
+- Eine optionale Spalte `category TEXT` an `subscriptions` (NULL = keine). **Bewusst kein CHECK/keine Whitelist** — Freitext muss möglich bleiben; die Presets sind reine Frontend-Vorschläge.
+- **Migration `0011_subscription_category.sql`**: simples `ALTER TABLE ADD COLUMN` (kein Tabellen-Rebuild → kein FK-787-Risiko, kein `-- no-transaction` nötig). Bestandszeilen bekommen NULL.
+
+### Was passierte
+
+- **Rust:** `category: Option<String>` in `Subscription` + `NewSubscription` (db.rs). Neue `validate_category` + `MAX_CATEGORY_LENGTH = 60` (validation.rs, reine Längen-Sanity), eingehängt als 7. Parameter in `validate_subscription_fields` → greift automatisch in add/update **und** restore_backup.
+- **Alle SQL-Pfade durchgezogen:** list-SELECTs (×2), INSERT, beide UPDATE-Branches (commands.rs), collect-SELECT + restore-INSERT (backup.rs) und — der kritische — der `query_as::<Subscription>`-SELECT in **reminders.rs**. Genau dort entstand beim 0008-Feature der „Notifications komplett tot"-Bug, weil der SELECT eine neue Spalte nicht mitlud; diesmal von Anfang an mitgezogen.
+- **TS:** `category: string | null` in `types.ts`. `db.ts` brauchte **nichts** — reiner String ohne Narrowing, fließt durch `...s` und die Omit-Wrapper.
+- **Dialog (SubscriptionDialog.tsx):** Kategorie-Sektion zwischen Konto und Intervall. Select mit Sentinels `NO_CATEGORY`/`CUSTOM_CATEGORY` + Preset-Items; bei „Eigene…" erscheint ein Textfeld (`categoryCustom`). Init narrowed Bestandswert auf Preset vs. Freitext. Längen-Validierung + Fokus-Kette wie bei den anderen Feldern. `MAX_CATEGORY_LENGTH` ist hier gespiegelt (parallel zu Rust, wie bei `MAX_CANCEL_PERIOD_VALUE`).
+- **Filter:** `category` in `SubListOptions` + Filterlogik + neuer `uniqueCategories`-Helper (subscription-list.ts); Kategorie-Select in der FilterBar, **nur sichtbar ab > 1 vorkommender Kategorie** (gleiche Logik wie der Währungsfilter).
+- **Anzeige:** `· Kategorie` in der Abo-Card-Subtitle (App.tsx), analog zu `· Konto`.
+
+### Verifikation (alle grün)
+
+- `cargo test` ✓ **66** (+`category_validation`), `cargo clippy -D warnings` ✓, `cargo fmt` ✓.
+- `pnpm test:run` ✓ **219** (+3: Kategorie-Filter, `uniqueCategories`), `pnpm build` ✓, `pnpm lint` ✓ (nur bekanntes `noUselessFragments`-Info).
+- **Test-Sub-Builder in 10 TS-Files** um `category: null` ergänzt (Regex-Insert mit erhaltener Einrückung; recurrence-vectors.test.ts hat ein Inline-Objekt statt Builder → separat).
+- **Migrationskette gegen Kopie der echten DB** (stand auf Migration **8**, 3 Abos): 0009→0010→0011 alle OK, `category`-Spalte da, weekly-Insert mit Kategorie funktioniert, Daten erhalten. Deckt nebenbei die SQL-Ebene von BACKLOG-Item „Migrationsstand verifizieren" ab — der App-Start-Test (echtes Speichern eines weekly/bimonthly-Abos durch den User) steht weiterhin aus.
+
+### Nächster Schritt (Feature-Roadmap)
+
+- #2 ✅ Kategorien. **▶ NÄCHSTES: #3 Abo-Kosten-Überblick** (jetzt mit Kategorie-Aufschlüsselung möglich). Danach #4 Einmalige Ausgaben. Beide im BACKLOG unter „Geplante Features".
+
+---
+
 ## 2026-06-16 — Claude: Kündigungs-Erinnerungen + Notification-Bugfix
 
 > Erstes von vier vom User gewünschten Features (Feature-Roadmap, siehe „Nächste Schritte" unten). User-Sicht-Check für #1 erteilt. **Enthält einen kritischen Bugfix.**

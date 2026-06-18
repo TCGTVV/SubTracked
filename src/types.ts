@@ -54,6 +54,8 @@ export interface Subscription {
   cancelPeriodUnit: CancelUnit | null;
   /** Festes Stichdatum (ISO "YYYY-MM-DD") bei cancelMode === "date", sonst null. */
   cancelDate: string | null;
+  /** Optionale Kategorie (Freitext, Presets im Dialog); null = keine. */
+  category: string | null;
 }
 
 export interface PriceHistoryEntry {

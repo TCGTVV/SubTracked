@@ -66,6 +66,8 @@ pub struct Subscription {
     pub cancel_period_value: Option<i64>,
     pub cancel_period_unit: Option<String>,
     pub cancel_date: Option<String>,
+    /// Optionale Kategorie (Freitext, Presets im Frontend); None = keine.
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
@@ -126,6 +128,8 @@ pub struct NewSubscription {
     pub cancel_period_value: Option<i64>,
     pub cancel_period_unit: Option<String>,
     pub cancel_date: Option<String>,
+    /// Optionale Kategorie (Freitext, Presets im Frontend); None = keine.
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
