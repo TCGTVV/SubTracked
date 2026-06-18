@@ -9,6 +9,26 @@
 
 ---
 
+## 2026-06-18 — Claude: Branch-Protection-Ruleset `protect-main` für `main`
+
+> User: GitHub meldete `main` als „unprotected" (ausgelöst durch die frisch von Codex aktivierte Dependabot-Automatik, die PRs gegen `main` öffnet). User wollte ein Ruleset, das sicherstellt: nur er mergt, alles läuft über ihn.
+
+### Umgesetzt: Ruleset via GitHub-API (kein Repo-Commit)
+
+- Angelegt per `gh api -X POST repos/{owner}/{repo}/rulesets` → Ruleset **`protect-main`** (ID `17858352`), `enforcement: active`, Target `~DEFAULT_BRANCH`.
+- Regeln: `pull_request` (kein Direkt-Push), `required_approving_review_count: 0` (bewusst 0 — Solo-Dev kann eigene PRs nicht approven, sonst Selbst-Lockout), `required_status_checks` (`Lint, Tests, Cargo` · `cargo audit` · `pnpm audit`), `non_fast_forward` (kein Force-Push), `deletion` (nicht löschbar).
+- Bypass: `RepositoryRole` Admin (User), `bypass_mode: always` — User bleibt nie ausgesperrt. User hat strengere Variante (nur PR-Bypass) **explizit abgelehnt**.
+- Pflicht-Check-Namen sind die Job-Namen (nicht Workflow-Namen): exakt `Lint, Tests, Cargo` (aus `checks.yml`), `cargo audit` + `pnpm audit` (aus `security.yml`). Beide Workflows triggern auf `pull_request` → laufen bei jedem PR.
+
+### Hinweis: roter Dependabot-PR `js-patch-minor` ist KEIN CVE
+
+- `Checks`/`Security` failen am `pnpm install --frozen-lockfile`-Schritt: `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION` — `lucide-react@1.21.0` (publ. 2026-06-18 06:57) ist der `minimumReleaseAge`-Cooldown-Policy (`pnpm-workspace.yaml`, von Codex) noch zu frisch.
+- Kein Handlungsbedarf: nach Ablauf des Cooldowns (~24 h) Checks re-runnen → grün → mergen, oder PR schließen (Dependabot legt ihn gealtert neu an).
+
+### Offen / nicht gemacht
+
+- Dependabot **security updates** weiterhin `disabled` (nur Version-Updates aktiv) — User noch nicht entschieden, ob aktivieren.
+
 ## 2026-06-18 — Codex: Abschluss P0-Härtung CI/Release/Backup + Serena-Setup
 
 > Abschluss-/Commit-Handover für diese Codex-Session. User bat erst um Serena-Aktivierung, dann um BACKLOG-Zeilen 192, 193, 194, anschließend „handover detailliert dokumentieren und dann commit und push".
