@@ -43,6 +43,16 @@ function incomeDatesWithin(income: Income, from: Date, until: Date): Date[] {
   return anchor >= from && anchor <= until ? [anchor] : [];
 }
 
+/** Fälligkeitstermine eines Abos im Fenster. Einmalige Ausgaben (`oneTime`) liefern
+ *  genau die anchorDate-Buchung, sonst die Wiederholung. Spiegelbild zu
+ *  {@link incomeDatesWithin}. */
+function subscriptionDatesWithin(sub: Subscription, from: Date, until: Date): Date[] {
+  const anchor = parseStrictISODate(sub.anchorDate);
+  if (!anchor) return [];
+  if (!sub.oneTime) return dueDatesWithin(anchor, sub.interval, from, until);
+  return anchor >= from && anchor <= until ? [anchor] : [];
+}
+
 function monthlyEquivalentCents(sub: Subscription): number {
   if (sub.interval === "weekly") return (sub.amountCents * 52) / 12;
   if (sub.interval === "biweekly") return (sub.amountCents * 26) / 12;
@@ -124,9 +134,7 @@ export function computeCoverage(
     }
 
     const list = itemsByBucket.get(key) ?? [];
-    const anchor = parseStrictISODate(sub.anchorDate);
-    if (!anchor) continue;
-    for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
+    for (const d of subscriptionDatesWithin(sub, from, until)) {
       list.push({
         type: "outflow",
         subscriptionId: sub.id,
@@ -232,6 +240,8 @@ export function computeMonthlyBaseline(
   const buckets = new Map<string, MonthlyBaseline>();
 
   for (const sub of subscriptions) {
+    // Einmalige Ausgaben sind keine monatlich gebundenen Fixkosten -> nicht einrechnen.
+    if (sub.oneTime) continue;
     const account = sub.accountId != null ? accById.get(sub.accountId) : undefined;
     const label = account ? account.name : UNASSIGNED_LABEL;
     const currency = sub.currency;
@@ -295,6 +305,8 @@ export function computeCostSummary(subscriptions: Subscription[], topN = 5): Cur
   >();
 
   for (const sub of subscriptions) {
+    // Einmalige Ausgaben haben kein Monatsäquivalent -> aus dem Kosten-Überblick raushalten.
+    if (sub.oneTime) continue;
     const monthly = monthlyEquivalentCents(sub);
     let entry = byCurrency.get(sub.currency);
     if (!entry) {
@@ -366,9 +378,7 @@ export function computeUpcoming(
   for (const sub of subscriptions) {
     const accountName =
       sub.accountId != null ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)") : null;
-    const anchor = parseStrictISODate(sub.anchorDate);
-    if (!anchor) continue;
-    for (const d of dueDatesWithin(anchor, sub.interval, from, until)) {
+    for (const d of subscriptionDatesWithin(sub, from, until)) {
       items.push({
         type: "outflow",
         subscriptionId: sub.id,

@@ -167,6 +167,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const [currency, setCurrency] = useState<string>(subscription?.currency ?? "EUR");
   const [accountId, setAccountId] = useState<number | null>(subscription?.accountId ?? null);
   const [interval, setInterval] = useState<Interval>(subscription?.interval ?? "monthly");
+  const [oneTime, setOneTime] = useState(subscription?.oneTime ?? false);
   const [anchorDate, setAnchorDate] = useState(subscription?.anchorDate ?? todayISO());
   const [leadDays, setLeadDays] = useState(subscription?.leadDays ?? 60);
   const [notify, setNotify] = useState(subscription?.notify ?? true);
@@ -290,6 +291,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
         currency,
         accountId,
         interval,
+        oneTime,
         anchorDate,
         leadDays,
         notify,
@@ -478,25 +480,47 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`${anchorId}-interval`}>Intervall</Label>
-              <Select value={interval} onValueChange={(v) => setInterval(v as Interval)}>
-                <SelectTrigger id={`${anchorId}-interval`} className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTERVAL_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2.5">
+              <Checkbox
+                id={`${anchorId}-onetime`}
+                checked={oneTime}
+                onCheckedChange={(checked) => {
+                  const on = checked === true;
+                  setOneTime(on);
+                  if (on) {
+                    setInterval("monthly");
+                    setCancelMode(NO_CANCEL);
+                    clearFieldError("cancelPeriod");
+                    clearFieldError("cancelDate");
+                  }
+                }}
+              />
+              <Label htmlFor={`${anchorId}-onetime`} className="font-medium">
+                Einmalige Ausgabe
+              </Label>
             </div>
+
+            {!oneTime && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`${anchorId}-interval`}>Intervall</Label>
+                <Select value={interval} onValueChange={(v) => setInterval(v as Interval)}>
+                  <SelectTrigger id={`${anchorId}-interval`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERVAL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="grid grid-cols-[1fr_auto] gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor={anchorId}>Erste Fälligkeit</Label>
+                <Label htmlFor={anchorId}>{oneTime ? "Datum" : "Erste Fälligkeit"}</Label>
                 <DateField
                   id={anchorId}
                   buttonRef={anchorRef}
@@ -555,112 +579,114 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
               </Label>
             </div>
 
-            <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
-              <div className="flex flex-col gap-1.5">
-                <Label
-                  htmlFor={`${anchorId}-cancel-mode`}
-                  className="flex items-center gap-1.5 font-medium"
-                >
-                  <CalendarX className="size-4 text-muted-foreground" />
-                  Kündigung
-                </Label>
-                <Select
-                  value={cancelMode}
-                  onValueChange={(v) => {
-                    setCancelMode(v as typeof NO_CANCEL | CancelMode);
-                    clearFieldError("cancelPeriod");
-                    clearFieldError("cancelDate");
-                  }}
-                >
-                  <SelectTrigger id={`${anchorId}-cancel-mode`} className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_CANCEL}>Keine Kündigung tracken</SelectItem>
-                    <SelectItem value="period">Kündigungsfrist (vor Fälligkeit)</SelectItem>
-                    <SelectItem value="date">Festes Kündigungsdatum</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {cancelMode === "period" && (
-                <div className="grid grid-cols-[6rem_1fr] gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={`${anchorId}-cancel-value`}>Frist</Label>
-                    <Input
-                      id={`${anchorId}-cancel-value`}
-                      ref={cancelPeriodRef}
-                      type="number"
-                      min={1}
-                      max={MAX_CANCEL_PERIOD_VALUE}
-                      step={1}
-                      value={cancelPeriodValue}
-                      onChange={(e) => {
-                        setCancelPeriodValue(Number(e.target.value));
-                        clearFieldError("cancelPeriod");
-                      }}
-                      aria-invalid={!!errors.cancelPeriod}
-                      aria-describedby={errors.cancelPeriod ? cancelPeriodErrorId : undefined}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={`${anchorId}-cancel-unit`}>Einheit</Label>
-                    <Select
-                      value={cancelPeriodUnit}
-                      onValueChange={(v) => setCancelPeriodUnit(v as CancelUnit)}
-                    >
-                      <SelectTrigger id={`${anchorId}-cancel-unit`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="days">Tage</SelectItem>
-                        <SelectItem value="weeks">Wochen</SelectItem>
-                        <SelectItem value="months">Monate</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {errors.cancelPeriod && (
-                    <p
-                      id={cancelPeriodErrorId}
-                      className="col-span-2 text-sm text-destructive"
-                      role="alert"
-                    >
-                      {errors.cancelPeriod}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {cancelMode === "date" && (
+            {!oneTime && (
+              <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${anchorId}-cancel-date`}>Kündigen bis</Label>
-                  <DateField
-                    id={`${anchorId}-cancel-date`}
-                    buttonRef={cancelDateRef}
-                    value={cancelDate}
-                    onChange={(value) => {
-                      setCancelDate(value);
+                  <Label
+                    htmlFor={`${anchorId}-cancel-mode`}
+                    className="flex items-center gap-1.5 font-medium"
+                  >
+                    <CalendarX className="size-4 text-muted-foreground" />
+                    Kündigung
+                  </Label>
+                  <Select
+                    value={cancelMode}
+                    onValueChange={(v) => {
+                      setCancelMode(v as typeof NO_CANCEL | CancelMode);
+                      clearFieldError("cancelPeriod");
                       clearFieldError("cancelDate");
                     }}
-                    ariaInvalid={errors.cancelDate ? true : undefined}
-                    ariaDescribedBy={errors.cancelDate ? cancelDateErrorId : undefined}
-                  />
-                  {errors.cancelDate && (
-                    <p id={cancelDateErrorId} className="text-sm text-destructive" role="alert">
-                      {errors.cancelDate}
-                    </p>
-                  )}
+                  >
+                    <SelectTrigger id={`${anchorId}-cancel-mode`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CANCEL}>Keine Kündigung tracken</SelectItem>
+                      <SelectItem value="period">Kündigungsfrist (vor Fälligkeit)</SelectItem>
+                      <SelectItem value="date">Festes Kündigungsdatum</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
 
-              <p className="text-xs text-muted-foreground">
-                {cancelMode === "period"
-                  ? "Die App berechnet das Kündigungsdatum automatisch aus der nächsten Fälligkeit minus Frist."
-                  : cancelMode === "date"
-                    ? "Fester Stichtag, bis zu dem gekündigt werden muss."
-                    : "Optional: Frist oder Stichtag tracken, um eine Kündigung nicht zu verpassen."}
-              </p>
-            </div>
+                {cancelMode === "period" && (
+                  <div className="grid grid-cols-[6rem_1fr] gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`${anchorId}-cancel-value`}>Frist</Label>
+                      <Input
+                        id={`${anchorId}-cancel-value`}
+                        ref={cancelPeriodRef}
+                        type="number"
+                        min={1}
+                        max={MAX_CANCEL_PERIOD_VALUE}
+                        step={1}
+                        value={cancelPeriodValue}
+                        onChange={(e) => {
+                          setCancelPeriodValue(Number(e.target.value));
+                          clearFieldError("cancelPeriod");
+                        }}
+                        aria-invalid={!!errors.cancelPeriod}
+                        aria-describedby={errors.cancelPeriod ? cancelPeriodErrorId : undefined}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`${anchorId}-cancel-unit`}>Einheit</Label>
+                      <Select
+                        value={cancelPeriodUnit}
+                        onValueChange={(v) => setCancelPeriodUnit(v as CancelUnit)}
+                      >
+                        <SelectTrigger id={`${anchorId}-cancel-unit`} className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="days">Tage</SelectItem>
+                          <SelectItem value="weeks">Wochen</SelectItem>
+                          <SelectItem value="months">Monate</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {errors.cancelPeriod && (
+                      <p
+                        id={cancelPeriodErrorId}
+                        className="col-span-2 text-sm text-destructive"
+                        role="alert"
+                      >
+                        {errors.cancelPeriod}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {cancelMode === "date" && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={`${anchorId}-cancel-date`}>Kündigen bis</Label>
+                    <DateField
+                      id={`${anchorId}-cancel-date`}
+                      buttonRef={cancelDateRef}
+                      value={cancelDate}
+                      onChange={(value) => {
+                        setCancelDate(value);
+                        clearFieldError("cancelDate");
+                      }}
+                      ariaInvalid={errors.cancelDate ? true : undefined}
+                      ariaDescribedBy={errors.cancelDate ? cancelDateErrorId : undefined}
+                    />
+                    {errors.cancelDate && (
+                      <p id={cancelDateErrorId} className="text-sm text-destructive" role="alert">
+                        {errors.cancelDate}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <p className="text-xs text-muted-foreground">
+                  {cancelMode === "period"
+                    ? "Die App berechnet das Kündigungsdatum automatisch aus der nächsten Fälligkeit minus Frist."
+                    : cancelMode === "date"
+                      ? "Fester Stichtag, bis zu dem gekündigt werden muss."
+                      : "Optional: Frist oder Stichtag tracken, um eine Kündigung nicht zu verpassen."}
+                </p>
+              </div>
+            )}
 
             {error && (
               <Alert variant="destructive">

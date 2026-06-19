@@ -56,6 +56,9 @@ export interface Subscription {
   cancelDate: string | null;
   /** Optionale Kategorie (Freitext, Presets im Dialog); null = keine. */
   category: string | null;
+  /** Einmalige Ausgabe: true = einzelne Buchung am anchorDate (Intervall/Kündigung
+   * ignoriert), false = wiederkehrend. Analog zu Income.oneTime. */
+  oneTime: boolean;
 }
 
 export interface PriceHistoryEntry {

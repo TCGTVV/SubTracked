@@ -407,12 +407,15 @@ function App() {
                         subtitle={
                           <>
                             {sub.active ? (
-                              <>nächste Fälligkeit: {formatNextDue(sub)}</>
+                              <>
+                                {sub.oneTime ? "Datum" : "nächste Fälligkeit"}: {formatNextDue(sub)}
+                              </>
                             ) : (
                               <>archiviert</>
                             )}
                             {account && <> · {account}</>}
                             {sub.category && <> · {sub.category}</>}
+                            {sub.oneTime && <> · einmalig</>}
                             {sub.active && !sub.notify && <> · stumm</>}
                           </>
                         }

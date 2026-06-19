@@ -68,7 +68,7 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     let subscriptions = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category FROM subscriptions ORDER BY id",
+         cancel_date, category, one_time FROM subscriptions ORDER BY id",
     )
     .fetch_all(db)
     .await
@@ -300,8 +300,8 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify, cancel_mode, cancel_period_value, \
-                cancel_period_unit, cancel_date, category) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                cancel_period_unit, cancel_date, category, one_time) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(s.id)
         .bind(&s.name)
@@ -318,6 +318,7 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
         .bind(&s.cancel_period_unit)
         .bind(&s.cancel_date)
         .bind(&s.category)
+        .bind(s.one_time)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

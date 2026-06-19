@@ -86,6 +86,32 @@ fn compute_due_reminders(
             }
         };
 
+        // Einmalige Ausgabe: genau eine Buchung am anchor_date, keine Wiederholung und
+        // keine Kündigung. Nur zukünftige Buchungen rechtfertigen eine Erinnerung.
+        if sub.one_time {
+            if let Err(e) = validate_lead_days(sub.lead_days) {
+                tracing::warn!(
+                    subscription_id = sub.id,
+                    lead_days = sub.lead_days,
+                    error = %e,
+                    "Zahlungs-Erinnerung (einmalig) wegen ungueltigem Vorlauf uebersprungen"
+                );
+            } else if anchor >= today {
+                let remind_from = anchor - Duration::days(sub.lead_days);
+                if today >= remind_from {
+                    out.push(DueReminder {
+                        subscription_id: sub.id,
+                        subscription_name: sub.name.clone(),
+                        amount_cents: sub.amount_cents,
+                        currency: sub.currency.clone(),
+                        due_date: anchor,
+                        kind: ReminderKind::Payment,
+                    });
+                }
+            }
+            continue;
+        }
+
         // Zahlungs-Erinnerung: nur bei gültigem Vorlauf und gültiger Wiederholung.
         if let Err(e) = validate_lead_days(sub.lead_days) {
             tracing::warn!(
@@ -246,7 +272,7 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
     let subs = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category FROM subscriptions WHERE active = 1",
+         cancel_date, category, one_time FROM subscriptions WHERE active = 1",
     )
     .fetch_all(pool)
     .await
@@ -368,6 +394,7 @@ mod tests {
             cancel_period_unit: None,
             cancel_date: None,
             category: None,
+            one_time: false,
         }
     }
 
@@ -406,6 +433,43 @@ mod tests {
         let subs = vec![sub(1, "2025-02-15", 0, true)];
         let due = compute_due_reminders(&subs, d(2025, 2, 15)).unwrap();
         assert_eq!(due.len(), 1);
+    }
+
+    #[test]
+    fn compute_one_time_reminds_at_anchor_inside_lead_window() {
+        // Einmalige Ausgabe am 2025-02-15, lead_days = 7 -> Vorlauf ab 2025-02-08.
+        let mut s = sub(1, "2025-02-15", 7, true);
+        s.one_time = true;
+        let due = compute_due_reminders(&[s], d(2025, 2, 8)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].due_date, d(2025, 2, 15));
+        assert_eq!(due[0].kind, ReminderKind::Payment);
+    }
+
+    #[test]
+    fn compute_one_time_skips_past_payment() {
+        // Einmalige Ausgabe, deren Datum bereits vorbei ist -> keine (wiederkehrende!) Erinnerung.
+        let mut s = sub(1, "2025-01-15", 7, true);
+        s.one_time = true;
+        let due = compute_due_reminders(&[s], d(2025, 3, 1)).unwrap();
+        assert!(
+            due.is_empty(),
+            "vergangene Einmalbuchung erinnert nicht erneut"
+        );
+    }
+
+    #[test]
+    fn compute_one_time_has_no_cancel_reminder() {
+        // Auch mit gesetztem Kündigungsdatum: Einmalausgaben haben keine Kündigung.
+        let mut s = sub(1, "2025-02-15", 7, true);
+        s.one_time = true;
+        s.cancel_mode = Some("date".to_string());
+        s.cancel_date = Some("2025-02-10".to_string());
+        let due = compute_due_reminders(&[s], d(2025, 2, 8)).unwrap();
+        assert!(
+            due.iter().all(|r| r.kind == ReminderKind::Payment),
+            "Einmalausgabe erzeugt keine Kündigungs-Erinnerung"
+        );
     }
 
     #[test]

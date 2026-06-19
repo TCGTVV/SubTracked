@@ -9,6 +9,42 @@
 
 ---
 
+## 2026-06-19 — Claude: Einmalige Ausgaben (Feature-Roadmap #4) + UI-Cleanup #177
+
+> Session-Auftrag: zuerst BACKLOG-Zeile 177 (UI-Cleanup), dann Zeile 183 (Einmalige Ausgaben). Beides umgesetzt, verifiziert, committet. **Roadmap #1–#4 ist damit komplett.** Serena lief in dieser Session voll (Discovery/Symbol-Edits/Memories) — Tool-Wahl-Regel aus CLAUDE.md eingehalten.
+
+### Vorab: BACKLOG #177 — UI-Cleanup nach shadcn-Overhaul (Commit `e4746cd`)
+
+- Ungenutzte `src/components/ui/dropdown-menu.tsx` entfernt (kein externer Consumer — alle „Dropdowns" der App sind Selects; `@radix-ui/react-dropdown-menu` war nicht mal als Dependency deklariert, also nichts verwaist).
+- Das kosmetische `noUselessFragments`-Biome-Info in der incomes-View von [App.tsx](src/App.tsx) via Biome-Autofix aufgeräumt (überflüssiges `<>`-Fragment um den Ternary entfernt, Logik unverändert). Lint jetzt komplett grün, keine Infos mehr.
+
+### Hauptarbeit: BACKLOG #183 — Einmalige Ausgaben
+
+> **User-Entscheidung vorab (per Frage):** Datenmodell = **`one_time`-Flag an `subscriptions`** (analog `incomes.one_time`), NICHT eigene Tabelle. Begründung: maximale Wiederverwendung (Dialog/commands/validation/backup/coverage), simples `ALTER ADD COLUMN` ohne Rebuild, spiegelt den etablierten incomes-Präzedenzfall.
+
+- **Migration [0012_subscription_one_time.sql](src-tauri/migrations/0012_subscription_one_time.sql):** `ALTER TABLE subscriptions ADD COLUMN one_time INTEGER NOT NULL DEFAULT 0`. Kein Tabellen-Rebuild → kein FK-787-Risiko, kein `-- no-transaction` (wie 0011).
+- **Rust — `one_time` durch ALLE SQL-Pfade gezogen:** Structs `Subscription`/`NewSubscription` ([db.rs](src-tauri/src/db.rs)); `list_subscriptions` (beide SELECTs), `add_subscription` (INSERT+bind), `update_subscription_in_db` (beide UPDATE-Branches) ([commands.rs](src-tauri/src/commands.rs)); der **`query_as::<Subscription>`-SELECT in [reminders.rs](src-tauri/src/reminders.rs)** (genau die Stelle, die 0008 den „Notifications tot"-Bug hatte — diesmal von Anfang an mitgezogen); collect-SELECT + restore-INSERT in [backup.rs](src-tauri/src/backup.rs).
+- **Reminder-Logik one_time-aware:** `compute_due_reminders` ([reminders.rs](src-tauri/src/reminders.rs)) behandelt `one_time`-Subs als **Einzelbuchung am `anchor_date`** — eine Zahlungs-Erinnerung nur wenn das Datum in der Zukunft liegt (kein `next_due_date`!), **keine** Kündigungs-Erinnerung. `continue` überspringt den wiederkehrenden Block. `notify`-Flag gilt weiter (Einmalausgabe kann eine Erinnerung haben).
+- **TS:** `oneTime: boolean` in [types.ts](src/types.ts). Neuer `subscriptionDatesWithin`-Helper in [coverage.ts](src/lib/coverage.ts) (Spiegel zu `incomeDatesWithin`): `one_time` → genau `[anchor]` im Fenster, sonst `dueDatesWithin`. Eingebaut in `computeCoverage` + `computeUpcoming`. **Ausgeschlossen** aus `computeMonthlyBaseline` + `computeCostSummary` (`if (sub.oneTime) continue;`) — eine Einmalausgabe hat kein sinnvolles Monatsäquivalent. `db.ts` brauchte nichts (boolean fließt durch `...s`/`narrowSub`).
+- **UI:** Toggle „Einmalige Ausgabe" im [SubscriptionDialog](src/components/SubscriptionDialog.tsx) (analog IncomeDialog): blendet bei aktiv das Intervall **und** die Kündigungs-Box aus, Anchor-Label wird „Datum"; beim Anschalten werden `interval`→`monthly` und `cancelMode`→`NO_CANCEL` zurückgesetzt (konsistenter Payload). „· einmalig"-Badge auf der Abo-Card ([App.tsx](src/App.tsx)); `formatNextDue` zeigt dank vorhandener `oneTime?`-Unterstützung automatisch das Datum.
+
+### Gotchas / bewusste Entscheidungen
+
+- **Kosten-Überblick/Baseline-Ausschluss ist Pflicht**, sonst würde eine 500€-Einmalanschaffung als „500€/Monat" o.ä. den Überblick verfälschen.
+- Test-Builder: `oneTime: false` in **11 TS-Testdateien** ergänzt (perl-Insert nach der ERSTEN `category: null` je Datei = Base-Builder; Overrides später bleiben unberührt). `subscription-list.ts` (Source, `DEFAULT_SUB_LIST_OPTIONS`) ist **kein** Subscription-Builder → bewusst nicht angefasst. Rust: `one_time: false` in den beiden Test-`Subscription`-Literalen (commands.rs/reminders.rs); backup-Test nutzt Migrations + DEFAULT, kein Change nötig.
+
+### Verifikation (alles grün)
+
+- `cargo clippy --all-targets -D warnings` ✓, `cargo fmt` ✓, `cargo test` ✓ **72** (+3: `compute_one_time_reminds_at_anchor_inside_lead_window`, `compute_one_time_skips_past_payment`, `compute_one_time_has_no_cancel_reminder`).
+- `pnpm test:run` ✓ **237** (+5 coverage: Einzelbuchung, Fenster-Ausschluss, Upcoming, Baseline-/Cost-Ausschluss), `pnpm build` ✓, `pnpm lint` ✓ (75 Files, keine Infos), `tsc --noEmit` ✓.
+- **Migration gegen Kopie der echten DB** (`~/.config/com.tcgtvv.subtracked/subtracker.db`, Stand Migration **11**, 5 Abos): 0012 angewandt → `one_time`-Spalte da (NOT NULL default 0), alle Bestandszeilen `one_time=0`, `PRAGMA integrity_check`=ok, `foreign_key_check` leer, Einmalausgabe-Insert + Rücklesen ok. Temp-Kopie wieder entfernt, echte DB unberührt.
+
+### Nächste Schritte
+
+- Feature-Roadmap #1–#4 ✅ komplett. Offen im BACKLOG v.a. der **P0-Härtungs-Cluster** (organisatorisch: GitHub „Private vulnerability reporting" aktivieren; beim nächsten Release `SHA256SUMS.txt` am Draft prüfen; Dependabot-security-updates-Entscheidung) und Feinschliff/„Geplante Features".
+- Optional fachlich offen aus früheren Einträgen: echter App-Start-Test, dass eine **Einmalausgabe** end-to-end speicherbar ist + korrekt im Forecast als einzelne Buchung erscheint (UI-Sicht-Check beim User).
+- Beim nächsten Release ggf. Minor-Bump erwägen (sichtbares Feature „Einmalige Ausgaben").
+
 ## 2026-06-18 — Claude: Branch-Protection-Ruleset `protect-main` für `main`
 
 > User: GitHub meldete `main` als „unprotected" (ausgelöst durch die frisch von Codex aktivierte Dependabot-Automatik, die PRs gegen `main` öffnet). User wollte ein Ruleset, das sicherstellt: nur er mergt, alles läuft über ihn.

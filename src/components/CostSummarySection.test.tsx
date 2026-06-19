@@ -20,6 +20,7 @@ function makeSub(overrides: Partial<Subscription> = {}): Subscription {
     cancelPeriodUnit: null,
     cancelDate: null,
     category: null,
+    oneTime: false,
     ...overrides,
   };
 }

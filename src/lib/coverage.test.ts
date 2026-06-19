@@ -23,6 +23,7 @@ const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   cancelPeriodUnit: null,
   cancelDate: null,
   category: null,
+  oneTime: false,
   ...overrides,
 });
 
@@ -356,5 +357,49 @@ describe("computeCostSummary", () => {
       ["Streaming", 1000, 2],
       [null, 500, 1],
     ]);
+  });
+});
+
+describe("Einmalige Ausgaben (oneTime)", () => {
+  it("computeCoverage bucht eine oneTime-Ausgabe genau einmal am anchorDate", () => {
+    const subs = [sub({ oneTime: true, anchorDate: "2026-03-10", amountCents: 5000 })];
+    const result = computeCoverage(subs, [acc(1, "Giro", { balanceCents: 20000 })], 6, NOW);
+    expect(result[0]?.items).toHaveLength(1);
+    expect(result[0]?.items[0]?.date).toBe("2026-03-10");
+    expect(result[0]?.totalOutflowCents).toBe(5000);
+  });
+
+  it("computeCoverage ignoriert eine oneTime-Ausgabe außerhalb des Fensters", () => {
+    const subs = [sub({ oneTime: true, anchorDate: "2027-01-10" })];
+    const result = computeCoverage(subs, [acc(1, "Giro")], 6, NOW);
+    expect(result[0]?.items ?? []).toHaveLength(0);
+  });
+
+  it("computeUpcoming zeigt eine oneTime-Ausgabe als einzelne Buchung", () => {
+    const subs = [sub({ oneTime: true, anchorDate: "2026-01-20", amountCents: 5000 })];
+    const items = computeUpcoming(subs, [acc(1, "Giro")], 30, NOW);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.date).toBe("2026-01-20");
+    expect(items[0]?.type).toBe("outflow");
+  });
+
+  it("computeMonthlyBaseline schließt oneTime-Ausgaben aus", () => {
+    const subs = [
+      sub({ id: 1, amountCents: 1000 }),
+      sub({ id: 2, oneTime: true, amountCents: 9999 }),
+    ];
+    const baseline = computeMonthlyBaseline(subs, [acc(1, "Giro")]);
+    // Nur das wiederkehrende Abo (1000) zählt, die Einmalausgabe nicht.
+    expect(baseline[0]?.monthlyCents).toBe(1000);
+  });
+
+  it("computeCostSummary schließt oneTime-Ausgaben aus", () => {
+    const subs = [
+      sub({ id: 1, amountCents: 1000 }),
+      sub({ id: 2, oneTime: true, amountCents: 9999 }),
+    ];
+    const summary = computeCostSummary(subs);
+    expect(summary[0]?.subscriptionCount).toBe(1);
+    expect(summary[0]?.monthlyCents).toBe(1000);
   });
 });

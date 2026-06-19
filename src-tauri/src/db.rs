@@ -68,6 +68,9 @@ pub struct Subscription {
     pub cancel_date: Option<String>,
     /// Optionale Kategorie (Freitext, Presets im Frontend); None = keine.
     pub category: Option<String>,
+    /// Einmalige Ausgabe: true = einzelne Buchung am anchor_date (interval/Kündigung
+    /// werden ignoriert), false = wiederkehrend. Analog zu incomes.one_time.
+    pub one_time: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
@@ -130,6 +133,8 @@ pub struct NewSubscription {
     pub cancel_date: Option<String>,
     /// Optionale Kategorie (Freitext, Presets im Frontend); None = keine.
     pub category: Option<String>,
+    /// Einmalige Ausgabe (analog incomes.one_time); None = false.
+    pub one_time: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
