@@ -434,52 +434,50 @@ function App() {
           )}
 
           {/* EINNAHMEN */}
-          {!isEmpty && view === "incomes" && (
-            <>
-              {incomes.length === 0 ? (
-                <p className="text-muted-foreground">Noch keine Einnahmen.</p>
-              ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--card-min),1fr))] gap-3">
-                  {incomes.map((income) => {
-                    const account = accountName(income.accountId);
-                    return (
-                      <CashflowCard
-                        key={income.id}
-                        id={income.id}
+          {!isEmpty &&
+            view === "incomes" &&
+            (incomes.length === 0 ? (
+              <p className="text-muted-foreground">Noch keine Einnahmen.</p>
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(var(--card-min),1fr))] gap-3">
+                {incomes.map((income) => {
+                  const account = accountName(income.accountId);
+                  return (
+                    <CashflowCard
+                      key={income.id}
+                      id={income.id}
+                      active={income.active}
+                      accent={ACCENTS[income.id % ACCENTS.length]}
+                      title={income.name}
+                      income
+                      amount={formatAmount(income.amountCents, income.currency)}
+                      subtitle={
+                        <>
+                          {income.active ? (
+                            <>
+                              {income.oneTime ? "Datum" : "nächste Fälligkeit"}:{" "}
+                              {formatNextDue(income)}
+                              {income.oneTime && <> · einmalig</>}
+                            </>
+                          ) : (
+                            <>archiviert</>
+                          )}
+                          {account && <> · {account}</>}
+                        </>
+                      }
+                    >
+                      <CardActions
+                        name={income.name}
                         active={income.active}
-                        accent={ACCENTS[income.id % ACCENTS.length]}
-                        title={income.name}
-                        income
-                        amount={formatAmount(income.amountCents, income.currency)}
-                        subtitle={
-                          <>
-                            {income.active ? (
-                              <>
-                                {income.oneTime ? "Datum" : "nächste Fälligkeit"}:{" "}
-                                {formatNextDue(income)}
-                                {income.oneTime && <> · einmalig</>}
-                              </>
-                            ) : (
-                              <>archiviert</>
-                            )}
-                            {account && <> · {account}</>}
-                          </>
-                        }
-                      >
-                        <CardActions
-                          name={income.name}
-                          active={income.active}
-                          onEdit={() => startEditIncome(income)}
-                          onToggle={() => void handleToggleIncomeActive(income)}
-                          onDelete={() => void handleDeleteIncome(income)}
-                        />
-                      </CashflowCard>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          )}
+                        onEdit={() => startEditIncome(income)}
+                        onToggle={() => void handleToggleIncomeActive(income)}
+                        onDelete={() => void handleDeleteIncome(income)}
+                      />
+                    </CashflowCard>
+                  );
+                })}
+              </div>
+            ))}
         </div>
       </main>
 
