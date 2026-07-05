@@ -1,5 +1,7 @@
 mod backup;
 mod commands;
+mod csv_export;
+mod csv_import;
 mod currencies;
 mod db;
 mod db_backup;
@@ -62,6 +64,8 @@ pub fn run() {
             commands::list_price_history,
             backup::export_backup,
             backup::import_backup,
+            csv_export::export_subscriptions_csv,
+            csv_import::preview_csv_import,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei

@@ -9,6 +9,37 @@
 
 ---
 
+## 2026-07-05 — Claude: CSV-Export der Abos + CSV-Import mit Auto-Erkennung (BACKLOG #171, #198)
+
+> Session-Auftrag: Priorisierte Feature-Liste erstellt (git pull, CLAUDE.md/Serena-Aktivierung vorab), User wählte #4 (CSV-Import) und #5 (CSV-Export). Für den Import-Scope explizit nachgefragt: **Bank-Kontoauszug mit Auto-Erkennung** (nicht das einfachere Eigenformat) — User-Entscheidung per Frage.
+
+### CSV-Export (BACKLOG #171)
+
+- Neues Modul [csv_export.rs](src-tauri/src/csv_export.rs): pure `build_subscriptions_csv(subs, accounts)` + Command `export_subscriptions_csv`. Alle Abos (inkl. archiviert), Konto-Name statt ID, Dezimalbetrag passend zur Currency-Subdivision (`currencies::subdivisor`, EUR 2 Nachkommastellen, KRW ganzzahlig), CSV-Escaping für Kommas/Anführungszeichen. Button „Abos als CSV exportieren" im SettingsDialog (gleiche Sektion wie JSON-Backup, per `tauri-plugin-dialog` Save-Dialog).
+
+### CSV-Import mit Auto-Erkennung (BACKLOG #198)
+
+- Neues Modul [csv_import.rs](src-tauri/src/csv_import.rs), komplett pure/testbar getrennt von Datei-I/O:
+  - `parse_bank_csv`: Delimiter-Erkennung (`;`/`,`/Tab per Zählung in der Kopfzeile), minimaler RFC4180-Feld-Parser (gequotete Felder mit `""`-Escape), Spalten-Erkennung über Alias-Listen (dt. „Buchungstag"/„Verwendungszweck"/„Betrag" + engl. Pendants, exakter Treffer vor Teilstring-Fallback), BOM-Stripping, flexibles Datum (ISO oder `DD.MM.YYYY`).
+  - `parse_localized_amount`: **portiert dieselbe Trennzeichen-Heuristik wie `format.ts::parseLocalizedAmountInput`** (spätere Trennzeichen bei beiden = Dezimaltrenner, 3-Stellen-Tail-Heuristik für Tausender), damit Frontend-Eingabe und Bank-Import Beträge gleich interpretieren. Ignoriert Währungssuffixe (`"−17,99 EUR"`).
+  - `detect_recurring_candidates`: gruppiert Abbuchungen (nur negative Beträge — Gutschriften sind keine Abo-Kandidaten) nach (normalisierter Verwendungszweck, exaktem Betrag), prüft Datums-Abstände gegen Toleranzfenster je Intervall (`weekly` 7±2 … `yearly` 365±12, aufsteigend geprüft), Intervall-Namen identisch zu `recurrence::ALLOWED_INTERVALS`. **Preisänderungen werden bewusst NICHT zusammengeführt** (andere Betrag-Gruppe, zu wenig Vorkommen für Erkennung) — dokumentiertes Verhalten, kein Bug.
+  - Command `preview_csv_import(path)`: reine Vorschau, kein DB-Zugriff, kein eigener Schreibpfad — Anlegen läuft über das bestehende `add_subscription` (keine Validierungslogik dupliziert).
+  - 22 neue Rust-Unit-Tests: Parsing (semikolon/komma, gequotete Felder, fehlende Spalten, ungültiger Betrag, BOM+Leerzeilen), Erkennung (monthly/weekly/yearly nebeneinander, Einzelvorkommen ignoriert, Gutschriften ignoriert, irreguläre Abstände ignoriert, Preiswechsel-Gruppierung), Amount-Parsing (Punkt/Komma-Dezimal, DE/EN-Tausender, Währungssuffix, leer).
+- Frontend: `previewCsvImport`/`exportSubscriptionsCsv`-Wrapper in [db.ts](src/lib/db.ts) (Interval-Narrowing wie bei `Subscription` via `parseInterval`). Neuer [CsvImportDialog.tsx](src/components/CsvImportDialog.tsx): Datei-Auswahl (`tauri-plugin-dialog`), Kandidaten-Liste mit Checkbox + editierbarem Intervall/Währung/Konto pro Zeile (Default-Währung EUR, Default-Vorlauf 60 Tage wie im SubscriptionDialog), Anlegen iteriert über ausgewählte Kandidaten via `addSubscription`. Trigger „Bankauszug importieren (CSV)" im SettingsDialog schließt Settings und öffnet den Dialog (`onStartCsvImport`-Prop, analog zum bestehenden `onDataReplaced`-Pattern); `App.tsx` verdrahtet `csvImportOpen`-State + `reloadAll` nach Import.
+
+### Verifikation (alles grün)
+
+- `cargo test` ✓ **94** (+22 neue), `cargo clippy --all-targets -D warnings` ✓, `cargo fmt --check` ✓.
+- `pnpm test:run` ✓ **237** (unverändert — keine neuen Component-Tests für den Import-Dialog, siehe „Offen" unten), `tsc --noEmit` ✓, `pnpm lint` ✓, `pnpm build` ✓.
+
+### Bewusst nicht gemacht / offen
+
+- **Keine RTL-Component-Tests für `CsvImportDialog`** — Zeitbudget der Session ging in die Kern-Erkennungslogik (dort liegt das fachliche Risiko); Komponente folgt dem etablierten Dialog-Pattern (controlled `open`, Radix-Select), sollte bei nächster Berührung nach dem RTL-Muster (`SettingsDialog.test.tsx`) nachgezogen werden.
+- **Keine echte End-zu-End-Verifikation mit echtem Bank-CSV-Export** (Sparkasse/DKB/ING o.ä.) — nur synthetische Test-Vektoren. Nächster sinnvoller Schritt: User testet mit einem echten Kontoauszug-Export und meldet, ob Spalten-Erkennung + Interval-Heuristik in der Praxis treffen.
+- Mehrfach-Konto-CSV (mehrere IBANs in einer Datei) nicht gesondert behandelt — Import kennt kein Konto-Feld aus der Bank-CSV, User weist Konto pro Kandidat manuell zu.
+
+---
+
 ## 2026-06-19 — Claude: Einmalige Ausgaben (Feature-Roadmap #4) + UI-Cleanup #177
 
 > Session-Auftrag: zuerst BACKLOG-Zeile 177 (UI-Cleanup), dann Zeile 183 (Einmalige Ausgaben). Beides umgesetzt, verifiziert, committet. **Roadmap #1–#4 ist damit komplett.** Serena lief in dieser Session voll (Discovery/Symbol-Edits/Memories) — Tool-Wahl-Regel aus CLAUDE.md eingehalten.

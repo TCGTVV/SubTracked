@@ -193,3 +193,32 @@ export async function exportBackup(path: string): Promise<void> {
 export async function importBackup(path: string): Promise<void> {
   await invoke("import_backup", { path });
 }
+
+// --- CSV Export / Import ----------------------------------------------------
+
+/** Exportiert alle Abos (inkl. archivierte) als lesbare CSV an den gewählten Pfad. */
+export async function exportSubscriptionsCsv(path: string): Promise<void> {
+  await invoke("export_subscriptions_csv", { path });
+}
+
+export interface RecurringCandidate {
+  name: string;
+  amountCents: number;
+  interval: Interval;
+  /** Jüngstes erkanntes Vorkommen — als anchorDate direkt für addSubscription nutzbar. */
+  anchorDate: string;
+  firstDate: string;
+  occurrenceCount: number;
+}
+
+type RecurringCandidateFromRust = Omit<RecurringCandidate, "interval"> & { interval: string };
+
+/**
+ * Liest eine Bank-Kontoauszug-CSV und schlägt wiederkehrende Abbuchungen als
+ * Import-Kandidaten vor (Erkennungs-Heuristik in src-tauri/src/csv_import.rs).
+ * Reine Vorschau — legt noch keine Abos an.
+ */
+export async function previewCsvImport(path: string): Promise<RecurringCandidate[]> {
+  const rows = await invoke<RecurringCandidateFromRust[]>("preview_csv_import", { path });
+  return rows.map((r) => ({ ...r, interval: parseInterval(r.interval) }));
+}
