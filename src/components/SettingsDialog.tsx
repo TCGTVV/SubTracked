@@ -7,6 +7,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   type AppInfo,
   exportBackup,
+  exportSubscriptionsCsv,
   getAppInfo,
   getReminderStatus,
   importBackup,
@@ -24,6 +25,8 @@ interface Props {
   onClose: () => void;
   /** Wird nach erfolgreichem Import aufgerufen, damit die App ihre Daten neu lädt. */
   onDataReplaced?: () => void | Promise<void>;
+  /** Schließt Settings und öffnet den Bankauszug-CSV-Import-Dialog. */
+  onStartCsvImport?: () => void;
 }
 
 function formatDateTime(iso: string): string {
@@ -43,7 +46,7 @@ function formatInterval(secs: number): string {
   return `${minutes} Minuten`;
 }
 
-export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
+export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport }: Props) {
   const autostartId = useId();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
@@ -61,6 +64,10 @@ export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
   const [backupMessage, setBackupMessage] = useState<string | null>(null);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [confirmingImport, setConfirmingImport] = useState(false);
+
+  const [csvExportPending, setCsvExportPending] = useState(false);
+  const [csvExportMessage, setCsvExportMessage] = useState<string | null>(null);
+  const [csvExportError, setCsvExportError] = useState<string | null>(null);
 
   const loadReminderStatus = useCallback(async () => {
     try {
@@ -176,6 +183,25 @@ export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
       setBackupError(e instanceof Error ? e.message : String(e));
     } finally {
       setBackupPending(false);
+    }
+  }
+
+  async function handleExportCsv() {
+    setCsvExportPending(true);
+    setCsvExportMessage(null);
+    setCsvExportError(null);
+    try {
+      const path = await save({
+        defaultPath: `subtracked-abos-${format(new Date(), "yyyy-MM-dd")}.csv`,
+        filters: [{ name: "CSV", extensions: ["csv"] }],
+      });
+      if (!path) return; // Dialog abgebrochen
+      await exportSubscriptionsCsv(path);
+      setCsvExportMessage(`✓ CSV gespeichert: ${path}`);
+    } catch (e) {
+      setCsvExportError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCsvExportPending(false);
     }
   }
 
@@ -422,6 +448,40 @@ export function SettingsDialog({ open, onClose, onDataReplaced }: Props) {
             {backupError && (
               <Alert variant="destructive">
                 <AlertDescription>Fehler: {backupError}</AlertDescription>
+              </Alert>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-semibold">CSV</h3>
+            <p className="text-xs text-muted-foreground">
+              Abo-Liste als CSV exportieren (z.B. für Tabellenkalkulation) oder wiederkehrende
+              Abbuchungen aus einem Bank-Kontoauszug automatisch erkennen und als Abos anlegen.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleExportCsv()}
+                disabled={csvExportPending}
+              >
+                {csvExportPending ? "Arbeite …" : "Abos als CSV exportieren"}
+              </Button>
+              {onStartCsvImport && (
+                <Button type="button" variant="outline" size="sm" onClick={onStartCsvImport}>
+                  Bankauszug importieren (CSV)
+                </Button>
+              )}
+            </div>
+            {csvExportMessage && (
+              <span className="text-sm text-success" role="status">
+                {csvExportMessage}
+              </span>
+            )}
+            {csvExportError && (
+              <Alert variant="destructive">
+                <AlertDescription>Fehler: {csvExportError}</AlertDescription>
               </Alert>
             )}
           </section>

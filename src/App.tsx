@@ -3,6 +3,7 @@ import { type ReactNode, useMemo, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { AppSidebar, type DashboardView } from "./components/AppSidebar";
 import { CostSummarySection } from "./components/CostSummarySection";
+import { CsvImportDialog } from "./components/CsvImportDialog";
 import { IncomeDialog } from "./components/IncomeDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
@@ -158,6 +159,7 @@ function App() {
   const [incomeOpenSeq, setIncomeOpenSeq] = useState(0);
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
 
@@ -510,6 +512,16 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onDataReplaced={reloadAll}
+        onStartCsvImport={() => {
+          setSettingsOpen(false);
+          setCsvImportOpen(true);
+        }}
+      />
+      <CsvImportDialog
+        open={csvImportOpen}
+        accounts={accounts}
+        onClose={() => setCsvImportOpen(false)}
+        onImported={reloadAll}
       />
     </div>
   );
