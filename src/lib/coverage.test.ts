@@ -5,6 +5,7 @@ import {
   computeCoverage,
   computeMonthlyBaseline,
   computeUpcoming,
+  computeYearlyLoad,
 } from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
@@ -401,5 +402,86 @@ describe("Einmalige Ausgaben (oneTime)", () => {
     const summary = computeCostSummary(subs);
     expect(summary[0]?.subscriptionCount).toBe(1);
     expect(summary[0]?.monthlyCents).toBe(1000);
+  });
+});
+
+describe("computeYearlyLoad", () => {
+  it("bucketet ein monatliches Abo in alle 12 Kalendermonate", () => {
+    const result = computeYearlyLoad([sub({ anchorDate: "2026-01-15" })], NOW);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.months).toHaveLength(12);
+    expect(result[0]?.months[0]).toEqual({ month: "2026-01", cents: 1000, count: 1 });
+    expect(result[0]?.months[11]).toEqual({ month: "2026-12", cents: 1000, count: 1 });
+    expect(result[0]?.totalCents).toBe(12_000);
+    expect(result[0]?.maxCents).toBe(1000);
+  });
+
+  it("zeigt ein Jahres-Abo nur im Fälligkeitsmonat", () => {
+    const result = computeYearlyLoad(
+      [sub({ interval: "yearly", anchorDate: "2026-03-20", amountCents: 5000 })],
+      NOW,
+    );
+    const march = result[0]?.months.find((m) => m.month === "2026-03");
+    expect(march).toEqual({ month: "2026-03", cents: 5000, count: 1 });
+    expect(result[0]?.totalCents).toBe(5000);
+    expect(result[0]?.months.filter((m) => m.cents > 0)).toHaveLength(1);
+  });
+
+  it("bucketet halbjährliche Abos in beide Fälligkeitsmonate", () => {
+    const result = computeYearlyLoad(
+      [sub({ interval: "semiannual", anchorDate: "2026-02-10", amountCents: 3000 })],
+      NOW,
+    );
+    const loaded = result[0]?.months.filter((m) => m.cents > 0).map((m) => m.month);
+    expect(loaded).toEqual(["2026-02", "2026-08"]);
+  });
+
+  it("zählt Fälligkeiten des aktuellen Monats vor dem from-Tag mit (Kalendermonats-Profil)", () => {
+    const midMonth = new Date(2026, 0, 20);
+    const result = computeYearlyLoad([sub({ anchorDate: "2026-01-05" })], midMonth);
+    expect(result[0]?.months[0]).toEqual({ month: "2026-01", cents: 1000, count: 1 });
+  });
+
+  it("trennt Währungen und sortiert nach Jahressumme absteigend", () => {
+    const result = computeYearlyLoad(
+      [
+        sub({ id: 1, currency: "EUR", amountCents: 100 }),
+        sub({ id: 2, currency: "USD", amountCents: 900 }),
+      ],
+      NOW,
+    );
+    expect(result.map((r) => r.currency)).toEqual(["USD", "EUR"]);
+  });
+
+  it("zählt einmalige Ausgaben im Anker-Monat, ignoriert sie außerhalb des Fensters", () => {
+    const inside = computeYearlyLoad(
+      [sub({ oneTime: true, anchorDate: "2026-05-01", amountCents: 7000 })],
+      NOW,
+    );
+    expect(inside[0]?.months.find((m) => m.month === "2026-05")?.cents).toBe(7000);
+    expect(inside[0]?.months.filter((m) => m.cents > 0)).toHaveLength(1);
+
+    const outside = computeYearlyLoad(
+      [sub({ oneTime: true, anchorDate: "2027-02-01", amountCents: 7000 })],
+      NOW,
+    );
+    expect(outside).toHaveLength(0);
+  });
+
+  it("zählt eine Fälligkeit exakt am Fensterende (Monat 13) nicht mit", () => {
+    const result = computeYearlyLoad([sub({ interval: "yearly", anchorDate: "2027-01-01" })], NOW);
+    expect(result).toHaveLength(0);
+  });
+
+  it("summiert mehrere Abos im selben Monat inklusive Posten-Zähler", () => {
+    const result = computeYearlyLoad(
+      [
+        sub({ id: 1, anchorDate: "2026-01-15", amountCents: 1000 }),
+        sub({ id: 2, interval: "yearly", anchorDate: "2026-01-20", amountCents: 8000 }),
+      ],
+      NOW,
+    );
+    expect(result[0]?.months[0]).toEqual({ month: "2026-01", cents: 9000, count: 2 });
+    expect(result[0]?.maxCents).toBe(9000);
   });
 });

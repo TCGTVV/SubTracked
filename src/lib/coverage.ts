@@ -1,4 +1,4 @@
-import { addDays, addMonths, startOfDay } from "date-fns";
+import { addDays, addMonths, startOfDay, startOfMonth } from "date-fns";
 import type { Account, Income, Subscription } from "../types";
 import { parseStrictISODate, toISODateLocal } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
@@ -412,4 +412,65 @@ export function computeUpcoming(
 
   items.sort((a, b) => a.date.localeCompare(b.date));
   return items;
+}
+
+export interface MonthlyLoad {
+  /** Kalendermonat als "YYYY-MM" (lokal). */
+  month: string;
+  cents: number;
+  /** Anzahl der Fälligkeiten in diesem Monat. */
+  count: number;
+}
+
+export interface YearlyLoadSummary {
+  currency: string;
+  /** Immer 12 Einträge, beginnend mit dem Monat von `from`. */
+  months: MonthlyLoad[];
+  totalCents: number;
+  maxCents: number;
+}
+
+/**
+ * Jahres-Belastungsprofil: summiert alle Fälligkeiten der nächsten 12 Kalendermonate
+ * (ab Monatsanfang von `from`) pro Monat und Währung. Im Gegensatz zur monatlichen
+ * Baseline wird nichts normiert — jährliche/halbjährliche Posten erscheinen in dem
+ * Monat, in dem sie tatsächlich abgebucht werden. Einmalige Ausgaben zählen mit.
+ */
+export function computeYearlyLoad(
+  subscriptions: Subscription[],
+  from: Date = new Date(),
+): YearlyLoadSummary[] {
+  const start = startOfMonth(startOfDay(from));
+  const end = addMonths(start, 12);
+  const baseIndex = start.getFullYear() * 12 + start.getMonth();
+
+  const byCurrency = new Map<string, MonthlyLoad[]>();
+  for (const sub of subscriptions) {
+    const dates = subscriptionDatesWithin(sub, start, end).filter((d) => d < end);
+    if (dates.length === 0) continue;
+    let months = byCurrency.get(sub.currency);
+    if (!months) {
+      months = Array.from({ length: 12 }, (_, i) => ({
+        month: toISODateLocal(addMonths(start, i)).slice(0, 7),
+        cents: 0,
+        count: 0,
+      }));
+      byCurrency.set(sub.currency, months);
+    }
+    for (const d of dates) {
+      const bucket = months[d.getFullYear() * 12 + d.getMonth() - baseIndex];
+      if (!bucket) continue;
+      bucket.cents += sub.amountCents;
+      bucket.count += 1;
+    }
+  }
+
+  return [...byCurrency.entries()]
+    .map(([currency, months]) => ({
+      currency,
+      months,
+      totalCents: months.reduce((sum, m) => sum + m.cents, 0),
+      maxCents: months.reduce((max, m) => Math.max(max, m.cents), 0),
+    }))
+    .sort((a, b) => b.totalCents - a.totalCents);
 }
