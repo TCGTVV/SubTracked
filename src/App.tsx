@@ -13,6 +13,7 @@ import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { SubscriptionFilterBar } from "./components/SubscriptionFilterBar";
 import { UpcomingSection } from "./components/UpcomingSection";
 import { Button } from "./components/ui/button";
+import { YearlyLoadSection } from "./components/YearlyLoadSection";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
@@ -343,6 +344,7 @@ function App() {
                 />
               )}
               {activeSubs.length > 0 && <CostSummarySection subscriptions={activeSubs} />}
+              {activeSubs.length > 0 && <YearlyLoadSection subscriptions={activeSubs} />}
               {hasActiveCashflow && (
                 <UpcomingSection
                   subscriptions={activeSubs}
