@@ -9,6 +9,28 @@
 
 ---
 
+## 2026-07-06 — Claude: README-Logo durch In-App-Branding ersetzt (BACKLOG #212)
+
+> Session-Auftrag: BACKLOG #212. Kurze, fokussierte Session — nur Assets + README, kein Code.
+
+- **Neue Brand-Assets** in `assets/brand/`: [logo-light.svg](assets/brand/logo-light.svg) + [logo-dark.svg](assets/brand/logo-dark.svg) reproduzieren das Sidebar-Branding exakt (Kachel 32px→128px mit rx 45% = `rounded-lg`-Verhältnis, `from-primary to-accent`-Gradient nach br, lucide-`Wallet` 18px→72px in `primary-foreground`, Wordmark Inter Bold `-0.025em`). Farben sind hart kodierte Hex-Werte der oklch-Tokens (`:root`/`.dark`), konvertiert per Wegwerf-Node-Skript (oklch→sRGB nach CSS Color 4): Light `#5c58e8→#f17070`, Icon `#f8f8ff`, Text `#191924`; Dark `#9296ff→#f97676`, Icon `#10101a`, Text `#eeeef5`.
+- **Font-Falle gelöst:** SVG-`<text>` mit Inter rendert auf GitHub falsch (Betrachter haben Inter nicht; `<img>`-SVGs laden keine Webfonts). `rsvg-convert -f svg` wandelt Text in Pfade (~16 KB, Inter Bold liegt lokal unter `~/.local/share/fonts/subtracked-build/`). Die ausgelieferten SVGs sind daher Cairo-Output; **wartbare Text-Master liegen daneben als `logo-{light,dark}.src.svg`** — bei Token-Änderungen Master editieren und neu konvertieren.
+- **README-Header:** `<picture>` mit `prefers-color-scheme: dark`-Source, Fallback light, `width="480"` wie vorher.
+- **Aufgeräumt:** `assets/logo.png`, `logo2.png`, `logo3.png` (zusammen ~10 MB!) und das alte `brand/logo.svg` (Kalender+Münzen-Wortmarke) per `git rm`. **Bewusst behalten:** `brand/icon.svg` + `assets/icon-source.png` — das echte Tauri-App-Icon (`src-tauri/icons/`) ist weiterhin das Kalender+Münzen-Design.
+- Serena hat in dieser Umgebung kein `search_for_pattern` mehr exponiert — Discovery lief über `grep` (laut CLAUDE.md erlaubt), Edits über `replace_content`.
+
+### Verifikation
+
+- Beide SVGs (Pfad-Versionen) via `rsvg-convert` → PNG gerendert und angesehen: Light auf weiß, Dark auf `#13131c` — deckungsgleich mit dem Sidebar-Look in beiden Themes.
+- Kein Code angefasst → Test-/Lint-Stand unverändert (Lefthook läuft beim Commit).
+
+### Offen / Folgeideen
+
+- **App-Icon ≠ In-App-Branding:** Das Tauri-Icon zeigt weiter das alte Kalender+Münzen-Design, die Sidebar die Wallet-Kachel. Falls gewünscht, Icon-Familie aus dem neuen Branding neu generieren (eigener Backlog-Punkt, nicht Teil von #212).
+- Rest wie im Vorgänger-Eintrag: #199/#200/#204/#205, PriceHistoryGraph-`<title>`-Fix, CSV-Praxistest, Overview-Scroll in der laufenden App.
+
+---
+
 ## 2026-07-06 — Claude: P1/P2-Abarbeitung — 4 Features + nachgezogene RTL-Tests (BACKLOG #197, #201, #203, #211)
 
 > Session-Auftrag: zuerst den offenen Punkt aus dem Vortag (RTL-Tests CsvImportDialog), danach der Reihe nach BACKLOG #201, #203, #197, #211 — je Feature ein Commit, alles verifiziert. Serena lief durchgehend als Default (Symbol-Edits, `replace_content`, `insert_after_symbol`); Read nur gezielt (HANDOVER-Top, App.tsx-Ausschnitte, ganze Dateien wo Tests das komplette JSX brauchten).
