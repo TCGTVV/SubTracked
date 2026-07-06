@@ -1,0 +1,24 @@
+<svg width="640" height="160" viewBox="0 0 640 160" xmlns="http://www.w3.org/2000/svg">
+  <!-- SubTracked Wortbildmarke (Light) — Spiegel des In-App-Brandings aus AppSidebar.tsx:
+       Kachel size-8/rounded-lg mit bg-gradient-to-br from-primary to-accent,
+       lucide-Wallet in primary-foreground, Wordmark Inter Bold tracking-tight in foreground.
+       Farben = hart kodierte Hex-Werte der oklch-Tokens aus src/index.css (:root). -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5c58e8"/>
+      <stop offset="1" stop-color="#f17070"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Kachel: 128x128, rx = 0.9rem/32px-Verhältnis (45%) -->
+  <rect x="8" y="16" width="128" height="128" rx="57.6" fill="url(#tile)"/>
+
+  <!-- lucide "wallet" (24x24, stroke 2) auf 72px skaliert, zentriert in der Kachel -->
+  <g transform="translate(36,44) scale(3)" fill="none" stroke="#f8f8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/>
+    <path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>
+  </g>
+
+  <!-- Wordmark: Inter Bold, tracking-tight (-0.025em) -->
+  <text x="168" y="108" font-family="Inter" font-weight="700" font-size="76.8" letter-spacing="-1.92" fill="#191924">SubTracked</text>
+</svg>

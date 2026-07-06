@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/logo.png" alt="SubTracked-Logo" width="480">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+    <img src="assets/brand/logo-light.svg" alt="SubTracked-Logo" width="480">
+  </picture>
 </p>
 
 # SubTracked
