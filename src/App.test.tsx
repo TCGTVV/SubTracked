@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
+import { expectNoAxeViolations } from "./test-utils/axe";
 import type { Account, Subscription } from "./types";
 
 vi.mock("./hooks/useNotificationPermission", () => ({
@@ -136,5 +137,10 @@ describe("App", () => {
     // Der Archiv-Toggle lebt in der Abos-Ansicht; dorthin navigieren.
     fireEvent.click(screen.getByRole("button", { name: "Abos" }));
     expect(screen.getByText(/Archivierte anzeigen \(1 Abo\)/)).toBeInTheDocument();
+  });
+
+  it("hat keine axe-Verstöße (App-Shell mit Empty-State)", async () => {
+    render(<App />);
+    await expectNoAxeViolations();
   });
 });

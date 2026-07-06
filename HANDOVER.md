@@ -9,6 +9,38 @@
 
 ---
 
+## 2026-07-06 — Claude: Bessere Fehlertexte + axe-Accessibility-Tests (BACKLOG #213)
+
+> Session-Auftrag: BACKLOG #213 („Bessere Fehlertexte; Accessibility-Tests; E2E-Tests"). Zwei von drei Teilen umgesetzt, je ein Commit; E2E ist auf der Dev-Maschine hart blockiert (s.u.) und steht jetzt als eigener Backlog-Punkt.
+
+### 1. Fehlertexte (Commit `5226cb2`)
+
+- **Befund:** Domänen-Fehler aus dem Rust-Backend (validation.rs, csv_import.rs, backup.rs) sind bereits deutsch und nutzertauglich — roh durchgesickert sind nur technische Strings (sqlx/SQLite englisch, Datei-I/O, Plugin-Fehler).
+- [errors.ts](src/lib/errors.ts): `toUserMessage(e, aktion)` mit Pattern-Liste (UNIQUE/FK-Constraint, DB-Fehler, Datei-I/O) → aktionsbezogene deutsche Meldung („Konto löschen fehlgeschlagen: Der Eintrag ist noch mit anderen Daten verknüpft."); Rohtext geht via `console.error` zur Diagnose raus. **Fallback reicht unbekannte Meldungen unverändert durch** — so bleiben die deutschen Validierungs-Meldungen intakt und bestehende Tests mit Mock-Fehlern grün.
+- Alle 22 catch-Stellen umgestellt (SubscriptionDialog, IncomeDialog, AccountsDialog ×2, BalanceFreshnessWarning, CsvImportDialog ×2, SettingsDialog ×9, useSubscriptions ×2, App.tsx ×4). Ein Test brauchte Anpassung: SettingsDialog-Autostart mockt `enable()` mit „Permission denied" — matcht jetzt bewusst das I/O-Pattern.
+
+### 2. Accessibility-Tests (dieser Commit)
+
+- **axe-core** (dev-dep) + [test-utils/axe.ts](src/test-utils/axe.ts): `expectNoAxeViolations(root = document.body)` (body als Default, weil Radix portalt) mit lesbarer Verstoß-Zusammenfassung. `color-contrast` (braucht echtes Layout) und `region` (Seiten-Regel, wir rendern Fragmente) in jsdom deaktiviert.
+- axe-Checks in bestehende Testdateien eingehängt (nutzen deren Render-Helper/Mocks): App-Shell, SubscriptionDialog (Anlegen), AccountsDialog, SettingsDialog, CsvImportDialog (mit geladener Kandidaten-Liste via `pickFileWith`).
+- **Echter Fund (critical):** die 3 Selects pro CsvImport-Kandidatenzeile (Intervall/Währung/Konto) hatten keinen zugänglichen Namen (`SelectValue` ohne Label) → `aria-label={\`Intervall für ${c.name}\`}` etc.
+
+### 3. E2E — blockiert, nicht angefangen
+
+- `tauri-driver` braucht `WebKitWebDriver`; Arch/CachyOS liefert den in `webkit2gtk-4.1` **nicht** mit (kein `/usr/bin/WebKitWebDriver`, kein Repo-Paket), passwortloses sudo gibt es nicht. Als eigener offener Backlog-Punkt dokumentiert; realistischste Option: CI-only auf ubuntu-latest (`webkit2gtk-driver` existiert dort).
+
+### Verifikation (alles grün)
+
+- `pnpm test:run` ✓ **298** (+7 errors.ts, +5 axe, +1 angepasst), `tsc --noEmit` ✓, `pnpm lint` ✓. Rust unberührt.
+
+### Offen / Folgeideen
+
+- **Radix-Warnung „Missing `Description` for {DialogContent}"** betrifft alle Dialoge (keiner nutzt `DialogDescription`) — app-weites Muster, bewusst nicht halb gefixt. Eigener kleiner Aufräum-Punkt: pro Dialog `DialogDescription` oder `aria-describedby={undefined}`.
+- axe-Abdeckung bei Bedarf ausweiten (IncomeDialog hat gar keine Testdatei; Sections).
+- Rest wie gehabt: #199/#200/#204/#205, PriceHistoryGraph-`<title>`-Fix, CSV-Praxistest, App-Icon-Angleich ans neue Branding.
+
+---
+
 ## 2026-07-06 — Claude: README-Logo durch In-App-Branding ersetzt (BACKLOG #212)
 
 > Session-Auftrag: BACKLOG #212. Kurze, fokussierte Session — nur Assets + README, kein Code.

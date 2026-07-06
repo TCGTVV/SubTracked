@@ -187,7 +187,7 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
                       value={c.interval}
                       onValueChange={(v) => updateCandidate(i, { interval: v as Interval })}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label={`Intervall für ${c.name}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -203,7 +203,7 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
                       value={c.currency}
                       onValueChange={(v) => updateCandidate(i, { currency: v })}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label={`Währung für ${c.name}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -221,7 +221,7 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
                         updateCandidate(i, { accountId: v === NO_ACCOUNT ? null : Number(v) })
                       }
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" aria-label={`Konto für ${c.name}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

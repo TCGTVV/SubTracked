@@ -2,6 +2,7 @@ import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addSubscription, previewCsvImport, type RecurringCandidate } from "../lib/db";
+import { expectNoAxeViolations } from "../test-utils/axe";
 import type { Account } from "../types";
 import { CsvImportDialog } from "./CsvImportDialog";
 
@@ -209,5 +210,11 @@ describe("CsvImportDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Schließen" }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("hat keine axe-Verstöße (Kandidaten-Liste)", async () => {
+    renderDialog();
+    await pickFileWith([netflix, spotify]);
+    await expectNoAxeViolations();
   });
 });

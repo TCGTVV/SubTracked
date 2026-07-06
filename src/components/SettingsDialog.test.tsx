@@ -9,6 +9,7 @@ import {
   importBackup,
   sendTestNotification,
 } from "../lib/db";
+import { expectNoAxeViolations } from "../test-utils/axe";
 import { SettingsDialog } from "./SettingsDialog";
 
 vi.mock("@tauri-apps/plugin-autostart", () => ({
@@ -337,5 +338,11 @@ describe("SettingsDialog", () => {
     expect(screen.queryByText(/Wirklich importieren\?/)).not.toBeInTheDocument();
     expect(mockOpen).not.toHaveBeenCalled();
     expect(mockImportBackup).not.toHaveBeenCalled();
+  });
+
+  it("hat keine axe-Verstöße", async () => {
+    renderDialog();
+    await screen.findByLabelText("Beim Login starten");
+    await expectNoAxeViolations();
   });
 });
