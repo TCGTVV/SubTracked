@@ -5,6 +5,7 @@ import { type AccountCoverage, computeCoverage, computeMonthlyBaseline } from ".
 import { daysSince, formatAmount } from "../lib/format";
 import { cn } from "../lib/utils";
 import type { Account, Income, Subscription } from "../types";
+import { BalanceForecastChart } from "./BalanceForecastChart";
 
 interface Props {
   subscriptions: Subscription[];
@@ -34,7 +35,8 @@ export function OverviewSection({ subscriptions, accounts, incomes = [], months 
   if (subscriptions.length === 0 && accounts.length === 0 && incomes.length === 0) return null;
 
   const baseline = computeMonthlyBaseline(subscriptions, accounts);
-  const coverage = computeCoverage(subscriptions, accounts, months, new Date(), incomes);
+  const today = new Date();
+  const coverage = computeCoverage(subscriptions, accounts, months, today, incomes);
 
   return (
     <section className="flex flex-col gap-6">
@@ -145,6 +147,8 @@ export function OverviewSection({ subscriptions, accounts, incomes = [], months 
                         : `${account.foreignCurrencySubsCount} Abos in anderer Währung werden hier nicht berücksichtigt.`}
                     </p>
                   )}
+
+                  <BalanceForecastChart account={account} from={today} months={months} />
 
                   {account.items.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Keine anstehenden Buchungen.</p>
