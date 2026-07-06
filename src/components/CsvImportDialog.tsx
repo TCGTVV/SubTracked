@@ -90,6 +90,8 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
           cancelDate: null,
           category: null,
           oneTime: false,
+          pendingAmountCents: null,
+          pendingFrom: null,
         });
       }
       setImportedCount(selected.length);

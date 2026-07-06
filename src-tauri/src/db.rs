@@ -76,6 +76,15 @@ pub struct Subscription {
     /// Backups aus älteren Versionen ohne das Feld importierbar bleiben.
     #[serde(default)]
     pub archived_at: Option<String>,
+    /// Geplante Preisänderung: neuer Betrag (kleinste Währungseinheit), wirksam ab
+    /// `pending_from`. Beide Felder immer gemeinsam gesetzt oder gemeinsam None
+    /// (validation.rs). Trial-/Probeabo = amount_cents 0 + gesetzte Änderung.
+    /// serde-default, damit Alt-Backups ohne die Felder importierbar bleiben.
+    #[serde(default)]
+    pub pending_amount_cents: Option<i64>,
+    /// Wirksamkeitsdatum (ISO "YYYY-MM-DD") der geplanten Preisänderung.
+    #[serde(default)]
+    pub pending_from: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
@@ -140,6 +149,11 @@ pub struct NewSubscription {
     pub category: Option<String>,
     /// Einmalige Ausgabe (analog incomes.one_time); None = false.
     pub one_time: Option<bool>,
+    /// Geplante Preisänderung (s. Subscription); beide gemeinsam oder gar nicht.
+    #[serde(default)]
+    pub pending_amount_cents: Option<i64>,
+    #[serde(default)]
+    pub pending_from: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]

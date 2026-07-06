@@ -99,14 +99,18 @@ fn compute_due_reminders(
             } else if anchor >= today {
                 let remind_from = anchor - Duration::days(sub.lead_days);
                 if today >= remind_from {
-                    out.push(DueReminder {
-                        subscription_id: sub.id,
-                        subscription_name: sub.name.clone(),
-                        amount_cents: sub.amount_cents,
-                        currency: sub.currency.clone(),
-                        due_date: anchor,
-                        kind: ReminderKind::Payment,
-                    });
+                    let amount_cents = effective_amount_cents(sub, anchor);
+                    // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+                    if amount_cents > 0 {
+                        out.push(DueReminder {
+                            subscription_id: sub.id,
+                            subscription_name: sub.name.clone(),
+                            amount_cents,
+                            currency: sub.currency.clone(),
+                            due_date: anchor,
+                            kind: ReminderKind::Payment,
+                        });
+                    }
                 }
             }
             continue;
@@ -125,14 +129,18 @@ fn compute_due_reminders(
                 Ok(due) => {
                     let remind_from = due - Duration::days(sub.lead_days);
                     if today >= remind_from {
-                        out.push(DueReminder {
-                            subscription_id: sub.id,
-                            subscription_name: sub.name.clone(),
-                            amount_cents: sub.amount_cents,
-                            currency: sub.currency.clone(),
-                            due_date: due,
-                            kind: ReminderKind::Payment,
-                        });
+                        let amount_cents = effective_amount_cents(sub, due);
+                        // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+                        if amount_cents > 0 {
+                            out.push(DueReminder {
+                                subscription_id: sub.id,
+                                subscription_name: sub.name.clone(),
+                                amount_cents,
+                                currency: sub.currency.clone(),
+                                due_date: due,
+                                kind: ReminderKind::Payment,
+                            });
+                        }
                     }
                 }
                 Err(e) => {
@@ -159,10 +167,17 @@ fn compute_due_reminders(
             Ok(Some(deadline)) => {
                 let remind_from = deadline - Duration::days(CANCEL_REMINDER_LEAD_DAYS);
                 if today >= remind_from && today <= deadline {
+                    // Kündigungs-Erinnerung zeigt die künftigen Kosten: in der
+                    // Trial-Phase (effektiv 0) den geplanten Preis — der ist das
+                    // eigentliche Kündigungs-Argument.
+                    let amount_cents = match effective_amount_cents(sub, deadline) {
+                        0 => sub.pending_amount_cents.unwrap_or(0),
+                        cents => cents,
+                    };
                     out.push(DueReminder {
                         subscription_id: sub.id,
                         subscription_name: sub.name.clone(),
-                        amount_cents: sub.amount_cents,
+                        amount_cents,
                         currency: sub.currency.clone(),
                         due_date: deadline,
                         kind: ReminderKind::Cancel,
@@ -180,6 +195,74 @@ fn compute_due_reminders(
         }
     }
     Ok(out)
+}
+
+/// Effektiver Betrag eines Abos an einem Stichtag: ab `pending_from` gilt der
+/// geplante Preis, davor der aktuelle. Ungültige pending-Daten fallen auf den
+/// aktuellen Preis zurück.
+fn effective_amount_cents(sub: &Subscription, on: NaiveDate) -> i64 {
+    if let (Some(cents), Some(from)) = (sub.pending_amount_cents, sub.pending_from.as_deref()) {
+        if let Ok(from_date) = parse_iso_date_strict(from) {
+            if on >= from_date {
+                return cents;
+            }
+        }
+    }
+    sub.amount_cents
+}
+
+/// Schaltet fällige geplante Preisänderungen scharf (`pending_from` <= heute):
+/// Betrag übernehmen, Preis-Historie-Eintrag zum Wirksamkeitsdatum, pending-Felder
+/// leeren. Läuft vor jedem Reminder-Check (Start + stündlich) und bewusst auch für
+/// archivierte Abos, damit deren Preisstand nach Reaktivierung stimmt.
+pub(crate) async fn apply_due_price_changes(
+    pool: &SqlitePool,
+    today: NaiveDate,
+) -> Result<u32, String> {
+    let due: Vec<(i64, i64, String, String)> = sqlx::query_as(
+        "SELECT id, pending_amount_cents, currency, pending_from FROM subscriptions \
+         WHERE pending_amount_cents IS NOT NULL AND pending_from IS NOT NULL AND pending_from <= ?",
+    )
+    .bind(today.to_string())
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let mut applied = 0u32;
+    for (id, cents, currency, from) in due {
+        let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
+        sqlx::query(
+            "UPDATE subscriptions \
+             SET amount_cents = ?, pending_amount_cents = NULL, pending_from = NULL \
+             WHERE id = ?",
+        )
+        .bind(cents)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        sqlx::query(
+            "INSERT INTO subscription_price_history \
+               (subscription_id, amount_cents, currency, changed_at) \
+             VALUES (?, ?, ?, datetime(?))",
+        )
+        .bind(id)
+        .bind(cents)
+        .bind(&currency)
+        .bind(&from)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+        tx.commit().await.map_err(|e| e.to_string())?;
+        tracing::info!(
+            subscription_id = id,
+            amount_cents = cents,
+            effective_from = %from,
+            "Geplante Preisänderung angewendet"
+        );
+        applied += 1;
+    }
+    Ok(applied)
 }
 
 /// Versendet Notifications und schreibt Reminder-Rows fuer die uebergebenen
@@ -269,10 +352,18 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
 
     let today = Local::now().date_naive();
 
+    // Fällige geplante Preisänderungen zuerst scharf schalten, damit der
+    // anschließende Check schon mit den neuen Beträgen rechnet. Fehler blockieren
+    // die Erinnerungen nicht.
+    if let Err(e) = apply_due_price_changes(pool, today).await {
+        tracing::error!(error = %e, "Anwenden geplanter Preisänderungen fehlgeschlagen");
+    }
+
     let subs = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time, archived_at FROM subscriptions WHERE active = 1",
+         cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
+         FROM subscriptions WHERE active = 1",
     )
     .fetch_all(pool)
     .await
@@ -396,6 +487,8 @@ mod tests {
             category: None,
             one_time: false,
             archived_at: None,
+            pending_amount_cents: None,
+            pending_from: None,
         }
     }
 
@@ -434,6 +527,128 @@ mod tests {
         let subs = vec![sub(1, "2025-02-15", 0, true)];
         let due = compute_due_reminders(&subs, d(2025, 2, 15)).unwrap();
         assert_eq!(due.len(), 1);
+    }
+
+    #[test]
+    fn payment_reminder_uses_pending_price_from_effective_date() {
+        let mut s = sub(1, "2025-02-15", 7, true);
+        s.pending_amount_cents = Some(2_499);
+        s.pending_from = Some("2025-02-10".to_string());
+        let due = compute_due_reminders(&[s], d(2025, 2, 8)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(
+            due[0].amount_cents, 2_499,
+            "Faelligkeit nach pending_from → geplanter Preis in der Notification"
+        );
+    }
+
+    #[test]
+    fn payment_reminder_keeps_current_price_before_effective_date() {
+        let mut s = sub(1, "2025-02-15", 7, true);
+        s.pending_amount_cents = Some(2_499);
+        s.pending_from = Some("2025-03-01".to_string());
+        let due = compute_due_reminders(&[s], d(2025, 2, 8)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].amount_cents, 1_799);
+    }
+
+    #[test]
+    fn trial_phase_skips_payment_reminder() {
+        // Probeabo: aktuell 0 €, kostenpflichtig erst nach der Faelligkeit —
+        // fuer die 0-€-Buchung gibt es nichts zu erinnern.
+        let mut s = sub(1, "2025-02-15", 7, true);
+        s.amount_cents = 0;
+        s.pending_amount_cents = Some(1_499);
+        s.pending_from = Some("2025-03-01".to_string());
+        let due = compute_due_reminders(&[s], d(2025, 2, 8)).unwrap();
+        assert!(
+            due.is_empty(),
+            "0-€-Buchung loest keine Zahlungs-Erinnerung aus"
+        );
+    }
+
+    #[test]
+    fn cancel_reminder_shows_pending_price_during_trial() {
+        // Kuendigungs-Erinnerung im Trial zeigt den kuenftigen Preis — der ist
+        // das eigentliche Kuendigungs-Argument.
+        let mut s = sub(1, "2025-02-15", 0, true);
+        s.amount_cents = 0;
+        s.pending_amount_cents = Some(1_499);
+        s.pending_from = Some("2025-02-15".to_string());
+        s.cancel_mode = Some("date".to_string());
+        s.cancel_date = Some("2025-02-10".to_string());
+        let due = compute_due_reminders(&[s], d(2025, 2, 5)).unwrap();
+        let cancel: Vec<_> = due
+            .iter()
+            .filter(|r| r.kind == ReminderKind::Cancel)
+            .collect();
+        assert_eq!(cancel.len(), 1);
+        assert_eq!(cancel[0].amount_cents, 1_499);
+    }
+
+    #[tokio::test]
+    async fn apply_due_price_changes_applies_only_due_pendings() {
+        let pool = test_pool().await;
+        // Abo 1 (Seed): Aenderung faellig, Abo 2: erst in der Zukunft.
+        sqlx::query(
+            "UPDATE subscriptions SET pending_amount_cents = 2499, pending_from = '2025-02-01' \
+             WHERE id = 1",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+               (id, name, amount_cents, currency, account_id, interval, anchor_date, \
+                lead_days, active, notify, pending_amount_cents, pending_from) \
+             VALUES (2, 'Spotify', 999, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1, \
+                     1199, '2025-06-01')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let applied = apply_due_price_changes(&pool, d(2025, 2, 3)).await.unwrap();
+        assert_eq!(applied, 1);
+
+        let (amount, pending_amount, pending_from): (i64, Option<i64>, Option<String>) =
+            sqlx::query_as(
+                "SELECT amount_cents, pending_amount_cents, pending_from \
+                 FROM subscriptions WHERE id = 1",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(amount, 2499, "faelliger geplanter Preis wird uebernommen");
+        assert!(
+            pending_amount.is_none() && pending_from.is_none(),
+            "pending-Felder geleert"
+        );
+
+        // Preis-Historie bekommt einen Eintrag zum Wirksamkeitsdatum.
+        let (hist_amount, changed_at): (i64, String) = sqlx::query_as(
+            "SELECT amount_cents, changed_at FROM subscription_price_history \
+             WHERE subscription_id = 1 ORDER BY changed_at DESC LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(hist_amount, 2499);
+        assert_eq!(changed_at, "2025-02-01 00:00:00");
+
+        // Zukuenftige Aenderung bleibt unangetastet.
+        let (a2, p2): (i64, Option<i64>) = sqlx::query_as(
+            "SELECT amount_cents, pending_amount_cents FROM subscriptions WHERE id = 2",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(a2, 999);
+        assert_eq!(p2, Some(1199));
+
+        // Idempotent: zweiter Lauf findet nichts mehr.
+        let again = apply_due_price_changes(&pool, d(2025, 2, 3)).await.unwrap();
+        assert_eq!(again, 0);
     }
 
     #[test]

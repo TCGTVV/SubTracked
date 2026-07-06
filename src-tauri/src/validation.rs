@@ -79,6 +79,10 @@ pub fn validate_min_buffer_cents(min_buffer_cents: i64) -> Result<(), String> {
     Ok(())
 }
 
+// Bewusst ein Parameter pro Feld statt Params-Struct: die drei Aufrufer (add/update/
+// Backup-Restore) haben unterschiedliche Quell-Structs, und die Feldliste wächst mit
+// jeder Migration — Positions-Fehler fängt der Typ-Mix (i64/&str/Option) ab.
+#[allow(clippy::too_many_arguments)]
 pub fn validate_subscription_fields(
     name: &str,
     amount_cents: i64,
@@ -87,15 +91,43 @@ pub fn validate_subscription_fields(
     anchor_date: &str,
     lead_days: i64,
     category: Option<&str>,
+    pending_amount_cents: Option<i64>,
+    pending_from: Option<&str>,
 ) -> Result<(), String> {
     validate_name(name)?;
-    validate_amount_cents(amount_cents)?;
+    // Trial-/Probeabo: Betrag 0 ist nur erlaubt, wenn eine geplante Preisänderung
+    // existiert („wird ab Datum X kostenpflichtig"). Negative Beträge nie.
+    if amount_cents != 0 || pending_amount_cents.is_none() {
+        validate_amount_cents(amount_cents)?;
+    }
     validate_currency(currency)?;
     validate_interval(interval)?;
     validate_anchor_date(anchor_date)?;
     validate_lead_days(lead_days)?;
     validate_category(category)?;
+    validate_pending_price(pending_amount_cents, pending_from)?;
     Ok(())
+}
+
+/// Geplante Preisänderung: Betrag und Wirksamkeitsdatum immer gemeinsam, Betrag > 0,
+/// Datum strikt ISO. Vergangene Daten sind erlaubt — der Rollover im Reminder-Loop
+/// schaltet sie beim nächsten Check scharf (max. 1h Verzug).
+pub fn validate_pending_price(
+    pending_amount_cents: Option<i64>,
+    pending_from: Option<&str>,
+) -> Result<(), String> {
+    match (pending_amount_cents, pending_from) {
+        (None, None) => Ok(()),
+        (Some(cents), Some(from)) => {
+            if cents <= 0 {
+                return Err("Geplanter Preis muss groesser als 0 sein.".to_string());
+            }
+            parse_iso_date_strict(from).map(|_| ())
+        }
+        _ => Err(
+            "Geplante Preisänderung braucht Betrag und Wirksamkeitsdatum gemeinsam.".to_string(),
+        ),
+    }
 }
 
 /// Erlaubte Einheiten für die Kündigungsfrist (cancel_mode = "period").
@@ -327,13 +359,23 @@ mod tests {
             "monthly",
             "2026-06-01",
             7,
+            None,
+            None,
             None
         )
         .is_ok());
-        assert!(
-            validate_subscription_fields("", 1_799, "EUR", "monthly", "2026-06-01", 7, None)
-                .is_err()
-        );
+        assert!(validate_subscription_fields(
+            "",
+            1_799,
+            "EUR",
+            "monthly",
+            "2026-06-01",
+            7,
+            None,
+            None,
+            None
+        )
+        .is_err());
         assert!(validate_subscription_fields(
             "Netflix",
             0,
@@ -341,6 +383,8 @@ mod tests {
             "monthly",
             "2026-06-01",
             7,
+            None,
+            None,
             None
         )
         .is_err());
@@ -351,6 +395,8 @@ mod tests {
             "monthly",
             "2026-06-01",
             7,
+            None,
+            None,
             None
         )
         .is_err());
@@ -361,6 +407,8 @@ mod tests {
             "fortnightly",
             "2026-06-01",
             7,
+            None,
+            None,
             None
         )
         .is_err());
@@ -371,6 +419,8 @@ mod tests {
             "monthly",
             "08.06.2026",
             7,
+            None,
+            None,
             None
         )
         .is_err());
@@ -381,7 +431,52 @@ mod tests {
             "monthly",
             "2026-06-01",
             400,
+            None,
+            None,
             None
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn pending_price_rules() {
+        assert!(validate_pending_price(None, None).is_ok());
+        assert!(validate_pending_price(Some(1_499), Some("2026-09-01")).is_ok());
+        // Vergangene Wirksamkeitsdaten sind erlaubt — der Rollover wendet sie an.
+        assert!(validate_pending_price(Some(1_499), Some("2020-01-01")).is_ok());
+        assert!(validate_pending_price(Some(1_499), None).is_err());
+        assert!(validate_pending_price(None, Some("2026-09-01")).is_err());
+        assert!(validate_pending_price(Some(0), Some("2026-09-01")).is_err());
+        assert!(validate_pending_price(Some(-5), Some("2026-09-01")).is_err());
+        assert!(validate_pending_price(Some(1_499), Some("01.09.2026")).is_err());
+    }
+
+    #[test]
+    fn trial_amount_zero_requires_pending_price() {
+        // Betrag 0 ist nur mit geplanter Preisaenderung erlaubt (Trial/Probeabo).
+        assert!(validate_subscription_fields(
+            "Disney+",
+            0,
+            "EUR",
+            "monthly",
+            "2026-06-01",
+            7,
+            None,
+            Some(1_499),
+            Some("2026-09-01")
+        )
+        .is_ok());
+        // Negative Betraege bleiben auch mit Pending verboten.
+        assert!(validate_subscription_fields(
+            "Disney+",
+            -1,
+            "EUR",
+            "monthly",
+            "2026-06-01",
+            7,
+            None,
+            Some(1_499),
+            Some("2026-09-01")
         )
         .is_err());
     }

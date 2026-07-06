@@ -53,6 +53,18 @@ function subscriptionDatesWithin(sub: Subscription, from: Date, until: Date): Da
   return anchor >= from && anchor <= until ? [anchor] : [];
 }
 
+/**
+ * Effektiver Betrag eines Abos an einem Stichtag (ISO "YYYY-MM-DD"): ab
+ * `pendingFrom` gilt der geplante Preis, davor der aktuelle. Spiegel der
+ * Rust-Logik (`effective_amount_cents` in reminders.rs). 0 = Trial-Phase.
+ */
+export function effectiveAmountCents(sub: Subscription, dateISO: string): number {
+  if (sub.pendingAmountCents != null && sub.pendingFrom != null && dateISO >= sub.pendingFrom) {
+    return sub.pendingAmountCents;
+  }
+  return sub.amountCents;
+}
+
 function monthlyEquivalentCents(sub: Subscription): number {
   if (sub.interval === "weekly") return (sub.amountCents * 52) / 12;
   if (sub.interval === "biweekly") return (sub.amountCents * 26) / 12;
@@ -135,12 +147,16 @@ export function computeCoverage(
 
     const list = itemsByBucket.get(key) ?? [];
     for (const d of subscriptionDatesWithin(sub, from, until)) {
+      const date = toISODateLocal(d);
+      const cents = effectiveAmountCents(sub, date);
+      // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+      if (cents === 0) continue;
       list.push({
         type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
-        date: toISODateLocal(d),
-        cents: sub.amountCents,
+        date,
+        cents,
       });
     }
     itemsByBucket.set(key, list);
@@ -379,12 +395,16 @@ export function computeUpcoming(
     const accountName =
       sub.accountId != null ? (accName.get(sub.accountId) ?? "(unbekanntes Konto)") : null;
     for (const d of subscriptionDatesWithin(sub, from, until)) {
+      const date = toISODateLocal(d);
+      const cents = effectiveAmountCents(sub, date);
+      // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+      if (cents === 0) continue;
       items.push({
         type: "outflow",
         subscriptionId: sub.id,
         subscription: sub.name,
-        date: toISODateLocal(d),
-        cents: sub.amountCents,
+        date,
+        cents,
         currency: sub.currency,
         accountName,
         notify: sub.notify,
@@ -460,7 +480,10 @@ export function computeYearlyLoad(
     for (const d of dates) {
       const bucket = months[d.getFullYear() * 12 + d.getMonth() - baseIndex];
       if (!bucket) continue;
-      bucket.cents += sub.amountCents;
+      const cents = effectiveAmountCents(sub, toISODateLocal(d));
+      // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+      if (cents === 0) continue;
+      bucket.cents += cents;
       bucket.count += 1;
     }
   }
