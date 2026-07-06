@@ -94,6 +94,11 @@ export async function updateAccount(account: Account): Promise<void> {
   await invoke("update_account", { account });
 }
 
+/** Bestätigt den aktuellen Saldo ohne Wertänderung — setzt nur `balance_updated_at`. */
+export async function confirmAccountBalance(id: number): Promise<void> {
+  await invoke("confirm_account_balance", { id });
+}
+
 export async function deleteAccount(id: number): Promise<void> {
   await invoke("delete_account", { id });
 }
