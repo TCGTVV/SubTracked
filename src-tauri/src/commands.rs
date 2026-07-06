@@ -215,6 +215,29 @@ pub async fn update_account(state: State<'_, AppState>, account: Account) -> Res
     Ok(())
 }
 
+/// Bestätigt den aktuellen Saldo ohne Wertänderung: setzt nur `balance_updated_at`.
+/// Nötig für die Frische-Warnung — `update_account` refresht den Zeitstempel bewusst
+/// nur bei tatsächlicher Saldo-Änderung.
+pub(crate) async fn confirm_account_balance_in_db(
+    db: &sqlx::SqlitePool,
+    id: i64,
+) -> Result<(), String> {
+    let res = sqlx::query("UPDATE accounts SET balance_updated_at = datetime('now') WHERE id = ?")
+        .bind(id)
+        .execute(db)
+        .await
+        .map_err(|e| e.to_string())?;
+    if res.rows_affected() == 0 {
+        return Err(format!("Konto {id} existiert nicht"));
+    }
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn confirm_account_balance(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    confirm_account_balance_in_db(&state.db, id).await
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn delete_account(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     sqlx::query("DELETE FROM accounts WHERE id = ?")
@@ -814,5 +837,40 @@ mod tests {
             .await
             .expect_err("period ohne Frist muss abgelehnt werden");
         assert!(err.contains("Kündigungsfrist"), "Fehlertext: {err}");
+    }
+
+    #[tokio::test]
+    async fn confirm_account_balance_sets_timestamp_without_touching_balance() {
+        let db = test_pool().await;
+        let id = insert_account(&db, "Giro").await;
+        let (before,): (Option<String>,) =
+            sqlx::query_as("SELECT balance_updated_at FROM accounts WHERE id = ?")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .expect("fetch before");
+        assert_eq!(before, None, "frisches Konto hat keinen Zeitstempel");
+
+        confirm_account_balance_in_db(&db, id)
+            .await
+            .expect("confirm sollte durchgehen");
+
+        let (after, balance): (Option<String>, i64) =
+            sqlx::query_as("SELECT balance_updated_at, balance_cents FROM accounts WHERE id = ?")
+                .bind(id)
+                .fetch_one(&db)
+                .await
+                .expect("fetch after");
+        assert!(after.is_some(), "Zeitstempel muss gesetzt sein");
+        assert_eq!(balance, 0, "Saldo bleibt unangetastet");
+    }
+
+    #[tokio::test]
+    async fn confirm_account_balance_rejects_unknown_account() {
+        let db = test_pool().await;
+        let err = confirm_account_balance_in_db(&db, 999)
+            .await
+            .expect_err("unbekanntes Konto muss abgelehnt werden");
+        assert!(err.contains("existiert nicht"), "Fehlertext: {err}");
     }
 }

@@ -50,6 +50,7 @@ pub fn run() {
             commands::delete_subscription,
             commands::add_account,
             commands::update_account,
+            commands::confirm_account_balance,
             commands::delete_account,
             commands::count_subs_for_account,
             commands::update_subscription,
