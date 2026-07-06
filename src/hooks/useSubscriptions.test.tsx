@@ -33,6 +33,8 @@ const sampleSubs: Subscription[] = [
     category: null,
     oneTime: false,
     archivedAt: null,
+    pendingAmountCents: null,
+    pendingFrom: null,
   },
 ];
 

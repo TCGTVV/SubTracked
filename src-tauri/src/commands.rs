@@ -30,11 +30,11 @@ pub async fn list_subscriptions(
     let only_active = only_active.unwrap_or(true);
     let sql = if only_active {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
          FROM subscriptions WHERE active = 1 ORDER BY name"
     } else {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
          FROM subscriptions ORDER BY name"
     };
     sqlx::query_as::<_, Subscription>(sql)
@@ -67,6 +67,8 @@ pub async fn add_subscription(
         &sub.anchor_date,
         sub.lead_days,
         sub.category.as_deref(),
+        sub.pending_amount_cents,
+        sub.pending_from.as_deref(),
     )?;
     validate_cancellation(
         sub.cancel_mode.as_deref(),
@@ -80,8 +82,9 @@ pub async fn add_subscription(
     let res = sqlx::query(
         "INSERT INTO subscriptions \
            (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, \
-            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, \
+            pending_amount_cents, pending_from) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&sub.name)
     .bind(sub.amount_cents)
@@ -98,6 +101,8 @@ pub async fn add_subscription(
     .bind(&sub.cancel_date)
     .bind(&sub.category)
     .bind(sub.one_time.unwrap_or(false))
+    .bind(sub.pending_amount_cents)
+    .bind(&sub.pending_from)
     .execute(&state.db)
     .await
     .map_err(|e| e.to_string())?;
@@ -281,6 +286,8 @@ pub(crate) async fn update_subscription_in_db(
         &sub.anchor_date,
         sub.lead_days,
         sub.category.as_deref(),
+        sub.pending_amount_cents,
+        sub.pending_from.as_deref(),
     )?;
     validate_cancellation(
         sub.cancel_mode.as_deref(),
@@ -308,7 +315,7 @@ pub(crate) async fn update_subscription_in_db(
              SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
                  cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
-                 category = ?, one_time = ? \
+                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -326,6 +333,8 @@ pub(crate) async fn update_subscription_in_db(
         .bind(&sub.cancel_date)
         .bind(&sub.category)
         .bind(sub.one_time)
+        .bind(sub.pending_amount_cents)
+        .bind(&sub.pending_from)
         .bind(sub.id)
         .execute(db)
         .await
@@ -336,7 +345,7 @@ pub(crate) async fn update_subscription_in_db(
              SET name = ?, amount_cents = ?, currency = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
                  cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
-                 category = ?, one_time = ? \
+                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ? \
              WHERE id = ?",
         )
         .bind(&sub.name)
@@ -353,6 +362,8 @@ pub(crate) async fn update_subscription_in_db(
         .bind(&sub.cancel_date)
         .bind(&sub.category)
         .bind(sub.one_time)
+        .bind(sub.pending_amount_cents)
+        .bind(&sub.pending_from)
         .bind(sub.id)
         .execute(db)
         .await
@@ -688,6 +699,8 @@ mod tests {
             category: None,
             one_time: false,
             archived_at: None,
+            pending_amount_cents: None,
+            pending_from: None,
         }
     }
 

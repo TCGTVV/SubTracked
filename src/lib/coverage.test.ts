@@ -7,6 +7,7 @@ import {
   computeMonthlyBaseline,
   computeUpcoming,
   computeYearlyLoad,
+  effectiveAmountCents,
 } from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
@@ -27,6 +28,8 @@ const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   category: null,
   oneTime: false,
   archivedAt: null,
+  pendingAmountCents: null,
+  pendingFrom: null,
   ...overrides,
 });
 
@@ -544,5 +547,47 @@ describe("computeArchivedSavings", () => {
     expect(result.map((r) => r.currency)).toEqual(["USD", "EUR"]);
     expect(result[1]?.items.map((i) => i.name)).toEqual(["Groß", "Klein"]);
     expect(result[1]?.totalCents).toBe(22_000);
+  });
+});
+
+describe("geplante Preisänderung (pendingAmountCents/pendingFrom)", () => {
+  it("effectiveAmountCents wechselt ab dem Wirksamkeitsdatum", () => {
+    const s = sub({ pendingAmountCents: 1499, pendingFrom: "2026-03-01" });
+    expect(effectiveAmountCents(s, "2026-02-28")).toBe(1000);
+    expect(effectiveAmountCents(s, "2026-03-01")).toBe(1499);
+    expect(effectiveAmountCents(s, "2026-04-15")).toBe(1499);
+  });
+
+  it("effectiveAmountCents ohne geplante Änderung = aktueller Preis", () => {
+    expect(effectiveAmountCents(sub(), "2099-01-01")).toBe(1000);
+  });
+
+  it("computeCoverage bucht Fälligkeiten ab Wirksamkeitsdatum mit dem geplanten Preis", () => {
+    const s = sub({ pendingAmountCents: 1499, pendingFrom: "2026-03-01" });
+    const [bucket] = computeCoverage([s], [acc(1, "Giro")], 4, new Date(2026, 0, 1));
+    expect(bucket?.items.find((i) => i.date === "2026-01-15")?.cents).toBe(1000);
+    expect(bucket?.items.find((i) => i.date === "2026-03-15")?.cents).toBe(1499);
+  });
+
+  it("computeCoverage überspringt 0-€-Buchungen der Trial-Phase", () => {
+    const s = sub({ amountCents: 0, pendingAmountCents: 1499, pendingFrom: "2026-03-01" });
+    const [bucket] = computeCoverage([s], [acc(1, "Giro")], 4, new Date(2026, 0, 1));
+    const dates = bucket?.items.map((i) => i.date) ?? [];
+    expect(dates).not.toContain("2026-01-15");
+    expect(dates).not.toContain("2026-02-15");
+    expect(bucket?.items.find((i) => i.date === "2026-03-15")?.cents).toBe(1499);
+  });
+
+  it("computeUpcoming nutzt den effektiven Preis und überspringt Trial-Buchungen", () => {
+    const s = sub({ amountCents: 0, pendingAmountCents: 1499, pendingFrom: "2026-02-01" });
+    const items = computeUpcoming([s], [acc(1, "Giro")], 60, new Date(2026, 0, 10));
+    expect(items.map((i) => i.date)).toEqual(["2026-02-15"]);
+    expect(items[0]?.cents).toBe(1499);
+  });
+
+  it("computeYearlyLoad summiert mit effektiven Preisen", () => {
+    const s = sub({ pendingAmountCents: 2000, pendingFrom: "2026-07-01" });
+    const [summary] = computeYearlyLoad([s], new Date(2026, 0, 1));
+    expect(summary?.totalCents).toBe(6 * 1000 + 6 * 2000);
   });
 });

@@ -1,4 +1,13 @@
-import { Archive, ArchiveRestore, CalendarX, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  CalendarClock,
+  CalendarX,
+  Pencil,
+  Plus,
+  Trash2,
+  Wallet,
+} from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { AccountsDialog } from "./components/AccountsDialog";
 import { AppSidebar, type DashboardView } from "./components/AppSidebar";
@@ -96,6 +105,18 @@ function CancelNotice({ sub }: { sub: Subscription }) {
     <p className={cn("flex items-center gap-1.5 text-xs", tone)}>
       <CalendarX className="size-3.5 shrink-0" />
       Kündigen bis {cd.formatted} · {suffix}
+    </p>
+  );
+}
+
+function PendingPriceNotice({ sub }: { sub: Subscription }) {
+  if (!sub.active || sub.pendingAmountCents == null || sub.pendingFrom == null) return null;
+  // pendingFrom ist strikt ISO (YYYY-MM-DD) aus der DB — Anzeige als DD.MM.YYYY.
+  const formatted = sub.pendingFrom.split("-").reverse().join(".");
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <CalendarClock className="size-3.5 shrink-0" />
+      Ab {formatted}: {formatAmount(sub.pendingAmountCents, sub.currency)}
     </p>
   );
 }
@@ -430,10 +451,14 @@ function App() {
                             {account && <> · {account}</>}
                             {sub.category && <> · {sub.category}</>}
                             {sub.oneTime && <> · einmalig</>}
+                            {sub.active &&
+                              sub.amountCents === 0 &&
+                              sub.pendingAmountCents != null && <> · Probeabo</>}
                             {sub.active && !sub.notify && <> · stumm</>}
                           </>
                         }
                       >
+                        <PendingPriceNotice sub={sub} />
                         <CancelNotice sub={sub} />
                         <CardActions
                           name={sub.name}

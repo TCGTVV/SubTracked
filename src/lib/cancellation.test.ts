@@ -21,6 +21,8 @@ function sub(overrides: Partial<Subscription>): Subscription {
     category: null,
     oneTime: false,
     archivedAt: null,
+    pendingAmountCents: null,
+    pendingFrom: null,
     ...overrides,
   };
 }

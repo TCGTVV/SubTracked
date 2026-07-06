@@ -23,6 +23,8 @@ const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   category: null,
   oneTime: false,
   archivedAt: "2025-09-01 10:00:00",
+  pendingAmountCents: null,
+  pendingFrom: null,
   ...overrides,
 });
 

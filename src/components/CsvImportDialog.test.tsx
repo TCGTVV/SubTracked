@@ -165,6 +165,8 @@ describe("CsvImportDialog", () => {
       cancelDate: null,
       category: null,
       oneTime: false,
+      pendingAmountCents: null,
+      pendingFrom: null,
     });
     expect(onImported).toHaveBeenCalledOnce();
     expect(screen.getByRole("status")).toHaveTextContent(/2 Abos angelegt/);

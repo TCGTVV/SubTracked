@@ -116,6 +116,8 @@ describe("App", () => {
       category: null,
       oneTime: false,
       archivedAt: null,
+      pendingAmountCents: null,
+      pendingFrom: null,
     };
     mockUseSubscriptions.mockReturnValue({
       subs: [archivedSub],

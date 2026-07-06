@@ -68,7 +68,8 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     let subscriptions = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time, archived_at FROM subscriptions ORDER BY id",
+         cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
+         FROM subscriptions ORDER BY id",
     )
     .fetch_all(db)
     .await
@@ -204,6 +205,8 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             &s.anchor_date,
             s.lead_days,
             s.category.as_deref(),
+            s.pending_amount_cents,
+            s.pending_from.as_deref(),
         )
         .map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
         validate_cancellation(
@@ -300,8 +303,9 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify, cancel_mode, cancel_period_value, \
-                cancel_period_unit, cancel_date, category, one_time, archived_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                cancel_period_unit, cancel_date, category, one_time, archived_at, \
+                pending_amount_cents, pending_from) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(s.id)
         .bind(&s.name)
@@ -320,6 +324,8 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
         .bind(&s.category)
         .bind(s.one_time)
         .bind(&s.archived_at)
+        .bind(s.pending_amount_cents)
+        .bind(&s.pending_from)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

@@ -9,6 +9,38 @@
 
 ---
 
+## 2026-07-06 — Claude: Trial-/Probeabo + geplante Preisänderung mit Wirksamkeitsdatum (BACKLOG #204)
+
+> Session-Auftrag: BACKLOG #204. Ein Feature, ein Commit, komplett durch beide Stacks (Migration → Rust → TS → UI → Tests).
+
+### Design-Entscheidungen
+
+- **Genau EINE geplante Änderung pro Abo** als zwei nullable Spalten (`pending_amount_cents`, `pending_from` — Migration [0014](src-tauri/migrations/0014_subscription_pending_price.sql), simple ALTERs, gegen Kopie der echten DB verifiziert). Kein Zukunfts-Eintrag in der History-Tabelle — `subscriptions.amount_cents` bleibt überall die operative Wahrheit, die Historie bleibt reine Vergangenheit bis zum Rollover.
+- **Trial-/Probeabo ist KEIN eigenes Flag:** Betrag 0 + geplanter Preis ab Datum X. Validation erlaubt 0 nur mit gesetzter Änderung (`validate_subscription_fields` hat jetzt 9 Args + begründetes `#[allow(too_many_arguments)]`; Tests wurden über die Compiler-Fehlerliste nachgezogen).
+- **Vergangene Wirksamkeitsdaten sind gültige Eingaben** — der Rollover wendet sie beim nächsten Check an (max. 1h). Kein Sonderfall Add/Update vs. Backup-Restore nötig.
+- **Rollover** `apply_due_price_changes` in [reminders.rs](src-tauri/src/reminders.rs), läuft am Anfang von `run_reminder_check` (Start + stündlich), Fehler blockieren die Erinnerungen nicht. Pro Abo eine Transaktion: Betrag setzen, History-Eintrag mit `changed_at = datetime(pending_from)` (= 00:00:00, sortiert sauber), pending-Felder nullen. Bewusst auch für **archivierte** Abos (Preisstand nach Reaktivierung korrekt). Idempotent (Test).
+- **Effektivpreis je Fälligkeitstag** doppelt gespiegelt: `effective_amount_cents` (Rust, Notifications) ↔ `effectiveAmountCents` (TS in [coverage.ts](src/lib/coverage.ts), von `computeCoverage`/`computeUpcoming`/`computeYearlyLoad` genutzt). **0-€-Buchungen (Trial-Phase) werden übersprungen** — nichts wird abgebucht, nichts erinnert. Ausnahme: **Kündigungs-Erinnerungen zeigen im Trial den geplanten Preis** — der ist das Kündigungs-Argument. `computeCostSummary`/Baseline bleiben bewusst beim aktuellen Preis (Trial kostet aktuell 0).
+
+### UI
+
+- SubscriptionDialog: Checkbox „Preisänderung geplant" (bei Einmalausgaben ausgeblendet) → „Neuer Betrag" + „Wirksam ab"-DateField, Hinweistext fürs Probeabo-Muster. Feldnahe Fehler + Fokus-Reihenfolge wie gehabt.
+- Abo-Card: „Ab {DD.MM.YYYY}: {Betrag}"-Zeile (`PendingPriceNotice`) + „· Probeabo"-Badge (Betrag 0 + Änderung gesetzt).
+- PriceHistoryGraph: geplanter Preis als **gestrichelt angebundener, hohler Zukunfts-Punkt** (skaliert min/max mit). Dabei den seit #201 bekannten **`<title>`-Array-Bug gefixt** (Template-Strings statt JSX-Interpolation) — Follow-up damit erledigt.
+
+### Verifikation (alles grün)
+
+- `cargo test` ✓ **104** (+7: validate_pending_price-Regeln, Trial-0-Regel, Effektivpreis ×3, Rollover inkl. Idempotenz), clippy `-D warnings` ✓, fmt ✓.
+- `pnpm test:run` ✓ **307** (+10: effectiveAmountCents/coverage/upcoming/yearly + 3 Dialog-RTL inkl. Payload- und Graph-Check), `tsc` ✓, `pnpm lint` ✓.
+- Migration auf Kopie der echten DB: integrity_check ok, foreign_key_check leer, Pending-Roundtrip ok.
+
+### Offen / Hinweise
+
+- CSV-Export gibt die pending-Spalten **nicht** aus (Formatentscheidung offen; SELECT ist gefixt, sonst wäre es der 0008-Klasse-Bug geworden).
+- Kein Tauri-App-Durchklick (nur jsdom) — beim nächsten `pnpm tauri dev`: Probeabo anlegen (Betrag 0 + Änderung), Card-Zeile, Graph-Punkt im Edit ansehen.
+- Rest wie im Vorgänger-Eintrag: #199/#200/#205, CSV-Praxistest, DialogDescription-Aufräumer, App-Icon-Angleich.
+
+---
+
 ## 2026-07-06 — Claude: Bessere Fehlertexte + axe-Accessibility-Tests (BACKLOG #213)
 
 > Session-Auftrag: BACKLOG #213 („Bessere Fehlertexte; Accessibility-Tests; E2E-Tests"). Zwei von drei Teilen umgesetzt, je ein Commit; E2E ist auf der Dev-Maschine hart blockiert (s.u.) und steht jetzt als eigener Backlog-Punkt.

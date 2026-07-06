@@ -46,6 +46,8 @@ interface FieldErrors {
   cancelPeriod?: string;
   cancelDate?: string;
   category?: string;
+  pendingAmount?: string;
+  pendingFrom?: string;
 }
 
 /** Sentinel für „keine Kündigung tracken" — Auswahl im Kündigungs-Select. */
@@ -69,17 +71,20 @@ const CATEGORY_PRESETS = [
 /** Obergrenze der Kategorie-Länge, parallel zu MAX_CATEGORY_LENGTH im Rust-Backend. */
 const MAX_CATEGORY_LENGTH = 60;
 
-function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
+function PriceHistoryGraph({
+  entries,
+  pending,
+}: {
+  entries: PriceHistoryEntry[];
+  /** Geplante Preisänderung — als gestrichelt angebundener Zukunfts-Punkt gerendert. */
+  pending?: { amountCents: number; from: string } | null;
+}) {
   const chronological = [...entries].reverse();
+  const currency = chronological[0]?.currency ?? "EUR";
   const amounts = chronological.map((entry) => entry.amountCents);
+  if (pending) amounts.push(pending.amountCents);
   const min = Math.min(...amounts);
   const max = Math.max(...amounts);
-  const minEntry = chronological.reduce((best, entry) =>
-    entry.amountCents < best.amountCents ? entry : best,
-  );
-  const maxEntry = chronological.reduce((best, entry) =>
-    entry.amountCents > best.amountCents ? entry : best,
-  );
   const isConstant = min === max;
   const range = max - min;
   const width = 320;
@@ -88,16 +93,24 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
   const paddingY = 16;
   const innerWidth = width - paddingX * 2;
   const innerHeight = height - paddingY * 2;
-  const xStep = chronological.length > 1 ? innerWidth / (chronological.length - 1) : 0;
-
-  const points = chronological.map((entry, index) => {
-    const x = paddingX + index * xStep;
-    const y = isConstant
+  const totalPoints = chronological.length + (pending ? 1 : 0);
+  const xStep = totalPoints > 1 ? innerWidth / (totalPoints - 1) : 0;
+  const yFor = (cents: number) =>
+    isConstant
       ? paddingY + innerHeight / 2
-      : paddingY + innerHeight - ((entry.amountCents - min) / range) * innerHeight;
-    return { entry, x, y };
-  });
+      : paddingY + innerHeight - ((cents - min) / range) * innerHeight;
+
+  const points = chronological.map((entry, index) => ({
+    entry,
+    x: paddingX + index * xStep,
+    y: yFor(entry.amountCents),
+  }));
   const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const lastPoint = points[points.length - 1];
+  const pendingPoint =
+    pending && lastPoint
+      ? { x: paddingX + (totalPoints - 1) * xStep, y: yFor(pending.amountCents) }
+      : null;
 
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -113,19 +126,36 @@ function PriceHistoryGraph({ entries }: { entries: PriceHistoryEntry[] }) {
         <polyline className="fill-none stroke-primary stroke-2" points={line} />
         {points.map(({ entry, x, y }) => (
           <circle key={entry.id} className="fill-primary" cx={x} cy={y} r="3.5">
-            <title>
-              {entry.changedAt.slice(0, 10)}: {formatAmount(entry.amountCents, entry.currency)}
-            </title>
+            <title>{`${entry.changedAt.slice(0, 10)}: ${formatAmount(entry.amountCents, entry.currency)}`}</title>
           </circle>
         ))}
+        {pending && pendingPoint && lastPoint && (
+          <>
+            <line
+              className="stroke-primary stroke-2 [stroke-dasharray:4_3]"
+              x1={lastPoint.x}
+              y1={lastPoint.y}
+              x2={pendingPoint.x}
+              y2={pendingPoint.y}
+            />
+            <circle
+              className="fill-background stroke-primary stroke-2"
+              cx={pendingPoint.x}
+              cy={pendingPoint.y}
+              r="3.5"
+            >
+              <title>{`ab ${pending.from}: ${formatAmount(pending.amountCents, currency)} (geplant)`}</title>
+            </circle>
+          </>
+        )}
       </svg>
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         {isConstant ? (
-          <span>Konstant: {formatAmount(min, minEntry.currency)}</span>
+          <span>Konstant: {formatAmount(min, currency)}</span>
         ) : (
           <>
-            <span>{formatAmount(min, minEntry.currency)}</span>
-            <span>{formatAmount(max, maxEntry.currency)}</span>
+            <span>{formatAmount(min, currency)}</span>
+            <span>{formatAmount(max, currency)}</span>
           </>
         )}
       </div>
@@ -151,6 +181,8 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const cancelPeriodErrorId = useId();
   const cancelDateErrorId = useId();
   const categoryErrorId = useId();
+  const pendingAmountErrorId = useId();
+  const pendingFromErrorId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -160,6 +192,8 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const cancelPeriodRef = useRef<HTMLInputElement>(null);
   const cancelDateRef = useRef<HTMLButtonElement>(null);
   const categoryCustomRef = useRef<HTMLInputElement>(null);
+  const pendingAmountRef = useRef<HTMLInputElement>(null);
+  const pendingFromRef = useRef<HTMLButtonElement>(null);
 
   const [name, setName] = useState(subscription?.name ?? "");
   const [amount, setAmount] = useState(
@@ -180,6 +214,13 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
     subscription?.cancelPeriodUnit ?? "months",
   );
   const [cancelDate, setCancelDate] = useState(subscription?.cancelDate ?? todayISO());
+  const [pendingEnabled, setPendingEnabled] = useState(subscription?.pendingAmountCents != null);
+  const [pendingAmount, setPendingAmount] = useState(
+    subscription?.pendingAmountCents != null
+      ? centsToInput(subscription.pendingAmountCents, subscription.currency)
+      : "",
+  );
+  const [pendingFrom, setPendingFrom] = useState(subscription?.pendingFrom ?? todayISO());
   const initialCategory = subscription?.category ?? null;
   const initialCategoryIsPreset =
     initialCategory !== null && (CATEGORY_PRESETS as readonly string[]).includes(initialCategory);
@@ -217,9 +258,15 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
     });
   }
 
-  function validate(): { errors: FieldErrors; amountNumber: number | null } {
+  function validate(): {
+    errors: FieldErrors;
+    amountNumber: number | null;
+    pendingAmountNumber: number | null;
+  } {
     const next: FieldErrors = {};
     if (name.trim() === "") next.name = "Bitte Namen eingeben.";
+
+    const pendingActive = pendingEnabled && !oneTime;
 
     let amountNumber: number | null = null;
     if (amount.trim() === "") {
@@ -228,8 +275,28 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       amountNumber = parseAmountInput(amount);
       if (amountNumber === null) {
         next.amount = "Betrag ungültig — bitte Zahl eingeben (z.B. 17,99).";
-      } else if (amountNumber <= 0) {
+      } else if (amountNumber === 0 && !pendingActive) {
+        // Trial-/Probeabo: 0 nur zusammen mit geplanter Preisänderung.
+        next.amount = "Betrag 0 ist nur mit geplanter Preisänderung erlaubt (Probeabo).";
+      } else if (amountNumber < 0) {
         next.amount = "Betrag muss größer als 0 sein.";
+      }
+    }
+
+    let pendingAmountNumber: number | null = null;
+    if (pendingActive) {
+      if (pendingAmount.trim() === "") {
+        next.pendingAmount = "Bitte geplanten Betrag eingeben.";
+      } else {
+        pendingAmountNumber = parseAmountInput(pendingAmount);
+        if (pendingAmountNumber === null) {
+          next.pendingAmount = "Betrag ungültig — bitte Zahl eingeben (z.B. 14,99).";
+        } else if (pendingAmountNumber <= 0) {
+          next.pendingAmount = "Geplanter Betrag muss größer als 0 sein.";
+        }
+      }
+      if (!isStrictISODate(pendingFrom)) {
+        next.pendingFrom = "Wirksam-ab muss ein gültiges Datum im Format YYYY-MM-DD sein.";
       }
     }
 
@@ -261,18 +328,20 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       next.category = `Kategorie darf höchstens ${MAX_CATEGORY_LENGTH} Zeichen lang sein.`;
     }
 
-    return { errors: next, amountNumber };
+    return { errors: next, amountNumber, pendingAmountNumber };
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const { errors: validation, amountNumber } = validate();
+    const { errors: validation, amountNumber, pendingAmountNumber } = validate();
     if (Object.keys(validation).length > 0) {
       setErrors(validation);
       // Fokus auf erstes fehlerhaftes Feld in DOM-Reihenfolge.
       if (validation.name) nameRef.current?.focus();
       else if (validation.amount) amountRef.current?.focus();
       else if (validation.currency) currencyRef.current?.focus();
+      else if (validation.pendingAmount) pendingAmountRef.current?.focus();
+      else if (validation.pendingFrom) pendingFromRef.current?.focus();
       else if (validation.anchorDate) anchorRef.current?.focus();
       else if (validation.leadDays) leadRef.current?.focus();
       else if (validation.cancelPeriod) cancelPeriodRef.current?.focus();
@@ -306,6 +375,11 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
             : categorySelect === CUSTOM_CATEGORY
               ? categoryCustom.trim() || null
               : categorySelect,
+        pendingAmountCents:
+          !oneTime && pendingEnabled && pendingAmountNumber !== null
+            ? Math.round(pendingAmountNumber * getCurrencySubdivisor(currency))
+            : null,
+        pendingFrom: !oneTime && pendingEnabled ? pendingFrom : null,
       };
       if (isEdit && subscription) {
         await updateSubscription({
@@ -416,6 +490,84 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
               </div>
             </div>
 
+            {!oneTime && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Checkbox
+                    id={`${anchorId}-pending`}
+                    checked={pendingEnabled}
+                    onCheckedChange={(checked) => {
+                      setPendingEnabled(checked === true);
+                      clearFieldError("pendingAmount");
+                      clearFieldError("pendingFrom");
+                      clearFieldError("amount");
+                    }}
+                  />
+                  <Label htmlFor={`${anchorId}-pending`} className="font-medium">
+                    Preisänderung geplant
+                  </Label>
+                </div>
+                {pendingEnabled && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor={`${anchorId}-pending-amount`}>Neuer Betrag</Label>
+                        <Input
+                          id={`${anchorId}-pending-amount`}
+                          ref={pendingAmountRef}
+                          value={pendingAmount}
+                          onChange={(e) => {
+                            setPendingAmount(e.target.value);
+                            clearFieldError("pendingAmount");
+                          }}
+                          inputMode="decimal"
+                          autoComplete="off"
+                          aria-invalid={!!errors.pendingAmount}
+                          aria-describedby={errors.pendingAmount ? pendingAmountErrorId : undefined}
+                        />
+                        {errors.pendingAmount && (
+                          <p
+                            id={pendingAmountErrorId}
+                            className="text-sm text-destructive"
+                            role="alert"
+                          >
+                            {errors.pendingAmount}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor={`${anchorId}-pending-from`}>Wirksam ab</Label>
+                        <DateField
+                          id={`${anchorId}-pending-from`}
+                          buttonRef={pendingFromRef}
+                          value={pendingFrom}
+                          onChange={(value) => {
+                            setPendingFrom(value);
+                            clearFieldError("pendingFrom");
+                          }}
+                          ariaInvalid={errors.pendingFrom ? true : undefined}
+                          ariaDescribedBy={errors.pendingFrom ? pendingFromErrorId : undefined}
+                        />
+                        {errors.pendingFrom && (
+                          <p
+                            id={pendingFromErrorId}
+                            className="text-sm text-destructive"
+                            role="alert"
+                          >
+                            {errors.pendingFrom}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Für Probeabos: Betrag 0 eintragen und hier den Preis nach der Testphase
+                      setzen. Die Änderung wird am Stichtag automatisch übernommen.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${anchorId}-account`}>Konto</Label>
               <Select
@@ -494,6 +646,8 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
                     setCancelMode(NO_CANCEL);
                     clearFieldError("cancelPeriod");
                     clearFieldError("cancelDate");
+                    clearFieldError("pendingAmount");
+                    clearFieldError("pendingFrom");
                   }
                 }}
               />
@@ -702,7 +856,17 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
                   <FolderClock className="size-4 text-muted-foreground" />
                   Preis-Historie ({priceHistory.length} Einträge)
                 </summary>
-                <PriceHistoryGraph entries={priceHistory} />
+                <PriceHistoryGraph
+                  entries={priceHistory}
+                  pending={
+                    subscription?.pendingAmountCents != null && subscription.pendingFrom != null
+                      ? {
+                          amountCents: subscription.pendingAmountCents,
+                          from: subscription.pendingFrom,
+                        }
+                      : null
+                  }
+                />
                 <ul className="mt-2 flex flex-col gap-1">
                   {priceHistory.map((entry, i) => (
                     <li key={entry.id} className="flex justify-between gap-2 tabular-nums">

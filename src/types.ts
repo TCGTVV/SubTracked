@@ -62,6 +62,12 @@ export interface Subscription {
   /** SQLite datetime (UTC, "YYYY-MM-DD HH:MM:SS"), gesetzt beim Archivieren.
    * null = aktiv oder vor Migration 0013 archiviert (Zeitpunkt unbekannt). */
   archivedAt: string | null;
+  /** Geplante Preisänderung: neuer Betrag (kleinste Währungseinheit), wirksam ab
+   * pendingFrom. Beide Felder immer gemeinsam gesetzt oder gemeinsam null.
+   * Trial-/Probeabo = amountCents 0 + gesetzte Änderung. */
+  pendingAmountCents: number | null;
+  /** Wirksamkeitsdatum (ISO "YYYY-MM-DD") der geplanten Preisänderung. */
+  pendingFrom: string | null;
 }
 
 export interface PriceHistoryEntry {

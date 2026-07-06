@@ -54,6 +54,8 @@ const existingSub: Subscription = {
   category: null,
   oneTime: false,
   archivedAt: null,
+  pendingAmountCents: null,
+  pendingFrom: null,
 };
 
 function renderDialog(subscription: Subscription | null = null, onSaved = vi.fn()) {
@@ -196,7 +198,7 @@ describe("SubscriptionDialog", () => {
     expect(screen.getByLabelText("Betrag")).toHaveFocus();
   });
 
-  it("zeigt feldnahe Fehlermeldung bei Betrag <= 0", async () => {
+  it("zeigt feldnahe Fehlermeldung bei Betrag 0 ohne geplante Preisänderung", async () => {
     renderDialog(null);
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Test" } });
     fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "0" } });
@@ -204,7 +206,9 @@ describe("SubscriptionDialog", () => {
 
     await Promise.resolve();
     expect(mockAddSubscription).not.toHaveBeenCalled();
-    expect(screen.getByText(/Betrag muss größer als 0/)).toBeInTheDocument();
+    expect(
+      screen.getByText("Betrag 0 ist nur mit geplanter Preisänderung erlaubt (Probeabo)."),
+    ).toBeInTheDocument();
   });
 
   it("räumt den Validierungs-Fehler weg, sobald der User wieder tippt", async () => {
@@ -312,5 +316,77 @@ describe("SubscriptionDialog", () => {
   it("hat keine axe-Verstöße (Anlegen-Modus)", async () => {
     renderDialog();
     await expectNoAxeViolations();
+  });
+
+  it("legt ein Probeabo mit geplanter Preisänderung an (Payload-Check)", async () => {
+    mockAddSubscription.mockResolvedValue(1);
+    const { onSaved } = renderDialog(null);
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Disney+" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "0" } });
+    fireEvent.click(screen.getByLabelText("Preisänderung geplant"));
+    fireEvent.change(screen.getByLabelText("Neuer Betrag"), { target: { value: "14,99" } });
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await waitFor(() => {
+      expect(mockAddSubscription).toHaveBeenCalledTimes(1);
+    });
+    expect(mockAddSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amountCents: 0,
+        pendingAmountCents: 1499,
+        pendingFrom: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      }),
+    );
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("meldet fehlenden geplanten Betrag feldnah und fokussiert das Feld", async () => {
+    renderDialog(null);
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Disney+" } });
+    fireEvent.change(screen.getByLabelText("Betrag"), { target: { value: "5" } });
+    fireEvent.click(screen.getByLabelText("Preisänderung geplant"));
+    fireEvent.click(screen.getByRole("button", { name: "Anlegen" }));
+
+    await Promise.resolve();
+    expect(mockAddSubscription).not.toHaveBeenCalled();
+    expect(screen.getByText("Bitte geplanten Betrag eingeben.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Neuer Betrag")).toHaveFocus();
+  });
+
+  it("übernimmt bestehende geplante Preisänderung beim Edit in Formular und Payload", async () => {
+    mockUpdateSubscription.mockResolvedValue(undefined);
+    mockListPriceHistory.mockResolvedValue([
+      {
+        id: 2,
+        subscriptionId: 42,
+        amountCents: 1799,
+        currency: "EUR",
+        changedAt: "2026-02-01T00:00:00Z",
+      },
+      {
+        id: 1,
+        subscriptionId: 42,
+        amountCents: 1599,
+        currency: "EUR",
+        changedAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+    renderDialog({ ...existingSub, pendingAmountCents: 1999, pendingFrom: "2026-09-01" });
+
+    expect(screen.getByLabelText("Preisänderung geplant")).toBeChecked();
+    expect(screen.getByLabelText("Neuer Betrag")).toHaveValue("19,99");
+
+    // Preis-Historie-Graph zeigt den geplanten Preis als Zukunfts-Punkt.
+    await screen.findByText(/Preis-Historie \(2 Einträge\)/);
+    const titles = [...document.querySelectorAll("title")].map((t) => t.textContent);
+    expect(titles.some((t) => t?.match(/^ab 2026-09-01: .*\(geplant\)$/))).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => {
+      expect(mockUpdateSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({ pendingAmountCents: 1999, pendingFrom: "2026-09-01" }),
+      );
+    });
   });
 });
