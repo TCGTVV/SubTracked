@@ -33,6 +33,7 @@ function makeSub(overrides: Partial<Subscription> = {}): Subscription {
     cancelDate: null,
     category: null,
     oneTime: false,
+    archivedAt: null,
     ...overrides,
   };
 }

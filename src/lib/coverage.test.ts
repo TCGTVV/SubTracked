@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Account, Income, Subscription } from "../types";
 import {
+  computeArchivedSavings,
   computeCostSummary,
   computeCoverage,
   computeMonthlyBaseline,
@@ -25,6 +26,7 @@ const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
   cancelDate: null,
   category: null,
   oneTime: false,
+  archivedAt: null,
   ...overrides,
 });
 
@@ -483,5 +485,64 @@ describe("computeYearlyLoad", () => {
     );
     expect(result[0]?.months[0]).toEqual({ month: "2026-01", cents: 9000, count: 2 });
     expect(result[0]?.maxCents).toBe(9000);
+  });
+});
+
+describe("computeArchivedSavings", () => {
+  const archived = (overrides: Partial<Parameters<typeof sub>[0]> = {}) =>
+    sub({ active: false, archivedAt: "2025-09-01 10:00:00", ...overrides });
+
+  it("rechnet Monatsäquivalent × volle Monate seit Archivierung", () => {
+    // 2025-09-01 → 2026-01-01 = 4 volle Monate à 1000.
+    const result = computeArchivedSavings([archived()], NOW);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.items[0]).toMatchObject({
+      name: "Test",
+      archivedOn: "2025-09-01",
+      monthlyCents: 1000,
+      monthsElapsed: 4,
+      savedCents: 4000,
+    });
+    expect(result[0]?.totalCents).toBe(4000);
+  });
+
+  it("normiert unterjährige Intervalle auf das Monatsäquivalent", () => {
+    const result = computeArchivedSavings(
+      [archived({ interval: "yearly", amountCents: 12_000 })],
+      NOW,
+    );
+    expect(result[0]?.items[0]?.monthlyCents).toBe(1000);
+    expect(result[0]?.items[0]?.savedCents).toBe(4000);
+  });
+
+  it("ignoriert aktive Abos, Einmalausgaben und Archivierte ohne Zeitstempel", () => {
+    const result = computeArchivedSavings(
+      [
+        sub({ id: 1 }),
+        archived({ id: 2, oneTime: true }),
+        sub({ id: 3, active: false, archivedAt: null }),
+      ],
+      NOW,
+    );
+    expect(result).toHaveLength(0);
+  });
+
+  it("listet frisch Archivierte mit 0 vollen Monaten und 0 Ersparnis", () => {
+    const result = computeArchivedSavings([archived({ archivedAt: "2025-12-20 08:00:00" })], NOW);
+    expect(result[0]?.items[0]).toMatchObject({ monthsElapsed: 0, savedCents: 0 });
+  });
+
+  it("trennt Währungen und sortiert Einträge nach Ersparnis absteigend", () => {
+    const result = computeArchivedSavings(
+      [
+        archived({ id: 1, name: "Klein", amountCents: 500 }),
+        archived({ id: 2, name: "Groß", amountCents: 5000 }),
+        archived({ id: 3, name: "Dollar", currency: "USD", amountCents: 9000 }),
+      ],
+      NOW,
+    );
+    expect(result.map((r) => r.currency)).toEqual(["USD", "EUR"]);
+    expect(result[1]?.items.map((i) => i.name)).toEqual(["Groß", "Klein"]);
+    expect(result[1]?.totalCents).toBe(22_000);
   });
 });

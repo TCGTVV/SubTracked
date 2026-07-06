@@ -71,6 +71,11 @@ pub struct Subscription {
     /// Einmalige Ausgabe: true = einzelne Buchung am anchor_date (interval/Kündigung
     /// werden ignoriert), false = wiederkehrend. Analog zu incomes.one_time.
     pub one_time: bool,
+    /// Archivierungszeitpunkt (SQLite datetime UTC). None = aktiv oder vor
+    /// Migration 0013 archiviert (Zeitpunkt unbekannt). serde-default, damit
+    /// Backups aus älteren Versionen ohne das Feld importierbar bleiben.
+    #[serde(default)]
+    pub archived_at: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]

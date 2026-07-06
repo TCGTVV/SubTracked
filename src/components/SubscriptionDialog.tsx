@@ -311,6 +311,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
           ...payload,
           id: subscription.id,
           active: subscription.active,
+          archivedAt: subscription.archivedAt,
         });
       } else {
         await addSubscription(payload);

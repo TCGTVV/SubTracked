@@ -32,6 +32,7 @@ const sampleSubs: Subscription[] = [
     cancelDate: null,
     category: null,
     oneTime: false,
+    archivedAt: null,
   },
 ];
 

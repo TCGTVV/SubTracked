@@ -272,7 +272,7 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
     let subs = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time FROM subscriptions WHERE active = 1",
+         cancel_date, category, one_time, archived_at FROM subscriptions WHERE active = 1",
     )
     .fetch_all(pool)
     .await
@@ -395,6 +395,7 @@ mod tests {
             cancel_date: None,
             category: None,
             one_time: false,
+            archived_at: None,
         }
     }
 
