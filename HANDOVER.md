@@ -9,6 +9,52 @@
 
 ---
 
+## 2026-07-06 — Claude: P1/P2-Abarbeitung — 4 Features + nachgezogene RTL-Tests (BACKLOG #197, #201, #203, #211)
+
+> Session-Auftrag: zuerst den offenen Punkt aus dem Vortag (RTL-Tests CsvImportDialog), danach der Reihe nach BACKLOG #201, #203, #197, #211 — je Feature ein Commit, alles verifiziert. Serena lief durchgehend als Default (Symbol-Edits, `replace_content`, `insert_after_symbol`); Read nur gezielt (HANDOVER-Top, App.tsx-Ausschnitte, ganze Dateien wo Tests das komplette JSX brauchten).
+
+### 1. RTL-Tests für CsvImportDialog (Commit `43c7fc9`)
+
+- 10 Tests nach dem `SettingsDialog.test.tsx`-Muster: Datei-Dialog-Abbruch, Kandidaten-Rendering, Select-Defaults (per Trigger-Text, nicht interaktiv), leeres Ergebnis, Preview-Fehler, Checkbox-Auswahl → Button-Label/Disabled, voller `addSubscription`-Payload-Check, Teil-Auswahl, Fehlerpfad (Liste bleibt stehen), onClose. Gotcha: `getByTitle` findet SVG-`<title>` nur als direktes SVG-Kind — bei verschachtelten Titles `container.querySelectorAll("title")` nutzen.
+
+### 2. Saldo-Verlaufs-Chart pro Konto (Commit `58c71c8`, BACKLOG #201)
+
+- [BalanceForecastChart.tsx](src/components/BalanceForecastChart.tsx): Step-Linie des prognostizierten Saldos (x **zeitproportional**, nicht Index-basiert; nach letzter Buchung waagerecht bis Horizont-Ende), Null-/Puffer-Linie mit Labels + Kollisionsschutz, Warnzonen (unter Puffer immer, unter 0 nur wenn erreicht), Punkte statusgefärbt deckungsgleich zur Buchungsliste, SVG-Tooltips mit 9px-Hit-Target. In der aufgeklappten Konto-`details` der OverviewSection; `today` wird dort einmal gehoben und an `computeCoverage` + Chart gereicht.
+- **Echter Fund beim visuellen Check:** React verlangt in SVG-`<title>` einen einzelnen String — JSX-Interpolation erzeugt Arrays und spammt Dev-Konsolen-Warnungen. Alle Tooltips auf Template-Strings umgestellt. ⚠️ **`PriceHistoryGraph` in [SubscriptionDialog.tsx](src/components/SubscriptionDialog.tsx) hat dasselbe Array-Muster** — bei nächster Berührung mitziehen.
+- **Technik etabliert — visuelle SVG-Verifikation ohne App-Start:** Komponente per esbuild (`node_modules/.pnpm/esbuild@*/…/bin/esbuild`, `--bundle --platform=node --format=cjs --jsx=automatic`, Entry temporär ins Projekt kopieren wegen node_modules-Resolution) + `renderToStaticMarkup` rendern, Token-Klassen per `<style>`-Block mit **Hex-Farben** mappen (rsvg-convert kann kein oklch → alles schwarz), `rsvg-convert` → PNG → per Read ansehen. Harness liegt im Session-Scratchpad (`preview.tsx`/`preview2.tsx`), bei Bedarf neu aufbauen.
+
+### 3. Jahres-Belastungsübersicht (Commit `de1a6a4`, BACKLOG #203)
+
+- `computeYearlyLoad` in [coverage.ts](src/lib/coverage.ts): 12 Kalendermonats-Buckets ab Monatsanfang (bewusst Kalendermonats-Profil, nicht ab-heute — bereits gebuchte Fälligkeiten des laufenden Monats zählen mit), pro Währung, via `subscriptionDatesWithin` (inkl. Einmalausgaben); Fenstergrenze exklusiv (`d < end`).
+- [YearlyLoadSection.tsx](src/components/YearlyLoadSection.tsx): Monats-Balkenchart (SVG), gestrichelte **Ø-Linie mit Betrag** als Kontrast zur geglätteten Baseline, Direct-Label nur am teuersten Monat, Tooltip je Balken, aufklappbare „Werte als Liste" als Tabellen-Alternative. In der Übersicht nach der CostSummarySection.
+
+### 4. Kontostand-Frische-Warnung (Commit `c5a1975`, BACKLOG #197)
+
+- **Kern-Erkenntnis:** `update_account` refresht `balance_updated_at` bewusst nur bei echter Saldo-Änderung — „geprüft, stimmt noch" braucht daher das neue Command `confirm_account_balance` (setzt nur den Zeitstempel, lehnt unbekannte IDs ab; `_in_db`-Helper-Muster für Testbarkeit).
+- [BalanceFreshnessWarning.tsx](src/components/BalanceFreshnessWarning.tsx): Banner in der Übersicht unter der StatusCard ab **`STALE_BALANCE_DAYS = 14`** (die dezente 7-Tage-Notiz in der OverviewSection bleibt als Vorstufe). Aktionen: „Stimmt noch" (Command + reload) und „Saldo aktualisieren" (öffnet AccountsDialog). Konten ohne Zeitstempel (Legacy) warnen bewusst nicht.
+
+### 5. „Gespart seit Kündigung" (Commit `bde434f`, BACKLOG #211)
+
+- Migration [0013_subscription_archived_at.sql](src-tauri/migrations/0013_subscription_archived_at.sql): `ALTER ADD COLUMN archived_at TEXT` (kein Rebuild; zusätzlich auf Kopie der echten DB + `PRAGMA foreign_key_check` getestet).
+- `set_subscription_active` → `set_subscription_active_in_db` mit SQL-`CASE`: Archivieren setzt Zeitstempel, erneutes Deaktivieren behält ihn (idempotent), Reaktivieren löscht. `archived_at` durch **alle** `Subscription`-Pfade: list/reminders/backup (Restore-INSERT + `#[serde(default)]` für Alt-Backups) und **csv_export.rs** — den hat der Compiler gefangen, sonst 0008-Klasse-Bug.
+- `computeArchivedSavings`: Monatsäquivalent × volle Monate, **beide Seiten `startOfDay`-normalisiert** (`differenceInMonths` vergleicht sonst Uhrzeiten → off-by-one). Einmalausgaben + Bestands-Archivierte ohne Zeitstempel außen vor. [ArchivedSavingsSection.tsx](src/components/ArchivedSavingsSection.tsx) am Ende der Übersicht; frisch Archivierte: „noch kein voller Monat".
+- `addSubscription`-Payload schließt `archivedAt` per `Omit` aus (system-verwaltet); SubscriptionDialog reicht es beim Edit durch. Test-Builder-Rollout (12 Dateien `archivedAt: null`) **über die tsc-Fehlerliste statt blindem perl-Insert** — `oneTime: false` steht auch in Income-Buildern und Payload-Asserts, die nichts bekommen dürfen.
+
+### Verifikation (alles grün, Stand Session-Ende)
+
+- `cargo test` ✓ **97** (+3), `cargo clippy --all-targets -D warnings` ✓, `cargo fmt --check` ✓.
+- `pnpm test:run` ✓ **285** (+48 über die Session), `tsc --noEmit` ✓, `pnpm lint` ✓.
+- Beide Charts visuell verifiziert (PNG-Rendering, s.o.); Frische-Warnung und Savings nur per Tests.
+
+### Bewusst nicht gemacht / offen
+
+- **`PriceHistoryGraph`-`<title>`-Array-Fix** (React-Warnung, s. Punkt 2) — bei nächster Berührung des SubscriptionDialog.
+- **CSV-Import-Praxistest mit echtem Bank-Export** (aus Vortags-Session) weiter offen.
+- Kein End-zu-End-Check der neuen Overview-Sections in der laufenden Tauri-App (nur jsdom + PNG-Preview) — beim nächsten `pnpm tauri dev` einmal Übersicht durchscrollen: StatusCard → Frische-Banner → Abo-Kosten → Jahresbelastung → Anstehend → Cashflow (+ Saldo-Chart in Konto-Details) → Gespart seit Kündigung.
+- P1 verbleibend: #199 (Duplikat-Erkennung CSV-Import), #200 (Ist-Soll-Abgleich), #204 (Trial/Preisänderung mit Wirksamkeitsdatum), #205 (Demo-Datensatz/Onboarding).
+
+---
+
 ## 2026-07-05 — Claude: CSV-Export der Abos + CSV-Import mit Auto-Erkennung (BACKLOG #171, #198)
 
 > Session-Auftrag: Priorisierte Feature-Liste erstellt (git pull, CLAUDE.md/Serena-Aktivierung vorab), User wählte #4 (CSV-Import) und #5 (CSV-Export). Für den Import-Scope explizit nachgefragt: **Bank-Kontoauszug mit Auto-Erkennung** (nicht das einfachere Eigenformat) — User-Entscheidung per Frage.
