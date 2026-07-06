@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
+import { expectNoAxeViolations } from "../test-utils/axe";
 import type { Account, Subscription } from "../types";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 
@@ -306,5 +307,10 @@ describe("SubscriptionDialog", () => {
     });
     expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Anlegen" })).toBeEnabled();
+  });
+
+  it("hat keine axe-Verstöße (Anlegen-Modus)", async () => {
+    renderDialog();
+    await expectNoAxeViolations();
   });
 });

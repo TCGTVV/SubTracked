@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
+import { expectNoAxeViolations } from "../test-utils/axe";
 import type { Account } from "../types";
 import { AccountsDialog } from "./AccountsDialog";
 
@@ -265,5 +266,10 @@ describe("AccountsDialog", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/Konto-Konflikt/);
     });
+  });
+
+  it("hat keine axe-Verstöße (Liste + Formular)", async () => {
+    renderDialog();
+    await expectNoAxeViolations();
   });
 });
