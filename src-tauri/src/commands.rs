@@ -30,11 +30,11 @@ pub async fn list_subscriptions(
     let only_active = only_active.unwrap_or(true);
     let sql = if only_active {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at \
          FROM subscriptions WHERE active = 1 ORDER BY name"
     } else {
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time \
+         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at \
          FROM subscriptions ORDER BY name"
     };
     sqlx::query_as::<_, Subscription>(sql)
@@ -382,19 +382,40 @@ pub async fn update_subscription(
     update_subscription_in_db(&state.db, &sub).await
 }
 
+/// Archiviert/reaktiviert ein Abo. archived_at trackt den Archivierungszeitpunkt
+/// für „Gespart seit Kündigung": Reaktivieren löscht ihn, erneutes Deaktivieren
+/// eines bereits archivierten Abos behält den ursprünglichen Zeitstempel (idempotent).
+pub(crate) async fn set_subscription_active_in_db(
+    db: &sqlx::SqlitePool,
+    id: i64,
+    active: bool,
+) -> Result<(), String> {
+    sqlx::query(
+        "UPDATE subscriptions \
+         SET active = ?, \
+             archived_at = CASE \
+               WHEN ? THEN NULL \
+               WHEN archived_at IS NULL THEN datetime('now') \
+               ELSE archived_at \
+             END \
+         WHERE id = ?",
+    )
+    .bind(active)
+    .bind(active)
+    .bind(id)
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn set_subscription_active(
     state: State<'_, AppState>,
     id: i64,
     active: bool,
 ) -> Result<(), String> {
-    sqlx::query("UPDATE subscriptions SET active = ? WHERE id = ?")
-        .bind(active)
-        .bind(id)
-        .execute(&state.db)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    set_subscription_active_in_db(&state.db, id, active).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -666,6 +687,7 @@ mod tests {
             cancel_date: None,
             category: None,
             one_time: false,
+            archived_at: None,
         }
     }
 
@@ -863,6 +885,51 @@ mod tests {
                 .expect("fetch after");
         assert!(after.is_some(), "Zeitstempel muss gesetzt sein");
         assert_eq!(balance, 0, "Saldo bleibt unangetastet");
+    }
+
+    #[tokio::test]
+    async fn set_active_tracks_archived_at_lifecycle() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await;
+
+        let fetch = |db: &SqlitePool| {
+            let db = db.clone();
+            let id = sub.id;
+            async move {
+                let (archived_at,): (Option<String>,) =
+                    sqlx::query_as("SELECT archived_at FROM subscriptions WHERE id = ?")
+                        .bind(id)
+                        .fetch_one(&db)
+                        .await
+                        .expect("fetch archived_at");
+                archived_at
+            }
+        };
+
+        assert_eq!(fetch(&db).await, None, "aktives Abo hat keinen Zeitstempel");
+
+        // Archivieren setzt den Zeitstempel.
+        set_subscription_active_in_db(&db, sub.id, false)
+            .await
+            .expect("archivieren");
+        let first = fetch(&db).await;
+        assert!(first.is_some(), "Archivieren muss archived_at setzen");
+
+        // Erneutes Deaktivieren behält den ursprünglichen Zeitstempel.
+        set_subscription_active_in_db(&db, sub.id, false)
+            .await
+            .expect("erneut archivieren");
+        assert_eq!(fetch(&db).await, first, "Zeitstempel bleibt idempotent");
+
+        // Reaktivieren löscht den Zeitstempel.
+        set_subscription_active_in_db(&db, sub.id, true)
+            .await
+            .expect("reaktivieren");
+        assert_eq!(
+            fetch(&db).await,
+            None,
+            "Reaktivieren muss archived_at löschen"
+        );
     }
 
     #[tokio::test]

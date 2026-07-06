@@ -74,7 +74,7 @@ pub async fn export_subscriptions_csv(
     let subs = sqlx::query_as::<_, Subscription>(
         "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
          lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time FROM subscriptions ORDER BY name",
+         cancel_date, category, one_time, archived_at FROM subscriptions ORDER BY name",
     )
     .fetch_all(&state.db)
     .await
@@ -119,6 +119,7 @@ mod tests {
             cancel_date: None,
             category: None,
             one_time: false,
+            archived_at: None,
         }
     }
 

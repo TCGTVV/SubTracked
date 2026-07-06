@@ -59,6 +59,9 @@ export interface Subscription {
   /** Einmalige Ausgabe: true = einzelne Buchung am anchorDate (Intervall/Kündigung
    * ignoriert), false = wiederkehrend. Analog zu Income.oneTime. */
   oneTime: boolean;
+  /** SQLite datetime (UTC, "YYYY-MM-DD HH:MM:SS"), gesetzt beim Archivieren.
+   * null = aktiv oder vor Migration 0013 archiviert (Zeitpunkt unbekannt). */
+  archivedAt: string | null;
 }
 
 export interface PriceHistoryEntry {

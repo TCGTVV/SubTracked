@@ -1,4 +1,4 @@
-import { addDays, addMonths, startOfDay, startOfMonth } from "date-fns";
+import { addDays, addMonths, differenceInMonths, startOfDay, startOfMonth } from "date-fns";
 import type { Account, Income, Subscription } from "../types";
 import { parseStrictISODate, toISODateLocal } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
@@ -471,6 +471,63 @@ export function computeYearlyLoad(
       months,
       totalCents: months.reduce((sum, m) => sum + m.cents, 0),
       maxCents: months.reduce((max, m) => Math.max(max, m.cents), 0),
+    }))
+    .sort((a, b) => b.totalCents - a.totalCents);
+}
+
+export interface ArchivedSaving {
+  id: number;
+  name: string;
+  /** Archivierungsdatum als ISO "YYYY-MM-DD" (lokal). */
+  archivedOn: string;
+  monthlyCents: number;
+  /** Volle Monate seit Archivierung. */
+  monthsElapsed: number;
+  savedCents: number;
+}
+
+export interface CurrencyArchivedSavings {
+  currency: string;
+  totalCents: number;
+  items: ArchivedSaving[];
+}
+
+/**
+ * „Gespart seit Kündigung": Monatsäquivalent × volle Monate seit Archivierung,
+ * pro Währung. Nur archivierte, wiederkehrende Abos mit bekanntem
+ * Archivierungszeitpunkt (archived_at ab Migration 0013); Einmalausgaben haben
+ * kein Monatsäquivalent und bleiben außen vor.
+ */
+export function computeArchivedSavings(
+  subscriptions: Subscription[],
+  now: Date = new Date(),
+): CurrencyArchivedSavings[] {
+  const byCurrency = new Map<string, ArchivedSaving[]>();
+  for (const sub of subscriptions) {
+    if (sub.active || sub.oneTime || !sub.archivedAt) continue;
+    const archivedDate = new Date(`${sub.archivedAt.replace(" ", "T")}Z`);
+    if (Number.isNaN(archivedDate.getTime()) || archivedDate > now) continue;
+    const monthlyCents = Math.round(monthlyEquivalentCents(sub));
+    // Tages-genau, Uhrzeit ist hier Rauschen: „archiviert am 01.09." soll am 01.01.
+    // vier volle Monate zählen, unabhängig von der Uhrzeit des Archivierens.
+    const monthsElapsed = differenceInMonths(startOfDay(now), startOfDay(archivedDate));
+    const items = byCurrency.get(sub.currency) ?? [];
+    items.push({
+      id: sub.id,
+      name: sub.name,
+      archivedOn: toISODateLocal(archivedDate),
+      monthlyCents,
+      monthsElapsed,
+      savedCents: monthlyCents * monthsElapsed,
+    });
+    byCurrency.set(sub.currency, items);
+  }
+
+  return [...byCurrency.entries()]
+    .map(([currency, items]) => ({
+      currency,
+      items: items.sort((a, b) => b.savedCents - a.savedCents),
+      totalCents: items.reduce((sum, i) => sum + i.savedCents, 0),
     }))
     .sort((a, b) => b.totalCents - a.totalCents);
 }

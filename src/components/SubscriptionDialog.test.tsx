@@ -52,6 +52,7 @@ const existingSub: Subscription = {
   cancelDate: null,
   category: null,
   oneTime: false,
+  archivedAt: null,
 };
 
 function renderDialog(subscription: Subscription | null = null, onSaved = vi.fn()) {

@@ -103,6 +103,7 @@ describe("shared cancel-deadline vectors (TS-Seite)", () => {
         cancelDate: v.cancel_date,
         category: null,
         oneTime: false,
+        archivedAt: null,
       };
       expect(cancelDeadline(sub, parseDate(v.from))).toBe(v.expected);
     });

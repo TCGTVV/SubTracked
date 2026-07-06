@@ -115,7 +115,7 @@ export async function listSubscriptions(onlyActive = true): Promise<Subscription
 }
 
 export async function addSubscription(
-  s: Omit<Subscription, "id" | "active" | "notify"> & {
+  s: Omit<Subscription, "id" | "active" | "notify" | "archivedAt"> & {
     active?: boolean;
     notify?: boolean;
   },
