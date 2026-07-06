@@ -162,7 +162,7 @@ describe("SettingsDialog", () => {
 
     fireEvent.click(checkbox);
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/Permission denied/);
+      expect(screen.getByRole("alert")).toHaveTextContent(/Autostart umstellen fehlgeschlagen/);
     });
     expect(checkbox).not.toBeChecked();
   });
