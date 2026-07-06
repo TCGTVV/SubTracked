@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Wallet } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 import { addAccount, countSubsForAccount, deleteAccount, updateAccount } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import {
   CURRENCY_OPTIONS,
   daysSince,
@@ -187,7 +188,7 @@ export function AccountsDialog({ open, accounts, onChanged, onClose }: Props) {
       resetForm();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toUserMessage(err, "Konto speichern"));
     } finally {
       setSubmitting(false);
     }
@@ -209,7 +210,7 @@ export function AccountsDialog({ open, accounts, onChanged, onClose }: Props) {
       if (editingId === account.id) resetForm();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toUserMessage(err, "Konto löschen"));
     }
   }
 

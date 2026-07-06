@@ -1,6 +1,7 @@
 import { Bell, CalendarX, FolderClock, Pencil, Plus, Save, Tag, X } from "lucide-react";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { addSubscription, listPriceHistory, updateSubscription } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import {
   CURRENCY_OPTIONS,
   formatAmount,
@@ -318,7 +319,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
       }
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(toUserMessage(err, "Abo speichern"));
       setSubmitting(false);
     }
   }

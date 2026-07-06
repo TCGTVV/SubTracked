@@ -21,6 +21,7 @@ import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { cancelDeadlineDisplay } from "./lib/cancellation";
 import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
+import { toUserMessage } from "./lib/errors";
 import { formatAmount, formatNextDue } from "./lib/format";
 import {
   applyFilterAndSort,
@@ -211,7 +212,7 @@ function App() {
       await deleteIncome(income.id);
       await reloadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Einnahme löschen"));
     }
   }
 
@@ -220,7 +221,7 @@ function App() {
       await setIncomeActive(income.id, !income.active);
       await reloadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Status der Einnahme ändern"));
     }
   }
 
@@ -243,7 +244,7 @@ function App() {
       await deleteSubscription(sub.id);
       await reloadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Abo löschen"));
     }
   }
 
@@ -252,7 +253,7 @@ function App() {
       await setSubscriptionActive(sub.id, !sub.active);
       await reloadAll();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Status des Abos ändern"));
     }
   }
 

@@ -1,6 +1,7 @@
 import { Pencil, Save, Wallet, X } from "lucide-react";
 import { type FormEvent, useId, useRef, useState } from "react";
 import { addIncome, updateIncome } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import {
   CURRENCY_OPTIONS,
   getCurrencySubdivisor,
@@ -126,7 +127,7 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
       }
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Einnahme speichern"));
     } finally {
       setSubmitting(false);
     }

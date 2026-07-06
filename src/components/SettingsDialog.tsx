@@ -14,6 +14,7 @@ import {
   type ReminderStatus,
   sendTestNotification,
 } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -74,7 +75,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       setReminderStatus(await getReminderStatus());
       setReminderError(null);
     } catch (e) {
-      setReminderError(e instanceof Error ? e.message : String(e));
+      setReminderError(toUserMessage(e, "Erinnerungs-Status laden"));
     }
   }, []);
 
@@ -83,7 +84,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       setAppInfo(await getAppInfo());
       setAppInfoError(null);
     } catch (e) {
-      setAppInfoError(e instanceof Error ? e.message : String(e));
+      setAppInfoError(toUserMessage(e, "App-Informationen laden"));
     }
   }, []);
 
@@ -95,7 +96,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
         if (!cancelled) setAutostart(enabled);
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
+          setError(toUserMessage(e, "Autostart-Status laden"));
           setAutostart(false);
         }
       }
@@ -126,7 +127,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       else await disable();
       setAutostart(next);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Autostart umstellen"));
     } finally {
       setPending(false);
     }
@@ -140,7 +141,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       await sendTestNotification();
       setTestNotificationSent(true);
     } catch (e) {
-      setReminderError(e instanceof Error ? e.message : String(e));
+      setReminderError(toUserMessage(e, "Test-Benachrichtigung senden"));
     } finally {
       setTestNotificationPending(false);
     }
@@ -159,7 +160,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       await exportBackup(path);
       setBackupMessage(`✓ Backup gespeichert: ${path}`);
     } catch (e) {
-      setBackupError(e instanceof Error ? e.message : String(e));
+      setBackupError(toUserMessage(e, "Backup speichern"));
     } finally {
       setBackupPending(false);
     }
@@ -180,7 +181,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       setBackupMessage("✓ Backup importiert — Daten wurden wiederhergestellt.");
       await onDataReplaced?.();
     } catch (e) {
-      setBackupError(e instanceof Error ? e.message : String(e));
+      setBackupError(toUserMessage(e, "Backup wiederherstellen"));
     } finally {
       setBackupPending(false);
     }
@@ -199,7 +200,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       await exportSubscriptionsCsv(path);
       setCsvExportMessage(`✓ CSV gespeichert: ${path}`);
     } catch (e) {
-      setCsvExportError(e instanceof Error ? e.message : String(e));
+      setCsvExportError(toUserMessage(e, "CSV exportieren"));
     } finally {
       setCsvExportPending(false);
     }
@@ -212,7 +213,7 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
       setAppInfoError(null);
     } catch (e) {
       setCopiedPath(null);
-      setAppInfoError(e instanceof Error ? e.message : String(e));
+      setAppInfoError(toUserMessage(e, "Pfad kopieren"));
     }
   }
 

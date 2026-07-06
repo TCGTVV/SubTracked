@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listAccounts, listIncomes, listSubscriptions } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import type { Account, Income, Subscription } from "../types";
 
 export interface UseSubscriptionsResult {
@@ -35,7 +36,7 @@ export function useSubscriptions(): UseSubscriptionsResult {
       setIncomes(incomeRows);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Daten laden"));
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export function useSubscriptions(): UseSubscriptionsResult {
     try {
       setAccounts(await listAccounts());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Konten laden"));
     }
   }, []);
 

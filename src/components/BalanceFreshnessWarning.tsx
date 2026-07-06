@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { confirmAccountBalance } from "../lib/db";
+import { toUserMessage } from "../lib/errors";
 import { daysSince } from "../lib/format";
 import type { Account } from "../types";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -40,7 +41,7 @@ export function BalanceFreshnessWarning({ accounts, onOpenAccounts, onChanged }:
       await confirmAccountBalance(id);
       await onChanged();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toUserMessage(e, "Saldo bestätigen"));
     } finally {
       setPendingId(null);
     }
