@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
+import { hasDemoData, loadDemoData, removeDemoData } from "./lib/demo";
 import { expectNoAxeViolations } from "./test-utils/axe";
 import type { Account, Subscription } from "./types";
 
@@ -57,6 +58,12 @@ vi.mock("./lib/db", () => ({
   setSubscriptionActive: vi.fn(),
 }));
 
+vi.mock("./lib/demo", () => ({
+  hasDemoData: vi.fn(() => false),
+  loadDemoData: vi.fn(),
+  removeDemoData: vi.fn(),
+}));
+
 const mockUseSubscriptions = vi.mocked(useSubscriptions);
 const mockUseNotificationPermission = vi.mocked(useNotificationPermission);
 
@@ -72,6 +79,7 @@ const account: Account = {
 
 describe("App", () => {
   beforeEach(() => {
+    vi.mocked(hasDemoData).mockReturnValue(false);
     mockUseNotificationPermission.mockReturnValue({
       status: "granted",
       activate: vi.fn(),
@@ -88,13 +96,36 @@ describe("App", () => {
     });
   });
 
-  it("zeigt den Empty-State auch, wenn schon ein Konto existiert", () => {
+  it("zeigt den Onboarding-Empty-State auch, wenn schon ein Konto existiert", () => {
     render(<App />);
 
-    expect(screen.getByRole("heading", { name: "Noch keine Zahlungsdaten" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Wann wird dein Konto knapp?" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Erstes Abo" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Einnahme hinzufügen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mit Demo-Daten ausprobieren" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Overview Mock")).not.toBeInTheDocument();
+  });
+
+  it("lädt Demo-Daten über den Onboarding-Button und lädt danach neu", async () => {
+    const reloadAll = vi.fn();
+    mockUseSubscriptions.mockReturnValue({
+      subs: [],
+      accounts: [],
+      incomes: [],
+      loading: false,
+      error: null,
+      setError: vi.fn(),
+      reloadAll,
+      reloadAccounts: vi.fn(),
+    });
+    vi.mocked(loadDemoData).mockResolvedValue();
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Mit Demo-Daten ausprobieren" }));
+
+    await waitFor(() => expect(loadDemoData).toHaveBeenCalled());
+    expect(reloadAll).toHaveBeenCalled();
   });
 
   it("zeigt keinen Empty-State, wenn nur archivierte Abos vorhanden sind", () => {
@@ -133,12 +164,56 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      screen.queryByRole("heading", { name: "Noch keine Zahlungsdaten" }),
+      screen.queryByRole("heading", { name: "Wann wird dein Konto knapp?" }),
     ).not.toBeInTheDocument();
 
     // Der Archiv-Toggle lebt in der Abos-Ansicht; dorthin navigieren.
     fireEvent.click(screen.getByRole("button", { name: "Abos" }));
     expect(screen.getByText(/Archivierte anzeigen \(1 Abo\)/)).toBeInTheDocument();
+  });
+
+  it("zeigt das Demo-Banner mit Entfernen-Aktion, solange Demo-Daten aktiv sind", async () => {
+    vi.mocked(hasDemoData).mockReturnValue(true);
+    vi.mocked(removeDemoData).mockResolvedValue();
+    const reloadAll = vi.fn();
+    const demoSub: Subscription = {
+      id: 11,
+      name: "Streamgigant (Demo)",
+      amountCents: 1799,
+      currency: "EUR",
+      accountId: account.id,
+      interval: "monthly",
+      anchorDate: "2026-06-12",
+      leadDays: 7,
+      active: true,
+      notify: false,
+      cancelMode: null,
+      cancelPeriodValue: null,
+      cancelPeriodUnit: null,
+      cancelDate: null,
+      category: "Streaming",
+      oneTime: false,
+      archivedAt: null,
+      pendingAmountCents: null,
+      pendingFrom: null,
+    };
+    mockUseSubscriptions.mockReturnValue({
+      subs: [demoSub],
+      accounts: [account],
+      incomes: [],
+      loading: false,
+      error: null,
+      setError: vi.fn(),
+      reloadAll,
+      reloadAccounts: vi.fn(),
+    });
+
+    render(<App />);
+    expect(screen.getByText(/Du siehst gerade/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Demo-Daten entfernen" }));
+    await waitFor(() => expect(removeDemoData).toHaveBeenCalled());
+    expect(reloadAll).toHaveBeenCalled();
   });
 
   it("hat keine axe-Verstöße (App-Shell mit Empty-State)", async () => {
