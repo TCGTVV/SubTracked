@@ -31,6 +31,7 @@ import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { cancelDeadlineDisplay } from "./lib/cancellation";
 import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
+import { hasDemoData, loadDemoData, removeDemoData } from "./lib/demo";
 import { toUserMessage } from "./lib/errors";
 import { formatAmount, formatNextDue } from "./lib/format";
 import {
@@ -187,6 +188,8 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [csvReconcileOpen, setCsvReconcileOpen] = useState(false);
+  const [demoActive, setDemoActive] = useState(hasDemoData);
+  const [demoPending, setDemoPending] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
 
@@ -283,6 +286,32 @@ function App() {
   const accountName = (id: number | null): string | null =>
     id === null ? null : (accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)");
 
+  async function handleLoadDemo() {
+    setDemoPending(true);
+    try {
+      await loadDemoData();
+      setDemoActive(true);
+      await reloadAll();
+    } catch (e) {
+      setError(toUserMessage(e, "Demo-Daten laden"));
+    } finally {
+      setDemoPending(false);
+    }
+  }
+
+  async function handleRemoveDemo() {
+    setDemoPending(true);
+    try {
+      await removeDemoData();
+      setDemoActive(false);
+      await reloadAll();
+    } catch (e) {
+      setError(toUserMessage(e, "Demo-Daten entfernen"));
+    } finally {
+      setDemoPending(false);
+    }
+  }
+
   const isEmpty = !loading && !error && subs.length === 0 && incomes.length === 0;
   const viewTitle = view === "overview" ? "Übersicht" : view === "subs" ? "Abos" : "Einnahmen";
 
@@ -329,6 +358,27 @@ function App() {
             </p>
           )}
 
+          {demoActive && !isEmpty && (
+            <div
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm"
+              role="status"
+            >
+              <span>
+                Du siehst gerade <strong>Demo-Daten</strong> zum Ausprobieren — alle Einträge tragen
+                „(Demo)".
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void handleRemoveDemo()}
+                disabled={demoPending}
+              >
+                {demoPending ? "Entferne …" : "Demo-Daten entfernen"}
+              </Button>
+            </div>
+          )}
+
           {isEmpty && (
             <section
               className="flex flex-col items-center gap-4 rounded-xl border border-dashed bg-card/50 px-6 py-14 text-center"
@@ -339,21 +389,36 @@ function App() {
               </span>
               <div>
                 <h2 id="empty-title" className="text-fluid-lg font-semibold">
-                  Noch keine Zahlungsdaten
+                  Wann wird dein Konto knapp?
                 </h2>
-                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                  {accounts.length === 0
-                    ? "Konto anlegen, erstes Abo erfassen, danach zeigt SubTracked den Cashflow."
-                    : "Erstes Abo oder eine Einnahme erfassen, danach zeigt SubTracked den Cashflow."}
+                <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                  SubTracked verfolgt Abos und Einnahmen lokal auf deinem Rechner und zeigt, wie
+                  lange dein Saldo reicht — mit Erinnerung, bevor abgebucht wird.
                 </p>
               </div>
+              <ol className="grid max-w-2xl gap-3 text-left text-sm sm:grid-cols-3">
+                <li className="rounded-lg border border-border bg-card p-3">
+                  <span className="font-semibold text-primary">1.</span> Konto mit aktuellem Saldo
+                  anlegen
+                </li>
+                <li className="rounded-lg border border-border bg-card p-3">
+                  <span className="font-semibold text-primary">2.</span> Abos und Einnahmen erfassen
+                  — oder aus einem Bank-CSV importieren
+                </li>
+                <li className="rounded-lg border border-border bg-card p-3">
+                  <span className="font-semibold text-primary">3.</span> Sehen, wie lange der Saldo
+                  reicht, und vor jeder Abbuchung erinnert werden
+                </li>
+              </ol>
               <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => void handleLoadDemo()} disabled={demoPending}>
+                  {demoPending ? "Lade …" : "Mit Demo-Daten ausprobieren"}
+                </Button>
                 <Button variant="outline" onClick={openAccounts}>
                   Konto anlegen
                 </Button>
-                <Button onClick={startNew}>Erstes Abo</Button>
-                <Button variant="secondary" onClick={startNewIncome}>
-                  Einnahme hinzufügen
+                <Button variant="secondary" onClick={startNew}>
+                  Erstes Abo
                 </Button>
               </div>
             </section>
