@@ -16,6 +16,9 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 use serde::Serialize;
+use tauri::State;
+
+use crate::db::AppState;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BankTransaction {
@@ -35,6 +38,10 @@ pub struct RecurringCandidate {
     pub anchor_date: String,
     pub first_date: String,
     pub occurrence_count: usize,
+    /// Name eines bestehenden Abos, das vermutlich derselbe Posten ist
+    /// (identischer Betrag + Namens-Ähnlichkeit). None = kein Verdacht.
+    /// Das Frontend wählt solche Kandidaten default ab (Duplikat-Schutz).
+    pub matched_subscription: Option<String>,
 }
 
 /// Bekannte Spaltennamen deutscher/englischer Bank-CSV-Exports. Exakter Treffer
@@ -305,6 +312,7 @@ pub fn detect_recurring_candidates(transactions: &[BankTransaction]) -> Vec<Recu
                 anchor_date: last.format("%Y-%m-%d").to_string(),
                 first_date: first.format("%Y-%m-%d").to_string(),
                 occurrence_count: dates.len(),
+                matched_subscription: None,
             })
         })
         .collect();
@@ -317,12 +325,47 @@ pub fn detect_recurring_candidates(transactions: &[BankTransaction]) -> Vec<Recu
     candidates
 }
 
+/// Namens-Ähnlichkeit für Duplikat-/Abgleich-Matching: normalisierter Teilstring
+/// in eine der beiden Richtungen. Sehr kurze Namen (< 3 Zeichen) matchen nie —
+/// sonst träfe „TV" jeden Verwendungszweck mit diesen Buchstaben.
+fn names_similar(a: &str, b: &str) -> bool {
+    let a = normalize_description(a);
+    let b = normalize_description(b);
+    if a.chars().count() < 3 || b.chars().count() < 3 {
+        return false;
+    }
+    a.contains(&b) || b.contains(&a)
+}
+
+/// Markiert Kandidaten, die vermutlich ein bereits gepflegtes Abo sind:
+/// identischer Betrag + Namens-Ähnlichkeit. Pure Funktion, `existing` sind
+/// (Name, amount_cents)-Paare aller Abos — bewusst inkl. archivierter, denn
+/// ein Re-Import eines archivierten Abos wäre genauso Datenmüll.
+pub fn mark_probable_duplicates(candidates: &mut [RecurringCandidate], existing: &[(String, i64)]) {
+    for c in candidates.iter_mut() {
+        c.matched_subscription = existing
+            .iter()
+            .find(|(name, amount)| *amount == c.amount_cents && names_similar(name, &c.name))
+            .map(|(name, _)| name.clone());
+    }
+}
+
 #[tauri::command(rename_all = "camelCase")]
-pub fn preview_csv_import(path: String) -> Result<Vec<RecurringCandidate>, String> {
+pub async fn preview_csv_import(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<Vec<RecurringCandidate>, String> {
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
     let transactions = parse_bank_csv(&content)?;
-    Ok(detect_recurring_candidates(&transactions))
+    let mut candidates = detect_recurring_candidates(&transactions);
+    let existing: Vec<(String, i64)> =
+        sqlx::query_as("SELECT name, amount_cents FROM subscriptions")
+            .fetch_all(&state.db)
+            .await
+            .map_err(|e| e.to_string())?;
+    mark_probable_duplicates(&mut candidates, &existing);
+    Ok(candidates)
 }
 
 #[cfg(test)]
@@ -448,6 +491,51 @@ mod tests {
             tx("2026-03-20", "Sporadisch", -1000),
         ];
         assert!(detect_recurring_candidates(&txs).is_empty());
+    }
+
+    fn candidate(name: &str, amount_cents: i64) -> RecurringCandidate {
+        RecurringCandidate {
+            name: name.to_string(),
+            amount_cents,
+            interval: "monthly".to_string(),
+            anchor_date: "2026-03-15".to_string(),
+            first_date: "2026-01-15".to_string(),
+            occurrence_count: 3,
+            matched_subscription: None,
+        }
+    }
+
+    #[test]
+    fn marks_duplicate_on_amount_and_name_similarity() {
+        // Bank-Verwendungszweck enthält den Abo-Namen (Teilstring, case-insensitiv).
+        let mut candidates = vec![candidate("PayPal Europe NETFLIX.com", 1799)];
+        mark_probable_duplicates(&mut candidates, &[("Netflix".to_string(), 1799)]);
+        assert_eq!(
+            candidates[0].matched_subscription.as_deref(),
+            Some("Netflix")
+        );
+    }
+
+    #[test]
+    fn no_duplicate_when_amount_differs() {
+        let mut candidates = vec![candidate("PayPal Europe Netflix.com", 1999)];
+        mark_probable_duplicates(&mut candidates, &[("Netflix".to_string(), 1799)]);
+        assert_eq!(candidates[0].matched_subscription, None);
+    }
+
+    #[test]
+    fn no_duplicate_when_names_unrelated() {
+        let mut candidates = vec![candidate("Netflix.com", 1799)];
+        mark_probable_duplicates(&mut candidates, &[("Spotify".to_string(), 1799)]);
+        assert_eq!(candidates[0].matched_subscription, None);
+    }
+
+    #[test]
+    fn very_short_names_never_match() {
+        // „TV" wäre in fast jedem Verwendungszweck enthalten — Guard gegen Zufallstreffer.
+        let mut candidates = vec![candidate("Waipu TV Monatsabo", 1799)];
+        mark_probable_duplicates(&mut candidates, &[("TV".to_string(), 1799)]);
+        assert_eq!(candidates[0].matched_subscription, None);
     }
 
     #[test]
