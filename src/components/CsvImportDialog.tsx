@@ -53,7 +53,15 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
       setCandidates(null);
       setLoading(true);
       const rows = await previewCsvImport(selected);
-      setCandidates(rows.map((r) => ({ ...r, selected: true, accountId: null, currency: "EUR" })));
+      setCandidates(
+        // Vermutliche Duplikate (matchedSubscription gesetzt) starten abgewählt.
+        rows.map((r) => ({
+          ...r,
+          selected: !r.matchedSubscription,
+          accountId: null,
+          currency: "EUR",
+        })),
+      );
     } catch (e) {
       setLoadError(toUserMessage(e, "CSV-Datei lesen"));
       setCandidates(null);
@@ -180,6 +188,12 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
                         {c.occurrenceCount}× erkannt · zuletzt {c.anchorDate} · erstmals{" "}
                         {c.firstDate}
                       </p>
+                      {c.matchedSubscription && (
+                        <p className="text-xs text-warning">
+                          Existiert vermutlich schon als „{c.matchedSubscription}" — deshalb
+                          abgewählt.
+                        </p>
+                      )}
                     </div>
                     <span className="font-medium">{formatAmount(c.amountCents, c.currency)}</span>
                   </div>

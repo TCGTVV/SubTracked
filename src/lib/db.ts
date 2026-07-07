@@ -214,6 +214,8 @@ export interface RecurringCandidate {
   anchorDate: string;
   firstDate: string;
   occurrenceCount: number;
+  /** Name eines bestehenden Abos, das vermutlich derselbe Posten ist; null = kein Verdacht. */
+  matchedSubscription: string | null;
 }
 
 type RecurringCandidateFromRust = Omit<RecurringCandidate, "interval"> & { interval: string };

@@ -36,6 +36,7 @@ const netflix: RecurringCandidate = {
   anchorDate: "2026-06-15",
   firstDate: "2026-03-15",
   occurrenceCount: 4,
+  matchedSubscription: null,
 };
 
 const spotify: RecurringCandidate = {
@@ -45,6 +46,7 @@ const spotify: RecurringCandidate = {
   anchorDate: "2026-06-20",
   firstDate: "2026-04-20",
   occurrenceCount: 3,
+  matchedSubscription: null,
 };
 
 function renderDialog() {
@@ -104,6 +106,20 @@ describe("CsvImportDialog", () => {
     expect(triggers[0]).toHaveTextContent("Monatlich");
     expect(triggers[1]).toHaveTextContent("EUR");
     expect(triggers[2]).toHaveTextContent("(kein Konto)");
+  });
+
+  it("markiert vermutliche Duplikate und wählt sie default ab", async () => {
+    renderDialog();
+    await pickFileWith([{ ...netflix, matchedSubscription: "Netflix Premium" }, spotify]);
+    await screen.findByText("Netflix");
+
+    expect(
+      screen.getByText(/Existiert vermutlich schon als „Netflix Premium"/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Netflix importieren" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Spotify importieren" })).toBeChecked();
+    // Nur Spotify zählt für den Anlegen-Button.
+    expect(screen.getByRole("button", { name: "1 Abo anlegen" })).toBeEnabled();
   });
 
   it("zeigt einen Hinweis, wenn keine wiederkehrenden Abbuchungen erkannt wurden", async () => {
