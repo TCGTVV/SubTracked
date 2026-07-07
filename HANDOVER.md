@@ -9,6 +9,40 @@
 
 ---
 
+## 2026-07-07 — Claude: CSV-Duplikate, Ist-Soll-Abgleich, Demo-Onboarding (BACKLOG #199, #200, #205)
+
+> Session-Auftrag: die drei verbliebenen P1-Punkte, je Feature ein Commit. Serena als Default (symbol-basierte Discovery, `replace_content`-Edits); Read nur für ganze Dateien, wo Tests das komplette JSX brauchten. Hinweis: `search_for_pattern` existiert in der aktuellen Serena-Version nicht mehr — Discovery lief über `find_symbol`/`get_symbols_overview`/grep.
+
+### 1. Duplikat-Erkennung beim CSV-Import (Commit `42b7c54`, BACKLOG #199)
+
+- `preview_csv_import` ist jetzt async mit DB-Zugriff: matcht Kandidaten gegen **alle** Abos (bewusst inkl. archivierter — Re-Import wäre genauso Datenmüll). Heuristik `names_similar`: normalisierter Teilstring in beide Richtungen, Namen < 3 Zeichen matchen nie („TV"-Guard). Betrag muss exakt stimmen.
+- Neues Feld `matchedSubscription` am Kandidaten; Dialog wählt Treffer default ab + Hinweis „Existiert vermutlich schon als …".
+
+### 2. Ist-Soll-Abgleich über Bank-CSV (Commit `9281b8c`, BACKLOG #200)
+
+- Neues Modul [csv_reconcile.rs](src-tauri/src/csv_reconcile.rs), `names_similar` dafür `pub(crate)`. Matching **ohne** Betrag (Abweichungen sind ja das Ziel), nur aktive wiederkehrende Abos mit Preis > 0 (0-€-Trials buchen nichts ab).
+- Pro Abo max. ein Befund; **„≥ 2 Zyklen still" gewinnt vor Preisabweichung** (letzter bekannter Preis hat bei vermuteter Kündigung keine Aussage). Zykluslänge grob aus `recurrence::interval_step` (Monat = 30 Tage). Ist == pending-Preis zählt nicht als Abweichung. Abos ohne Treffer im Auszug: keine Aussage (Auszug kann von fremdem Konto sein).
+- [CsvReconcileDialog](src/components/CsvReconcileDialog.tsx): „Preis übernehmen" läuft über `updateSubscription` (Preis-Historie kommt automatisch, kein neuer Schreibpfad), „Archivieren" über `setSubscriptionActive`. Trigger im SettingsDialog neben dem Import.
+
+### 3. Demo-Datensatz + Onboarding (Commit `97f751e`, BACKLOG #205)
+
+- Empty-State in App.tsx = Onboarding: Hook „Wann wird dein Konto knapp?", 3 Schritte, CTA „Mit Demo-Daten ausprobieren".
+- [lib/demo.ts](src/lib/demo.ts): realistischer Monat über die bestehenden add-Commands (Konto 645 €/Puffer 200 €, Gehalt 2.450 €, Miete bis Probeabo bis Kfz-Jahresbeitrag — jede Übersichts-Section zeigt etwas). Alle Namen „(Demo)"-Suffix, **`notify: false`** (sonst feuert der Reminder-Scheduler beim ersten Check Notification-Spam für alle Demo-Abos).
+- IDs in localStorage `subtracked.demo-ids`; Banner „Demo-Daten entfernen" löscht rückstandsfrei (Abos/Einnahmen vor Konto — FK). Kaputte/fehlende Einträge sind No-ops.
+
+### Verifikation (alles grün)
+
+- `cargo test` ✓ **117** (+13: 4 Duplikat-Matching, 9 Reconcile), clippy `-D warnings` ✓, fmt ✓.
+- `pnpm test:run` ✓ **326** (+19: 1 Import-Dialog, 10 Reconcile-Dialog, 6 demo.ts, 2 App), `tsc` ✓, `pnpm lint` ✓.
+
+### Offen / Hinweise
+
+- **Kein Tauri-App-Durchklick** (nur jsdom): beim nächsten `pnpm tauri dev` frische DB → Onboarding ansehen, Demo laden (alle Sections + Banner), Demo entfernen; danach CSV-Abgleich mit echtem Auszug testen (zusammen mit dem weiter offenen CSV-Import-Praxistest).
+- Ist-Soll-Abgleich meldet bei mehreren ähnlich benannten Posten (z.B. „Miete Wohnung"/„Miete Garage" vs. Abo „Miete") den jüngsten Treffer — Heuristik, User prüft vor Klick. Bei Bedarf später Betrags-Nähe als Tiebreaker.
+- Rest wie gehabt: CSV-Export ohne pending-Spalten (Formatentscheidung), DialogDescription-Aufräumer, App-Icon-Angleich, E2E nur via CI möglich.
+
+---
+
 ## 2026-07-06 — Claude: Trial-/Probeabo + geplante Preisänderung mit Wirksamkeitsdatum (BACKLOG #204)
 
 > Session-Auftrag: BACKLOG #204. Ein Feature, ein Commit, komplett durch beide Stacks (Migration → Rust → TS → UI → Tests).
