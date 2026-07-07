@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod csv_export;
 mod csv_import;
+mod csv_reconcile;
 mod currencies;
 mod db;
 mod db_backup;
@@ -67,6 +68,7 @@ pub fn run() {
             backup::import_backup,
             csv_export::export_subscriptions_csv,
             csv_import::preview_csv_import,
+            csv_reconcile::reconcile_csv,
         ])
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei

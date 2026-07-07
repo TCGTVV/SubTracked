@@ -328,7 +328,7 @@ pub fn detect_recurring_candidates(transactions: &[BankTransaction]) -> Vec<Recu
 /// Namens-Ähnlichkeit für Duplikat-/Abgleich-Matching: normalisierter Teilstring
 /// in eine der beiden Richtungen. Sehr kurze Namen (< 3 Zeichen) matchen nie —
 /// sonst träfe „TV" jeden Verwendungszweck mit diesen Buchstaben.
-fn names_similar(a: &str, b: &str) -> bool {
+pub(crate) fn names_similar(a: &str, b: &str) -> bool {
     let a = normalize_description(a);
     let b = normalize_description(b);
     if a.chars().count() < 3 || b.chars().count() < 3 {

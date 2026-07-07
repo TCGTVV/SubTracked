@@ -229,3 +229,31 @@ export async function previewCsvImport(path: string): Promise<RecurringCandidate
   const rows = await invoke<RecurringCandidateFromRust[]>("preview_csv_import", { path });
   return rows.map((r) => ({ ...r, interval: parseInterval(r.interval) }));
 }
+
+export type ReconcileFindingKind = "price_changed" | "possibly_cancelled";
+
+export interface ReconcileFinding {
+  subscriptionId: number;
+  subscriptionName: string;
+  kind: ReconcileFindingKind;
+  expectedAmountCents: number;
+  /** Zuletzt abgebuchter Betrag — nur bei "price_changed" gesetzt. */
+  actualAmountCents: number | null;
+  /** Datum der jüngsten passenden Abbuchung im Auszug (ISO). */
+  lastChargeDate: string;
+  matchedCount: number;
+}
+
+type ReconcileFindingFromRust = Omit<ReconcileFinding, "kind"> & { kind: string };
+
+function parseReconcileKind(s: string): ReconcileFindingKind {
+  if (s !== "price_changed" && s !== "possibly_cancelled") {
+    throw new Error(`Unbekannte Abgleich-Befundart: ${s}`);
+  }
+  return s;
+}
+
+export async function reconcileCsv(path: string): Promise<ReconcileFinding[]> {
+  const rows = await invoke<ReconcileFindingFromRust[]>("reconcile_csv", { path });
+  return rows.map((r) => ({ ...r, kind: parseReconcileKind(r.kind) }));
+}

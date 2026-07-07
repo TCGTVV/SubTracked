@@ -28,6 +28,7 @@ interface Props {
   onDataReplaced?: () => void | Promise<void>;
   /** Schließt Settings und öffnet den Bankauszug-CSV-Import-Dialog. */
   onStartCsvImport?: () => void;
+  onStartCsvReconcile?: () => void;
 }
 
 function formatDateTime(iso: string): string {
@@ -47,7 +48,13 @@ function formatInterval(secs: number): string {
   return `${minutes} Minuten`;
 }
 
-export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport }: Props) {
+export function SettingsDialog({
+  open,
+  onClose,
+  onDataReplaced,
+  onStartCsvImport,
+  onStartCsvReconcile,
+}: Props) {
   const autostartId = useId();
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
@@ -456,8 +463,10 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
           <section className="flex flex-col gap-2">
             <h3 className="font-semibold">CSV</h3>
             <p className="text-xs text-muted-foreground">
-              Abo-Liste als CSV exportieren (z.B. für Tabellenkalkulation) oder wiederkehrende
-              Abbuchungen aus einem Bank-Kontoauszug automatisch erkennen und als Abos anlegen.
+              Abo-Liste als CSV exportieren (z.B. für Tabellenkalkulation), wiederkehrende
+              Abbuchungen aus einem Bank-Kontoauszug automatisch erkennen und als Abos anlegen —
+              oder den Auszug mit bestehenden Abos abgleichen (Preisänderungen, ausbleibende
+              Abbuchungen).
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -472,6 +481,11 @@ export function SettingsDialog({ open, onClose, onDataReplaced, onStartCsvImport
               {onStartCsvImport && (
                 <Button type="button" variant="outline" size="sm" onClick={onStartCsvImport}>
                   Bankauszug importieren (CSV)
+                </Button>
+              )}
+              {onStartCsvReconcile && (
+                <Button type="button" variant="outline" size="sm" onClick={onStartCsvReconcile}>
+                  Bankauszug abgleichen (CSV)
                 </Button>
               )}
             </div>

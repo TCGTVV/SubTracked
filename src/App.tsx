@@ -15,6 +15,7 @@ import { ArchivedSavingsSection } from "./components/ArchivedSavingsSection";
 import { BalanceFreshnessWarning } from "./components/BalanceFreshnessWarning";
 import { CostSummarySection } from "./components/CostSummarySection";
 import { CsvImportDialog } from "./components/CsvImportDialog";
+import { CsvReconcileDialog } from "./components/CsvReconcileDialog";
 import { IncomeDialog } from "./components/IncomeDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
@@ -185,6 +186,7 @@ function App() {
   const [accountsOpen, setAccountsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [csvReconcileOpen, setCsvReconcileOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
 
@@ -553,12 +555,22 @@ function App() {
           setSettingsOpen(false);
           setCsvImportOpen(true);
         }}
+        onStartCsvReconcile={() => {
+          setSettingsOpen(false);
+          setCsvReconcileOpen(true);
+        }}
       />
       <CsvImportDialog
         open={csvImportOpen}
         accounts={accounts}
         onClose={() => setCsvImportOpen(false)}
         onImported={reloadAll}
+      />
+      <CsvReconcileDialog
+        open={csvReconcileOpen}
+        subs={subs}
+        onClose={() => setCsvReconcileOpen(false)}
+        onChanged={reloadAll}
       />
     </div>
   );
