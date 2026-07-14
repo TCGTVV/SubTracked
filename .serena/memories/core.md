@@ -31,7 +31,7 @@ Diese im Repo gepflegten Dateien sind verbindlich und sollten zuerst gelesen wer
 
 ## Weiterführende Memories
 
-- Stack & Versionspins: `mem:tech_stack`.
+- Stack & Versionspins (schlanker Kern, in jeder Session gelesen): `mem:tech_stack`. Details zu Rust→TS-Typgenerierung + Compile-time-SQL-Verifikation: `mem:rust_build_pipeline`. Vitest/RTL/axe-Gotchas: `mem:frontend_test_setup`.
 - Befehle für Dev/Build inkl. Wayland-Renderfix: `mem:suggested_commands`.
 - Code-Konventionen, die über AGENTS.md hinaus für Agents relevant sind: `mem:conventions`.
 - Was vor "fertig" laufen muss: `mem:task_completion`.
