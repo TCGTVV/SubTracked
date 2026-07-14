@@ -1,7 +1,15 @@
+packages:
+  - "."
+  - "e2e"
+
 overrides:
   esbuild: '>=0.28.1'
   undici: 7.28.0
 
 allowBuilds:
+  # edgedriver/geckodriver sind transitive @wdio/cli-Deps fuer Browser-Treiber-
+  # Auto-Install -- wir nutzen tauri-driver extern, kein Browser-Treiber-Download.
+  edgedriver: false
   esbuild: true
+  geckodriver: false
   lefthook: true

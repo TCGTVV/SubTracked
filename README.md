@@ -179,6 +179,8 @@ cd src-tauri && cargo machete                    # Unbenutzte Cargo.toml-Depende
 
 [Lefthook](https://github.com/evilmartians/lefthook) hängt sich beim Commit automatisch ein und fährt diese parallel; Push triggert GitHub Actions als zusätzlichen Lauf.
 
+Ein WebdriverIO-E2E-Smoke-Test (`e2e/`, via `tauri-driver`) läuft nur in CI (`e2e.yml`) — braucht `webkit2gtk-driver`, das auf vielen Linux-Distros nicht vorinstalliert ist.
+
 ## Lizenz
 
 MIT — siehe [LICENSE](LICENSE).
