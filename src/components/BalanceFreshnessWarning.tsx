@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 
 /** Ab so vielen Tagen ohne Saldo-Update gilt der Forecast als unsicher. */
-export const STALE_BALANCE_DAYS = 14;
+const STALE_BALANCE_DAYS = 14;
 
 interface Props {
   accounts: Account[];

@@ -6,6 +6,7 @@ Vor "fertig":
    - Frontend/TS/UI: `pnpm build` und/oder `pnpm test:run`.
    - Rust: `cd src-tauri && cargo test`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`.
    - Format/Lint allgemein: `pnpm lint` bzw. bei gewollten Auto-Fixes `pnpm lint:fix`.
+   - Unbenutzte Dateien/Exports/Typen (Frontend): `pnpm knip`.
 2. **Bei App-/Tauri-/Plugin-Aenderungen:** `pnpm tauri dev` starten. Auf Linux ist der Wayland-DMABUF-Fix im `pnpm tauri`-Script bereits gesetzt. Fenster muss ohne Rust-Panic starten.
 3. **Manuelle Smoke-Tests:** geaenderten UI-/Plugin-Pfad tatsaechlich ausfuehren, soweit lokal moeglich. Tauri-Plugins wie Notification/Autostart sind nur begrenzt headless testbar.
 4. **BACKLOG.md updaten:** erledigte Punkte abhaken, nicht entfernen.
@@ -22,5 +23,5 @@ Vor "fertig":
 
 - **Vitest/RTL**: `pnpm test:run` fuer Frontend-Unit- und Komponenten-Smoke-Tests.
 - **Rust-Tests**: `cd src-tauri && cargo test`, aktuell vor allem Recurrence und Reminder-Format-Helfer.
-- **CI**: GitHub Actions faehrt Lint, Vitest, cargo fmt und cargo clippy.
+- **CI**: GitHub Actions faehrt Lint, Knip, Vitest, cargo fmt und cargo clippy.
 - Wenn Checks aus Zeit-/Umgebungsgruenden nicht liefen, im finalen Bericht ausdruecklich sagen.

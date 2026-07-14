@@ -13,6 +13,7 @@
     "lint:fix": "biome check --write",
     "test": "vitest",
     "test:run": "vitest run",
+    "knip": "knip",
     "prepare": "lefthook install"
   },
   "dependencies": {
@@ -43,6 +44,7 @@
     "@vitejs/plugin-react": "^4.6.0",
     "axe-core": "^4.12.1",
     "jsdom": "^29.1.1",
+    "knip": "^6.26.0",
     "lefthook": "^2.1.9",
     "tailwindcss": "^4.3.1",
     "typescript": "~5.8.3",

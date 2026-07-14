@@ -170,6 +170,7 @@ Lint, Tests und Qualitäts-Gates lokal (Rust-Befehle aus `src-tauri/`):
 
 ```bash
 pnpm lint                                       # Biome (Lint + Format-Check)
+pnpm knip                                       # Unbenutzte Dateien/Exports/Typen
 pnpm test:run                                   # Vitest (Frontend-Unit-Tests)
 cd src-tauri && cargo test                      # Rust-Tests (Recurrence-Logik)
 cd src-tauri && cargo clippy --all-targets -- -D warnings

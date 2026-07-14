@@ -135,7 +135,7 @@ export async function deleteSubscription(id: number): Promise<void> {
   await invoke("delete_subscription", { id });
 }
 
-export interface LastSentReminder {
+interface LastSentReminder {
   dueDate: string;
   subscriptionName: string;
   sentAt: string;
@@ -230,7 +230,7 @@ export async function previewCsvImport(path: string): Promise<RecurringCandidate
   return rows.map((r) => ({ ...r, interval: parseInterval(r.interval) }));
 }
 
-export type ReconcileFindingKind = "price_changed" | "possibly_cancelled";
+type ReconcileFindingKind = "price_changed" | "possibly_cancelled";
 
 export interface ReconcileFinding {
   subscriptionId: number;
