@@ -70,6 +70,14 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      # WEBKIT_DISABLE_COMPOSITING_MODE + LIBGL_ALWAYS_SOFTWARE: der Runner hat
+      # keine echte GPU, Xvfb kein DRI3-Device ("libEGL warning: DRI3 error:
+      # Could not get DRI3 device") -- ohne das haengt das Fenster in einem
+      # kaputten Rendering-Zustand, der Titel wird nie gesetzt (erster echter
+      # CI-Lauf: Timeout nach 15s trotz erfolgreicher WebDriver-Session).
       - name: Run WebdriverIO E2E tests
         working-directory: e2e
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
         run: xvfb-run --auto-servernum pnpm test
