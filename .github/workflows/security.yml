@@ -59,3 +59,25 @@ jobs:
       - name: Audit Rust dependencies
         working-directory: src-tauri
         run: cargo audit
+
+  rust-deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # Nur bans/licenses/sources: Advisories deckt bereits der rust-audit-Job
+      # oben ab (cargo audit), nicht doppelt gepflegt. `arguments` ersetzt den
+      # Default "--all-features" (sonst würde ts-rs-export, bewusst kein
+      # Teil normaler Builds, mitgecheckt) durch ein explizites `--config`,
+      # weil cargo-deny `deny.toml` sonst im Repo-Root (Action-CWD) statt in
+      # src-tauri/ sucht.
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: src-tauri/Cargo.toml
+          arguments: --config src-tauri/deny.toml
+          command: check
+          command-arguments: bans licenses sources
