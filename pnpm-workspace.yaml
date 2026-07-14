@@ -5,6 +5,12 @@ packages:
 overrides:
   esbuild: '>=0.28.1'
   undici: 7.28.0
+  # mocha (ueber e2e > @wdio/mocha-framework) deklariert weiterhin `^6.0.2`,
+  # aber jede 6.x-Version ist verwundbar (GHSA-5c6j-r48x-rmvq RCE,
+  # GHSA-qj8w-gfj5-8c6v DoS) -- gefixt erst ab 7.0.5. Ungenutzt in unserem
+  # Setup (nur der "spec"-Reporter laeuft), aber pnpm audit flaggt den
+  # deklarierten Graphen unabhaengig von der tatsaechlichen Nutzung.
+  serialize-javascript: '>=7.0.5'
 
 allowBuilds:
   # edgedriver/geckodriver sind transitive @wdio/cli-Deps fuer Browser-Treiber-
