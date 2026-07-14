@@ -11,7 +11,7 @@
 1. **Steht der Inhalt schon im Kontextfenster?** → KEIN neuer Tool-Call. Aus dem Kontext arbeiten.
 2. **Brauche ich den Datei-Inhalt überhaupt?** Für `mcp__serena__replace_content` reicht oft ein eindeutiger Anchor-String, den ich schon habe → KEIN Read.
 3. **Kann ein Serena-Tool das?**
-   - Discovery: `mcp__serena__get_symbols_overview`, `mcp__serena__find_symbol`, `mcp__serena__search_for_pattern`
+   - Discovery (Symbole): `mcp__serena__get_symbols_overview`, `mcp__serena__find_symbol`. Freitext/String ohne bekannten Symbolnamen: `grep` — Serena hat seit v1.5.x keinen reinen Lese-Pattern-Search-Tool mehr (`search_for_pattern` wurde entfernt), das ist kein Anti-Pattern mehr.
    - Referenzen: `mcp__serena__find_referencing_symbols`
    - Edits: `mcp__serena__replace_symbol_body`, `mcp__serena__insert_after_symbol`, `mcp__serena__insert_before_symbol`, `mcp__serena__replace_content`
    - Memories: `mcp__serena__read_memory`, `mcp__serena__write_memory`
@@ -29,7 +29,7 @@
 
 - `Read` auf `HANDOVER.md`/`BACKLOG.md`/`README.md` „nur kurz zum Verifizieren" — der Inhalt steht in 90% der Fälle schon im Kontext, sonst `mcp__serena__search_for_pattern` mit Anker.
 - `Edit` auf `HANDOVER.md`/`BACKLOG.md` für neue Einträge — `mcp__serena__replace_content` mit Regex auf einen eindeutigen Anchor-String.
-- `Grep` zum Finden eines Symbols — `mcp__serena__find_symbol` oder `mcp__serena__search_for_pattern`.
+- `Grep` zum Finden eines **Symbols** — `mcp__serena__find_symbol`. (Für Freitext/Strings ohne Symbolbezug ist `grep` seit dem Wegfall von `search_for_pattern` die korrekte Wahl, kein Anti-Pattern.)
 - Code-Datei lesen, um eine kleine Stelle zu ändern — `mcp__serena__find_symbol(include_body=True)` + `mcp__serena__replace_symbol_body` oder `mcp__serena__replace_content`.
 
 ## REGEL 2 — Session-Start-Reihenfolge

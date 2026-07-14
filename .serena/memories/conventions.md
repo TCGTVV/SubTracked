@@ -5,7 +5,7 @@ Verbindliche Regeln stehen in `AGENTS.md` ("Konventionen (verbindlich)"). Hier n
 ## Nicht naiv umschreiben
 
 - `src/lib/recurrence.ts` ist getestet. Folgetermine = `anchor + k·step` (anker-additiv), niemals iterativ vom letzten Termin weiter. Sonst driften Monatsende-Abos (31.) auf den 28.
-- `src-tauri/src/recurrence.rs` ist die Rust-Parallele fuer den Reminder-Scheduler. Neue Intervall-/Datumsregeln muessen TS und Rust konsistent halten; am besten gemeinsame Testvektoren ergaenzen.
+- `src-tauri/src/recurrence.rs` ist die Rust-Parallele fuer den Reminder-Scheduler. Neue Intervall-/Datumsregeln muessen TS und Rust konsistent halten. Seit Commit `6283ddb` gibt es dafuer eine geteilte Fixture `tests/fixtures/recurrence-vectors.json` (Repo-Root), konsumiert von `recurrence::tests::shared_vectors_match_typescript_impl` (Rust) und `src/lib/recurrence-vectors.test.ts` (TS) — bei neuen Intervall-/Kuendigungsregeln dort Vektoren ergaenzen statt neue Tests nur auf einer Seite.
 - `src/lib/db.ts` ist die einzige Frontend-Bridge zur Persistenz. Komponenten rufen keine Tauri-Commands direkt fuer DB-Zugriff auf; sie gehen ueber diese Wrapper.
 - Echte SQLite-Zugriffe liegen im Rust-Backend (`src-tauri/src/commands.rs` + `AppState { db: SqlitePool }`). Kein zweiter Pool, kein Webview-SQL.
 - Reminders: `UNIQUE(subscription_id, due_date)` bleibt die Idempotenz-Grenze. Seit 2026-06-07 bedeutet ein Reminder-Row: "Notification wurde erfolgreich angestossen". Bei fehlender Permission oder `show()`-Fehler wird nichts als gesendet markiert, damit spaeter erneut versucht werden kann.
