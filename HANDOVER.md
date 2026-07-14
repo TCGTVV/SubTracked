@@ -9,6 +9,64 @@
 
 ---
 
+## 2026-07-14 — Claude: Serena-Pin, Compile-time-SQL + Rust→TS-Typgenerierung, Code-Review-Fixes
+
+> Session-Auftrag: keine BACKLOG-Nummer — der User bat um allgemeine Architektur-/Effizienz-Vorschläge für die Zusammenarbeit mit Agents. Drei Vorschlagsblöcke entstanden im Gespräch: (1) Agent-Effizienz, (2) Architektur-Ergänzungen, (3) GitHub-Tooling. (1) und (2) wurden in dieser Session umgesetzt; (3) ist offen, siehe unten.
+
+### Was passierte
+
+1. **Serena-Tooling-Fix** (Commit `0fd8a99`): `mcp__serena__search_for_pattern` existiert in der installierten Serena-Version (1.5.4.dev0) nicht mehr — `CLAUDE.md` verwies aber noch zweimal darauf, und `.mcp.json` lief ungepinnt auf Serena `main`, konnte also jederzeit erneut driften. `.mcp.json` auf den verifizierten Commit gepinnt, `CLAUDE.md`/`conventions`-Memory korrigiert (`grep` ist für Freitextsuche jetzt explizit erlaubt statt Anti-Pattern).
+2. **Compile-time-verifizierte SQL-Queries + Rust→TS-Typgenerierung** (Commit `8618ee9`, größter Teil der Session):
+   - Alle 85 statischen `sqlx::query`/`query_as`-Stellen (`commands.rs`, `reminders.rs`, `backup.rs`, `db_backup.rs`, `csv_export.rs`, `csv_import.rs`, `csv_reconcile.rs`, `validation.rs`, inkl. Test-Module) auf `query!`/`query_as!` umgestellt. Genuines dynamisches SQL (Backup-Restore-Tabellennamen, `VACUUM INTO`) bleibt bewusst bei `sqlx::query()`.
+   - `sqlx-cli` installiert, Dev-DB (`src-tauri/.dev.db` + `.env`, beide gitignored) für Compile-Time-Checks aufgesetzt. `src-tauri/.cargo/config.toml` setzt `SQLX_OFFLINE=true` (force=false) — normale Builds brauchen **keine** DB, das committete `.sqlx/`-Verzeichnis reicht.
+   - `ts-rs` generiert `Account`/`Income`/`Subscription`/`PriceHistoryEntry` in `src/types.ts` jetzt aus den Rust-Structs in `db.rs` (`src/generated/*.ts`). `interval`/`cancelMode`/`cancelPeriodUnit` bleiben handgepflegte literale Unions, per `Omit`+Intersection über die generierten Typen gelegt.
+3. **Code-Review des Commits** (`/code-review`, `high`-Effort: 8 Finder-Angles + 10 Verifikations-Agents) fand 8 überlebende Findings (2 widerlegt: Rust erzwingt bereits Tuple-Konsistenz zwischen `match`-Armen; TS narrowt bereits ohne `Omit`).
+4. **Fix-Runde 1** (Findings 1–6, Commit `61b6a00`):
+   - `db_backup.rs::integrity_check` schlägt bei einer NULL-Zeile wieder hart fehl statt sie zu `""` zu verwaschen.
+   - CI prüft jetzt per `cargo sqlx prepare --check`, dass der `.sqlx`-Cache noch zum Schema passt, und per `git diff --exit-code -- src/generated`, dass die TS-Bindings noch zu den Rust-Structs passen (`checks.yml`).
+   - Neuer Vitest-Test (`src/lib/generated-bindings.test.ts`) schlägt fehl, sobald ein generiertes Binding `bigint` enthält (vergessenes `#[ts(type = "number")]`).
+   - `list_subscriptions`/`export_subscriptions_csv`/`run_reminder_check` teilen sich jetzt `db::fetch_subscriptions` statt drei Kopien der 19-Spalten-Query zu pflegen; `backup.rs` behält seine eigene `ORDER BY id`-Variante (Determinismus für Backup-Diffs). Bewusste Nebenwirkung: Reminder-Verarbeitung läuft jetzt in Namens- statt Rowid-Reihenfolge (für die Fälligkeitslogik irrelevant).
+   - Neuer Test verifiziert, dass `restore_backup()` wirklich jede Tabelle im Schema löscht (Sicherheitsnetz, weil die DELETE-Liste wegen des Makro-Literal-Zwangs nicht mehr aus einer gemeinsamen Quelle generiert werden kann).
+5. **Fix-Runde 2** (Findings 7–8, Commit `c4c1eb1`):
+   - Verlorenen Doc-Kommentar zur `account_id`-FK-Sonderbehandlung in `update_subscription_in_db` wiederhergestellt.
+   - `ts-rs` ist jetzt eine optionale Dependency hinter dem Cargo-Feature `ts-rs-export` (`#[cfg_attr(...)]` auf allen vier Structs) — normale Builds inkl. Release kompilieren `ts-rs`/`ts-rs-macros` gar nicht mehr mit. Bindings regenerieren: `cargo test --features ts-rs-export export` (default `cargo test` hat dadurch 118 statt 122 Tests).
+
+### Verifikation (alles grün, mehrfach durchlaufen)
+
+- `cargo test` ✓ 118 (ohne Feature) / `cargo test --features ts-rs-export` ✓ 122.
+- `cargo clippy --all-targets -- -D warnings` ✓ sowohl ohne als auch mit `--features ts-rs-export`.
+- `cargo fmt --check` ✓, `cargo sqlx prepare --check -- --tests` ✓ (gegen frisch migrierte Test-DB).
+- `pnpm test:run` ✓ 331 (25 Files), `pnpm lint` ✓, `pnpm tsc --noEmit` ✓.
+- CI-Schritte (`.sqlx`-Frische, TS-Bindings-Frische) lokal simuliert und verifiziert, bevor sie nach `checks.yml` committet wurden.
+
+### Wichtige Entscheidungen + Begründung
+
+- **`.mcp.json` gepinnt statt auf `main` laufen zu lassen**: Serena-Tool-Drift ist bereits zweimal in früheren Sessions aufgetreten (HANDOVER 2026-07-06/07 dokumentieren beide Workarounds für dasselbe `search_for_pattern`-Problem) — ungepinnt kann das jederzeit wieder passieren, ohne dass jemand merkt warum ein Agent plötzlich anders arbeitet.
+- **`.sqlx`-Cache + `SQLX_OFFLINE=true` per Default statt verpflichtender DB**: Passt zum Desktop-App-Charakter — kein Mitwirkender soll eine DB aufsetzen müssen, nur um `cargo build` auszuführen.
+- **ts-rs hinter einem Feature-Flag statt normaler Dependency**: Ein Code-Review-Fund zeigte, dass `#[derive(TS)]` unbedingt auf Production-Structs lag, wodurch `ts-rs`/`ts-rs-macros` in jeden Release-Build einkompiliert wurden, obwohl nur `cargo test export` sie je aufruft. `cfg_attr`-Gate löst das, ohne den Release-Build zu brechen (verifiziert: `#[derive(TS)]` kann nicht einfach nach `[dev-dependencies]`, weil es unbedingt auf Structs liegt, die auch außerhalb von Tests kompiliert werden).
+- **`fetch_subscriptions`-Konsolidierung nur für 3 von 4 Kopien**: `backup.rs::collect_backup` braucht `ORDER BY id` für deterministische Backup-Diffs (expliziter Kommentar im Code) — das wurde bewusst NICHT auf `ORDER BY name` vereinheitlicht, um dieses Verhalten nicht zu ändern.
+
+### Gotchas / Stolperfallen
+
+- `sqlx::query!`/`query_as!` verlangen zwingend ein String-**Literal** an der Aufrufstelle — weder ein `const &str` noch ein `macro_rules!`-Wrapper (der nicht eager expandiert wird) funktioniert als Umweg. Das ist der Grund, warum die 19-Spalten-Subscription-Query nicht vollständig auf einen Aufrufer reduzierbar war (nur auf `fetch_subscriptions` in `db.rs`) und warum die Backup-Restore-DELETE-Schleife zu 5 Einzelaufrufen entrollt werden musste.
+- SQLite-Pragmas brauchen die klassische `PRAGMA x`-Syntax in `query!`, nicht `pragma_x()`-Tabellenfunktionen — letztere scheitern an sqlx' Nullability-Introspektion ("no such table column").
+- `cargo sqlx prepare` muss mit `-- --tests` laufen, sonst fehlen die `#[cfg(test)]`-Queries im `.sqlx`-Cache und der nächste `cargo test` ohne DB bricht.
+- ts-rs mappt `i64` standardmäßig auf TS `bigint`, nicht `number` — bei Tauris JSON-basierter IPC ein echter Bug, kein Stilproblem (jede Zahlen-Arithmetik im Frontend hätte gebrochen). Musste vor dem Verdrahten in `types.ts` gefixt werden, sonst wäre es unbemerkt durchgerutscht.
+- `git status`/`cd`-Aufrufe in derselben Bash-Session persistieren das Arbeitsverzeichnis über Tool-Calls hinweg — ein `cd src-tauri` mitten in der Session hat einmal einen `find`/`ls`-Befund verfälscht (Fixture-Datei "fehlte" scheinbar, lag aber nur am falschen cwd).
+
+### Geänderte/neue Memories
+
+- `tech_stack`: zwei neue Abschnitte ("Rust→TS-Typgenerierung", "Compile-time-verifizierte SQL"), beide inkl. Nachträgen aus Fix-Runde 2 (Feature-Gate, bigint-Guard-Test, CI-Checks). Grund: Stack-Änderungen dieser Tragweite müssen für künftige Sessions ohne erneutes Code-Lesen auffindbar sein.
+- `conventions`: veraltete Notiz "am besten gemeinsame Testvektoren ergänzen" korrigiert — die gab es schon seit Commit `6283ddb`, nur die Memory wusste es nicht mehr (führte in dieser Session kurz zu einer falschen Empfehlung an den User).
+
+### Offen / nicht geklärt
+
+- **Vorschlag 3 aus dem eingangs geführten Architektur-Gespräch (GitHub-Tooling) ist NICHT begonnen**: `cargo-nextest` (schnellerer/paralleler Rust-Test-Runner), `knip` (ungenutzte TS-Exports/Files über Dateigrenzen), `cargo-deny` (Lizenz-/Security-Audit für Rust-Deps, passend zur bestehenden `security.yml`-Schiene). Dependabot ist bereits vorhanden, kein Renovate nötig.
+- `ts-rs`/`ts-rs-macros`/`termcolor`/zweite `thiserror`-Major-Version stehen weiterhin in `Cargo.lock` und damit vermutlich in `cargo audit`s Scan-Oberfläche, auch wenn sie durch das Feature-Gate nicht mehr in den Default-Build kompiliert werden — nicht abschließend verifiziert, ob `cargo-audit` optionale Dependencies ausklammert.
+- Rest wie in den Vorgänger-Einträgen unverändert offen: CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer, E2E via `tauri-driver` auf der Dev-Maschine blockiert (kein `WebKitWebDriver` unter Arch/CachyOS).
+
+---
+
 ## 2026-07-07 — Claude: CSV-Duplikate, Ist-Soll-Abgleich, Demo-Onboarding (BACKLOG #199, #200, #205)
 
 > Session-Auftrag: die drei verbliebenen P1-Punkte, je Feature ein Commit. Serena als Default (symbol-basierte Discovery, `replace_content`-Edits); Read nur für ganze Dateien, wo Tests das komplette JSX brauchten. Hinweis: `search_for_pattern` existiert in der aktuellen Serena-Version nicht mehr — Discovery lief über `find_symbol`/`get_symbols_overview`/grep.
