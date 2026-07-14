@@ -9,7 +9,7 @@
 
 ---
 
-## 2026-07-14 — Claude: Serena-Pin, Compile-time-SQL + Rust→TS-Typgenerierung, Code-Review-Fixes
+## 2026-07-14 — Claude: Serena-Pin, Compile-time-SQL + Rust→TS-Typgenerierung, Code-Review-Fixes; Fortsetzung: cargo-deny/knip/nextest/machete, Memory-Split, E2E-Test, Commit-Disziplin
 
 > Session-Auftrag: keine BACKLOG-Nummer — der User bat um allgemeine Architektur-/Effizienz-Vorschläge für die Zusammenarbeit mit Agents. Drei Vorschlagsblöcke entstanden im Gespräch: (1) Agent-Effizienz, (2) Architektur-Ergänzungen, (3) GitHub-Tooling. (1) und (2) wurden in dieser Session umgesetzt; (3) ist offen, siehe unten.
 
@@ -59,11 +59,64 @@
 - `tech_stack`: zwei neue Abschnitte ("Rust→TS-Typgenerierung", "Compile-time-verifizierte SQL"), beide inkl. Nachträgen aus Fix-Runde 2 (Feature-Gate, bigint-Guard-Test, CI-Checks). Grund: Stack-Änderungen dieser Tragweite müssen für künftige Sessions ohne erneutes Code-Lesen auffindbar sein.
 - `conventions`: veraltete Notiz "am besten gemeinsame Testvektoren ergänzen" korrigiert — die gab es schon seit Commit `6283ddb`, nur die Memory wusste es nicht mehr (führte in dieser Session kurz zu einer falschen Empfehlung an den User).
 
-### Offen / nicht geklärt
+### Offen / nicht geklärt (Stand Phase 1 — siehe Fortsetzung unten für den aktuellen Stand)
 
-- **Vorschlag 3 aus dem eingangs geführten Architektur-Gespräch (GitHub-Tooling) ist NICHT begonnen**: `cargo-nextest` (schnellerer/paralleler Rust-Test-Runner), `knip` (ungenutzte TS-Exports/Files über Dateigrenzen), `cargo-deny` (Lizenz-/Security-Audit für Rust-Deps, passend zur bestehenden `security.yml`-Schiene). Dependabot ist bereits vorhanden, kein Renovate nötig.
+- ~~Vorschlag 3 (GitHub-Tooling) ist NICHT begonnen~~ — **in der Fortsetzung derselben Session umgesetzt**, siehe unten.
 - `ts-rs`/`ts-rs-macros`/`termcolor`/zweite `thiserror`-Major-Version stehen weiterhin in `Cargo.lock` und damit vermutlich in `cargo audit`s Scan-Oberfläche, auch wenn sie durch das Feature-Gate nicht mehr in den Default-Build kompiliert werden — nicht abschließend verifiziert, ob `cargo-audit` optionale Dependencies ausklammert.
-- Rest wie in den Vorgänger-Einträgen unverändert offen: CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer, E2E via `tauri-driver` auf der Dev-Maschine blockiert (kein `WebKitWebDriver` unter Arch/CachyOS).
+- Rest wie in den Vorgänger-Einträgen unverändert offen: CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer.
+
+### Fortsetzung derselben Session: Vorschlag 3 (GitHub-Tooling) + Commit-Nacharbeit
+
+> Nach Phase 1 (oben) ging das Gespräch weiter: erst Vorschlag 3 komplett umgesetzt (vier Tools + ein Memory-Refactor + E2E-Test), dann ein Nachtrag zur Commit-Disziplin, nachdem auffiel, dass die gesamte Fortsetzung ohne einen einzigen Commit lief.
+
+#### Was passierte
+
+6. **cargo-deny** (Commit `8ccce3b`): neuer CI-Job (`security.yml`), `src-tauri/deny.toml` mit Lizenz-Allowlist aus der tatsächlichen Dependency-Landschaft ermittelt (`cargo metadata`). `multiple-versions = "warn"` bewusst, nicht `"deny"` — Tauris eigener Baum bringt ~36 unvermeidbare Duplicate-Version-Fälle mit, ein `deny` würde nur eine sinnlose Skip-Liste erzwingen.
+7. **knip** (Commit `7adc8c0`): neuer CI-Schritt + `knip.json` (`src-tauri/**` ausgeschlossen; `src/components/ui/**` nur für `exports`/`types`-Issues ausgeschlossen, damit ganze unbenutzte Dateien dort weiter gemeldet werden). Direkt mit den Funden aufgeräumt: 5 nie importierte shadcn-Primitive gelöscht (badge/card/scroll-area/separator/tooltip), 7 unnötige `export`-Keywords entfernt.
+8. **cargo-nextest** (Commit `0ea637b`): `cargo test` → `cargo nextest run` überall (CI, `AGENTS.md`, `README.md`, `task_completion`-Memory). Installation über `taiki-e/install-action` (vorgebaute Binary). Testanzahl-Parität verifiziert: 118 (default) / 122 (`--features ts-rs-export`), identisch zu vorher.
+9. **cargo-machete** (Commit `6c49527`): findet aktuell keine ungenutzten Dependencies. Bewusst **ohne** `--with-metadata` — das Flag erzeugt hier einen False Positive für `tauri-build` (korrekt in `build.rs` verwendet, von der Metadata-Analyse aber nicht erkannt).
+10. **tech_stack-Memory-Split** (Commit `befe370`): `tech_stack` (wird laut `CLAUDE.md` REGEL 2 in jeder Session gelesen) war auf ~13KB angewachsen. Auf einen schlanken Kern (~4KB) reduziert, Details in zwei neue Memories ausgelagert: `rust_build_pipeline` (ts-rs-Typgenerierung, Compile-time-SQL) und `frontend_test_setup` (Vitest/RTL/axe-Gotchas, später auch E2E-Details). `core` verlinkt beide.
+11. **E2E-Test** (Commit `b75b4c7`): WebdriverIO + `tauri-driver` in `e2e/` (eigenes pnpm-Workspace-Package). Umweg über `@wdio/tauri-service` mit `driverProvider: 'embedded'` (kein System-Treiber nötig, cross-platform) — kam lokal tatsächlich bis zu einer echten WebKitGTK-Session (echte Session-ID), scheiterte aber an einem echten Upstream-Bug (`@wdio/native-utils@2.4.0` fehlt der Export `installMockSyncOverride`, den `@wdio/tauri-service@1.2.0` braucht; gefixt erst in `2.5.0`, per `pnpm-workspace.yaml`-Override zunächst umgangen) und hätte danach zusätzlich ein zweites Rust-Plugin (`tauri-plugin-wdio`) + einen neuen, Vite-Env-gated Frontend-Import gebraucht — auf Rücksprache mit dem User verworfen zugunsten des klassischen, jahrelang erprobten `tauri-driver`-Ansatzes.
+12. **localStorage/Vitest-Fix** (Commit `3660e3e`): beim ersten Commit-Versuch blockierte Lefthook wegen 6 vorbestehender Vitest-Fails in `demo.test.ts` (Node ≥24s natives `localStorage` kollidiert mit jsdoms Polyfill; per `git stash` verifiziert, dass das schon auf `main` vor dieser Session so war). Auf Rücksprache gefixt: `vitest.config.ts` → `pool: "forks"` + `execArgv: ["--no-experimental-webstorage"]`.
+13. **Nachträgliche Commit-Rekonstruktion**: Punkte 6–12 liefen komplett ohne einen einzigen Commit — der User musste es einfordern. Da noch nichts committet war, ließ sich das sauber in 7 Feature-Commits zerlegen: gemeinsam genutzte Dateien (`checks.yml`, `AGENTS.md`, `README.md`, `task_completion`-Memory, `tech_stack`/`frontend_test_setup`-Memories) wurden pro Commit auf ihren jeweiligen Zwischenstand zurückgebaut (Edit/Write, keine destruktiven Git-Befehle), gestaged, committet, nächste Schicht wieder drauf.
+14. **CLAUDE.md REGEL 3** (Commit `a2db3a1`): „Ein Commit pro Feature, immer" — sofort committen sobald ein Feature fertig+verifiziert ist, nicht am Sitzungsende sammeln. Zusätzlich als Feedback-Memory im Cross-Session-Speicher abgelegt (`feedback_commit_discipline.md`, außerhalb Serena/außerhalb Project-Root), damit die Regel auch greift, wenn `CLAUDE.md` in einer künftigen Session nicht sorgfältig gelesen wird.
+
+#### Verifikation
+
+- Nach jedem der 7 Commits einzeln erneut: `pnpm lint`/`pnpm knip`/`pnpm exec tsc --noEmit`/`pnpm test:run` (331/331) grün, `cargo fmt --check`/`cargo clippy --all-targets -- -D warnings`/`cargo nextest run` (118 + 122 mit Feature)/`cargo machete` grün.
+- E2E lokal nur bis zur bekannten Grenze verifizierbar (fehlendes `webkit2gtk-driver`-Systempaket auf CachyOS) — inkl. eines echten, dabei gefundenen und gefixten Config-Bugs (fehlendes `hostname`/`port` in `wdio.conf.js`). Echter CI-Lauf steht mit dem nächsten Push noch aus.
+
+#### Wichtige Entscheidungen + Begründung
+
+- **`tauri-driver` (klassisch) statt `@wdio/tauri-service` (embedded)**: Embedded ist neuer, sidesteppt den lokalen `WebKitWebDriver`-Blocker sogar komplett und ist cross-platform — aber Stand 2026-07-14 zu unausgereift (echter, gerade erst gefundener Upstream-Bug) und hätte zusätzlichen Scope (zweites Plugin, Frontend-Eingriff) gebraucht. Klassischer Ansatz ist production-erprobt, auch wenn er nur in CI verifizierbar ist.
+- **cargo-machete/cargo-deny CI-Installation versioniert per `cargo install`** statt der jeweiligen `@main`-Action (`bnjbvr/cargo-machete@main`) — dieselbe Lehre wie beim Serena-`.mcp.json`-Pin aus Phase 1: ungepinnte `main`-Branches drifteten hier schon zweimal unbemerkt.
+- **`multiple-versions = "warn"` in `deny.toml`**: siehe Punkt 6 oben.
+
+#### Gotchas / Stolperfallen
+
+- Cargo `[target.'cfg(debug_assertions)'.dependencies]` wird von Cargo selbst als nicht unterstützt markiert ("will not work as expected") — hat in einem lokalen Test zufällig korrekt funktioniert (Debug-Build hatte die Dependency, Release nicht), ist für eine geshippte App aber zu riskant. Ein echtes Cargo-Feature-Flag ist der zuverlässige Weg (so jetzt für `e2e-webdriver` probiert, dann beim Umstieg auf `tauri-driver` wieder entfernt, weil der klassische Ansatz gar kein Rust-Plugin braucht).
+- `TAURI_CONFIG`-Env-Var patcht `tauri.conf.json` zur Build-Zeit (z.B. `withGlobalTauri`), ohne die committete Config dauerhaft zu ändern — nützlich für Build-Varianten, die nur zur Testzeit andere Config brauchen.
+- WebdriverIO braucht explizites `hostname`/`port`/`path` in der Config, sonst versucht es eine lokale Browser-Session zu starten ("No browserName defined") statt sich mit einem extern gestarteten Treiber (`tauri-driver`) zu verbinden — leicht zu übersehende Fehlkonfiguration, die offizielle Doku-Beispiele nicht immer klar zeigen.
+- `tauri-build` validiert **alle** Dateien in `src-tauri/capabilities/` gegen die tatsächlich kompilierten Plugins, unabhängig von Feature-Flags — ein dauerhafter Capability-Eintrag für ein optionales Plugin bricht jeden Build, der das Feature nicht aktiviert hat ("Permission ... not found").
+- **Vitest 4** hat `poolOptions` als Top-Level-Optionen aufgelöst (`execArgv` jetzt direkt unter `test`, nicht mehr unter `poolOptions.forks`) — die alte Syntax erzeugt nur eine Deprecation-**Warnung**, keinen Fehler, daher leicht zu übersehen und stundenlang wirkungslos.
+- **pnpm-Workspaces:** Sobald eine `pnpm-workspace.yaml` existiert (auch ohne `packages`-Feld), muss ein Sub-Package explizit in `packages:` gelistet werden — sonst meldet `pnpm install` im Unterordner scheinbar erfolgreich "Already up to date", installiert aber tatsächlich nichts.
+- Neue transitive Deps können pnpms `allowBuilds`-Gate triggern (`edgedriver`/`geckodriver` über `@wdio/cli`) — beide auf `false` gesetzt, da kein echter Browser-Treiber-Download gebraucht wird (wir steuern die App direkt, nicht Chrome/Firefox/Edge).
+
+#### Geänderte/neue Memories
+
+- `tech_stack`: komplett neu geschrieben, schlanker Kern (~4KB statt ~13KB).
+- `rust_build_pipeline` (neu): ts-rs-Typgenerierung + Compile-time-SQL-Details, aus `tech_stack` ausgelagert.
+- `frontend_test_setup` (neu): Vitest/RTL/axe-Gotchas + E2E-Setup-Details (inkl. der verworfenen `@wdio/tauri-service`-Alternative) + der gefixte `localStorage`-Bug.
+- `core`: verlinkt beide neuen Memories.
+- `task_completion`: `cargo nextest`/`cargo machete`/`pnpm knip` ergänzt, CI-Job-Übersicht (`checks.yml`/`security.yml`/`e2e.yml`) aktualisiert.
+- Auto-Memory (Cross-Session, außerhalb Serena/Project-Root): `feedback_commit_discipline.md` neu — Commit-Disziplin-Regel, siehe Punkt 14 oben.
+
+#### Offen / nicht geklärt (aktueller Stand)
+
+- **IDE zeigt in `lib.rs` weiterhin rote Fehler**, auch nach `Rust Analyzer: Restart Server`. `cargo check`, `cargo check --all-features` und `cargo verify-project` laufen alle sauber durch — kein echter Compile-Fehler. Vermutlich weiterhin stale rust-analyzer-Zustand nach den vielen `Cargo.toml`-Änderungen während der E2E-Experimente (Dependency+Feature rein und wieder raus). User testet nach vollständigem Neustart; falls die Fehler danach weiter bestehen, braucht es die konkreten Fehlermeldungen (Datei:Zeile + Text) für eine gezielte Prüfung.
+- **`e2e.yml` noch nie tatsächlich in GitHub Actions gelaufen** — erste echte Verifikation steht mit dem nächsten Push aus. Nicht auszuschließen, dass CI-spezifische Überraschungen (Runner-Umgebung, Timing) noch Nacharbeit brauchen.
+- Vorschlag 3 (GitHub-Tooling) damit komplett abgeschlossen: cargo-deny + knip + cargo-nextest + cargo-machete alle umgesetzt und verifiziert.
+- Rest wie in den Vorgänger-Einträgen unverändert offen: CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer.
 
 ---
 
