@@ -48,6 +48,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
         with:
@@ -73,14 +78,14 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
-      - name: cargo test
+      - name: cargo nextest
         working-directory: src-tauri
-        run: cargo test
+        run: cargo nextest run
 
       - name: Check generated TS bindings are up to date
         run: |
           git diff --exit-code -- src/generated || {
-            echo "::error::src/generated/*.ts ist nicht aktuell. Lokal 'cargo test export' in src-tauri/ laufen lassen und den Diff committen."
+            echo "::error::src/generated/*.ts ist nicht aktuell. Lokal 'cargo nextest run --features ts-rs-export export' in src-tauri/ laufen lassen und den Diff committen."
             exit 1
           }
 
