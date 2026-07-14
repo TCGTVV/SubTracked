@@ -73,3 +73,33 @@ jobs:
       - name: cargo test
         working-directory: src-tauri
         run: cargo test
+
+      - name: Check generated TS bindings are up to date
+        run: |
+          git diff --exit-code -- src/generated || {
+            echo "::error::src/generated/*.ts ist nicht aktuell. Lokal 'cargo test export' in src-tauri/ laufen lassen und den Diff committen."
+            exit 1
+          }
+
+      - name: Cache sqlx-cli binary
+        id: sqlx-cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-sqlx
+          key: sqlx-cli-0.9.0-${{ runner.os }}
+
+      - name: Install sqlx-cli
+        if: steps.sqlx-cli-cache.outputs.cache-hit != 'true'
+        run: cargo install sqlx-cli --version 0.9.0 --no-default-features --features sqlite,rustls --locked
+
+      - name: Check sqlx query cache is up to date
+        working-directory: src-tauri
+        env:
+          DATABASE_URL: sqlite://./.ci-check.db
+        run: |
+          cargo sqlx database create
+          cargo sqlx migrate run --source ./migrations
+          cargo sqlx prepare --check -- --tests || {
+            echo "::error::.sqlx/ ist nicht aktuell gegenueber Schema/Queries. Lokal 'cargo sqlx prepare -- --tests' laufen lassen und den Diff committen."
+            exit 1
+          }

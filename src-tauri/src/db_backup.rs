@@ -115,11 +115,14 @@ async fn integrity_check(pool: &SqlitePool) -> Result<String, BoxError> {
     let rows = sqlx::query!(r#"PRAGMA integrity_check"#)
         .fetch_all(pool)
         .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| r.integrity_check.unwrap_or_default())
-        .collect::<Vec<_>>()
-        .join("; "))
+    let mut lines = Vec::with_capacity(rows.len());
+    for r in rows {
+        lines.push(
+            r.integrity_check
+                .ok_or("integrity_check lieferte eine NULL-Zeile")?,
+        );
+    }
+    Ok(lines.join("; "))
 }
 
 async fn foreign_key_violations(pool: &SqlitePool) -> Result<usize, BoxError> {

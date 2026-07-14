@@ -639,6 +639,40 @@ mod tests {
         assert!(restore_backup(&db, &backup).await.is_err());
     }
 
+    /// Sicherheitsnetz fuer die DELETE-Liste in `restore_backup`: sqlx::query!
+    /// verlangt Literale, die Loeschreihenfolge kann also nicht mehr aus einer
+    /// gemeinsamen Liste generiert werden (siehe Kommentar dort). Dieser Test
+    /// bricht, sobald eine neue Tabelle im Schema auftaucht, die restore_backup
+    /// noch nicht kennt — Erinnerung, die DELETE-Liste dort zu ergaenzen.
+    #[tokio::test]
+    async fn restore_backup_deletes_every_application_table() {
+        let db = test_pool().await;
+        let rows = sqlx::query_scalar!(
+            "SELECT name FROM sqlite_master \
+             WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_sqlx_migrations'"
+        )
+        .fetch_all(&db)
+        .await
+        .unwrap();
+        let mut tables: Vec<&str> = rows.iter().flatten().map(String::as_str).collect();
+        tables.sort_unstable();
+
+        let mut expected = vec![
+            "accounts",
+            "incomes",
+            "reminders",
+            "subscription_price_history",
+            "subscriptions",
+        ];
+        expected.sort_unstable();
+
+        assert_eq!(
+            tables, expected,
+            "Schema hat eine neue Tabelle bekommen, die restore_backup() nicht kennt — \
+             DELETE-Liste in restore_backup() ergaenzen!"
+        );
+    }
+
     #[test]
     fn export_write_replaces_existing_file_via_temp_path() {
         let dir = unique_test_dir("atomic-export");

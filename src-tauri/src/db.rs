@@ -95,6 +95,46 @@ pub struct Subscription {
     pub pending_from: Option<String>,
 }
 
+/// Alle Subscription-Spalten, `ORDER BY name`. Geteilt von `commands::list_subscriptions`
+/// und `csv_export::export_subscriptions_csv` (beide wollen exakt das). `reminders::
+/// run_reminder_check` nutzt sie ebenfalls fuer den `only_active = true`-Fall — die
+/// Reihenfolge ist dort irrelevant (jede Subscription wird unabhaengig verarbeitet).
+/// `backup::collect_backup` bleibt bewusst bei einer eigenen `ORDER BY id`-Query,
+/// weil die Backup-Determinismus-Garantie (stabiler Diff zwischen zwei Backups) an
+/// der ID haengt, nicht am Namen.
+pub(crate) async fn fetch_subscriptions(
+    pool: &SqlitePool,
+    only_active: bool,
+) -> Result<Vec<Subscription>, String> {
+    if only_active {
+        sqlx::query_as!(
+            Subscription,
+            r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+               lead_days, active as "active: bool", notify as "notify: bool",
+               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
+               category, one_time as "one_time: bool", archived_at,
+               pending_amount_cents, pending_from
+               FROM subscriptions WHERE active = 1 ORDER BY name"#
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())
+    } else {
+        sqlx::query_as!(
+            Subscription,
+            r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+               lead_days, active as "active: bool", notify as "notify: bool",
+               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
+               category, one_time as "one_time: bool", archived_at,
+               pending_amount_cents, pending_from
+               FROM subscriptions ORDER BY name"#
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| e.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "../../src/generated/Account.ts")]
