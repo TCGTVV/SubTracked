@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO accounts (id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at) VALUES (1, 'Giro', 'Hauptkonto', 'EUR', 120000, 50000, '2026-06-01 10:00:00')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "0f72631a51cfc7f0131fb6ab9b0ae9f41958d5d4f7c8177090f10866a8392249"
+}

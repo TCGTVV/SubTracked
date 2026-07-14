@@ -192,18 +192,15 @@ pub fn validate_account_fields(
     Ok(())
 }
 
-/// Verifiziert, dass das angegebene Konto in der DB existiert. SQLite-Foreign-Keys
-/// sind in dieser App aktiv (siehe `lib.rs::run`, `foreign_keys(true)`); der
-/// explizite Check existiert trotzdem, damit der User bei einem nicht
-/// existierenden Konto einen lesbaren deutschen Fehler bekommt — statt der rohen
-/// SQLite-FK-Constraint-Meldung, die SQLite sonst beim INSERT/UPDATE liefert.
 pub async fn validate_account_exists(db: &SqlitePool, account_id: i64) -> Result<(), String> {
-    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts WHERE id = ?")
-        .bind(account_id)
-        .fetch_one(db)
-        .await
-        .map_err(|e| e.to_string())?;
-    if count == 0 {
+    let row = sqlx::query!(
+        r#"SELECT COUNT(*) as "count!: i64" FROM accounts WHERE id = ?"#,
+        account_id
+    )
+    .fetch_one(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    if row.count == 0 {
         return Err(format!("Konto mit ID {account_id} existiert nicht."));
     }
     Ok(())

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, account_id = ?, interval = ?, anchor_date = ?, active = ?, one_time = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "f0d5b855bd789d55b6bf566d204844faf9dbb602966f9d51add50e7cdbaf6dad"
+}

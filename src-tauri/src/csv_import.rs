@@ -359,11 +359,13 @@ pub async fn preview_csv_import(
         std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
     let transactions = parse_bank_csv(&content)?;
     let mut candidates = detect_recurring_candidates(&transactions);
-    let existing: Vec<(String, i64)> =
-        sqlx::query_as("SELECT name, amount_cents FROM subscriptions")
-            .fetch_all(&state.db)
-            .await
-            .map_err(|e| e.to_string())?;
+    let existing: Vec<(String, i64)> = sqlx::query!("SELECT name, amount_cents FROM subscriptions")
+        .fetch_all(&state.db)
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|r| (r.name, r.amount_cents))
+        .collect();
     mark_probable_duplicates(&mut candidates, &existing);
     Ok(candidates)
 }

@@ -1,0 +1,242 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n           lead_days, active as \"active: bool\", notify as \"notify: bool\",\n           cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,\n           category, one_time as \"one_time: bool\", archived_at,\n           pending_amount_cents, pending_from\n           FROM subscriptions ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "amount_cents",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "amount_cents"
+          }
+        }
+      },
+      {
+        "name": "currency",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "currency"
+          }
+        }
+      },
+      {
+        "name": "account_id",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "account_id"
+          }
+        }
+      },
+      {
+        "name": "interval",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "interval"
+          }
+        }
+      },
+      {
+        "name": "anchor_date",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "anchor_date"
+          }
+        }
+      },
+      {
+        "name": "lead_days",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "lead_days"
+          }
+        }
+      },
+      {
+        "name": "active: bool",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "name": "notify: bool",
+        "ordinal": 9,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "notify"
+          }
+        }
+      },
+      {
+        "name": "cancel_mode",
+        "ordinal": 10,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_mode"
+          }
+        }
+      },
+      {
+        "name": "cancel_period_value",
+        "ordinal": 11,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_period_value"
+          }
+        }
+      },
+      {
+        "name": "cancel_period_unit",
+        "ordinal": 12,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_period_unit"
+          }
+        }
+      },
+      {
+        "name": "cancel_date",
+        "ordinal": 13,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_date"
+          }
+        }
+      },
+      {
+        "name": "category",
+        "ordinal": 14,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "category"
+          }
+        }
+      },
+      {
+        "name": "one_time: bool",
+        "ordinal": 15,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "one_time"
+          }
+        }
+      },
+      {
+        "name": "archived_at",
+        "ordinal": 16,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "archived_at"
+          }
+        }
+      },
+      {
+        "name": "pending_amount_cents",
+        "ordinal": 17,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "pending_amount_cents"
+          }
+        }
+      },
+      {
+        "name": "pending_from",
+        "ordinal": 18,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "pending_from"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "08878fdeec397c1e1fa13c828d5036dcc9dc29074501143137bcd5ae364bdc31"
+}

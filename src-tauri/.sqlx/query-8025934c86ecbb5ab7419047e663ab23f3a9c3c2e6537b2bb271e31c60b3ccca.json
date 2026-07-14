@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO incomes (id, name, amount_cents, currency, account_id, interval, anchor_date, active) VALUES (1, 'Gehalt', 250000, 'EUR', 1, 'monthly', '2026-01-30', 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "8025934c86ecbb5ab7419047e663ab23f3a9c3c2e6537b2bb271e31c60b3ccca"
+}

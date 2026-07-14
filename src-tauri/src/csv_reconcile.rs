@@ -120,9 +120,10 @@ pub async fn reconcile_csv(
     let transactions = parse_bank_csv(&content)?;
     // Nur aktive, wiederkehrende Abos mit echtem Preis: Einmalausgaben haben
     // keinen Zyklus, 0-€-Trials keine Abbuchung, Archivierte keinen Soll-Wert.
-    let subs: Vec<ReconcileSubInfo> = sqlx::query_as(
+    let subs = sqlx::query_as!(
+        ReconcileSubInfo,
         "SELECT id, name, amount_cents, pending_amount_cents, interval \
-         FROM subscriptions WHERE active = 1 AND one_time = 0 AND amount_cents > 0",
+         FROM subscriptions WHERE active = 1 AND one_time = 0 AND amount_cents > 0"
     )
     .fetch_all(&state.db)
     .await

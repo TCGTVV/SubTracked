@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT archived_at FROM subscriptions WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "archived_at",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "archived_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "28c1c15ded34ea511ac4fef35e4a3c745286c3e7426715d57bd9481a2317fc29"
+}

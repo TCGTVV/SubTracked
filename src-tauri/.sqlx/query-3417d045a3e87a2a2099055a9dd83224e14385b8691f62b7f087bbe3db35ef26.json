@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO accounts (id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "3417d045a3e87a2a2099055a9dd83224e14385b8691f62b7f087bbe3db35ef26"
+}

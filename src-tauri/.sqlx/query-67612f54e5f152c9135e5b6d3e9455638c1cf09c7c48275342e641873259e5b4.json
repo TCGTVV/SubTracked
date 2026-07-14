@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscriptions (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify) VALUES ('Netflix', 1799, 'EUR', ?, 'monthly', '2026-01-15', 7, 1, 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "67612f54e5f152c9135e5b6d3e9455638c1cf09c7c48275342e641873259e5b4"
+}

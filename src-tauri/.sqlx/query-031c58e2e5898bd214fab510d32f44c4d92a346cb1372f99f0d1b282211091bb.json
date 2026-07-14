@@ -1,0 +1,122 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n           active as \"active: bool\", one_time as \"one_time: bool\"\n           FROM incomes ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "amount_cents",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "amount_cents"
+          }
+        }
+      },
+      {
+        "name": "currency",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "currency"
+          }
+        }
+      },
+      {
+        "name": "account_id",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "account_id"
+          }
+        }
+      },
+      {
+        "name": "interval",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "interval"
+          }
+        }
+      },
+      {
+        "name": "anchor_date",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "anchor_date"
+          }
+        }
+      },
+      {
+        "name": "active: bool",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "name": "one_time: bool",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "one_time"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "031c58e2e5898bd214fab510d32f44c4d92a346cb1372f99f0d1b282211091bb"
+}
