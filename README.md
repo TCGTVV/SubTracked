@@ -148,7 +148,7 @@ Details stehen in [BACKLOG.md](./BACKLOG.md).
 - **SQLite** über eigenen [`sqlx`](https://github.com/launchbadge/sqlx)-Pool im Rust-Hauptprozess (WAL-Mode, Migrations via `sqlx::migrate!`)
 - **Reminder-Loop** in Rust mit `tokio` + `chrono`, sendet native OS-Notifications über [`tauri-plugin-notification`](https://github.com/tauri-apps/plugins-workspace/tree/v2/plugins/notification)
 - **Biome** für Lint + Format
-- **Vitest** (Frontend) + **`cargo test`** (Rust) für Tests, **Lefthook** als Pre-Commit-Gate, GitHub Actions als CI
+- **Vitest** (Frontend) + **`cargo nextest`** (Rust) für Tests, **Lefthook** als Pre-Commit-Gate, GitHub Actions als CI
 
 ## Aus Source bauen
 
@@ -172,7 +172,7 @@ Lint, Tests und Qualitäts-Gates lokal (Rust-Befehle aus `src-tauri/`):
 pnpm lint                                       # Biome (Lint + Format-Check)
 pnpm knip                                       # Unbenutzte Dateien/Exports/Typen
 pnpm test:run                                   # Vitest (Frontend-Unit-Tests)
-cd src-tauri && cargo test                      # Rust-Tests (Recurrence-Logik)
+cd src-tauri && cargo nextest run                # Rust-Tests (Recurrence-Logik)
 cd src-tauri && cargo clippy --all-targets -- -D warnings
 ```
 
