@@ -32,10 +32,17 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-appender = "0.2"
 tauri-plugin-dialog = "2.7.1"
-ts-rs = "12.0.1"
+ts-rs = { version = "12.0.1", optional = true }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 
 [dev-dependencies]
 tokio = { version = "1.52.3", features = ["rt", "macros"] }
+
+[features]
+# Nur zum Regenerieren von src/generated/*.ts: `cargo test --features ts-rs-export export`
+# in src-tauri/. Nicht Default, damit normale Builds (inkl. Release) ts-rs/ts-rs-macros
+# nicht mitkompilieren — die generierten Bindings werden nur zur Entwicklungszeit
+# gebraucht, nie zur Laufzeit.
+ts-rs-export = ["dep:ts-rs"]

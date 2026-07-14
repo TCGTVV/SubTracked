@@ -259,6 +259,14 @@ pub async fn count_subs_for_account(
     Ok(row.n)
 }
 
+/// Tatsaechlicher Update-Pfad fuer Subscriptions. Direkt testbar mit einem
+/// in-memory-Pool, ohne Tauri-State-Setup. Der `#[tauri::command]`-Wrapper
+/// `update_subscription` darunter delegiert nur.
+///
+/// account_id-Sonderbehandlung: bei unveraendertem account_id lassen wir die
+/// Spalte komplett aus dem SET-Clause. Sonst pruefte SQLite (FK an per
+/// sqlx-Default) die FK-Bindung auch fuer den unveraenderten Wert und Legacy-
+/// Orphan-Rows aus der `tauri-plugin-sql`-Aera wuerden den UPDATE blockieren.
 pub(crate) async fn update_subscription_in_db(
     db: &sqlx::SqlitePool,
     sub: &Subscription,
