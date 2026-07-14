@@ -27,34 +27,7 @@ pub async fn list_subscriptions(
     state: State<'_, AppState>,
     only_active: Option<bool>,
 ) -> Result<Vec<Subscription>, String> {
-    let only_active = only_active.unwrap_or(true);
-    if only_active {
-        sqlx::query_as!(
-            Subscription,
-            r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-               lead_days, active as "active: bool", notify as "notify: bool",
-               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
-               category, one_time as "one_time: bool", archived_at,
-               pending_amount_cents, pending_from
-               FROM subscriptions WHERE active = 1 ORDER BY name"#
-        )
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| e.to_string())
-    } else {
-        sqlx::query_as!(
-            Subscription,
-            r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-               lead_days, active as "active: bool", notify as "notify: bool",
-               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
-               category, one_time as "one_time: bool", archived_at,
-               pending_amount_cents, pending_from
-               FROM subscriptions ORDER BY name"#
-        )
-        .fetch_all(&state.db)
-        .await
-        .map_err(|e| e.to_string())
-    }
+    crate::db::fetch_subscriptions(&state.db, only_active.unwrap_or(true)).await
 }
 
 #[tauri::command(rename_all = "camelCase")]

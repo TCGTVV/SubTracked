@@ -359,18 +359,7 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
         tracing::error!(error = %e, "Anwenden geplanter Preisänderungen fehlgeschlagen");
     }
 
-    let subs = sqlx::query_as!(
-        Subscription,
-        r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-           lead_days, active as "active: bool", notify as "notify: bool",
-           cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
-           category, one_time as "one_time: bool", archived_at,
-           pending_amount_cents, pending_from
-           FROM subscriptions WHERE active = 1"#
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|e| e.to_string())?;
+    let subs = crate::db::fetch_subscriptions(pool, true).await?;
 
     let due = compute_due_reminders(&subs, today)?;
     let notifier = AppNotifier(app);
