@@ -114,9 +114,34 @@
 #### Offen / nicht geklärt (aktueller Stand)
 
 - **IDE zeigt in `lib.rs` weiterhin rote Fehler**, auch nach `Rust Analyzer: Restart Server`. `cargo check`, `cargo check --all-features` und `cargo verify-project` laufen alle sauber durch — kein echter Compile-Fehler. Vermutlich weiterhin stale rust-analyzer-Zustand nach den vielen `Cargo.toml`-Änderungen während der E2E-Experimente (Dependency+Feature rein und wieder raus). User testet nach vollständigem Neustart; falls die Fehler danach weiter bestehen, braucht es die konkreten Fehlermeldungen (Datei:Zeile + Text) für eine gezielte Prüfung.
-- **`e2e.yml` noch nie tatsächlich in GitHub Actions gelaufen** — erste echte Verifikation steht mit dem nächsten Push aus. Nicht auszuschließen, dass CI-spezifische Überraschungen (Runner-Umgebung, Timing) noch Nacharbeit brauchen.
+- ~~`e2e.yml` noch nie tatsächlich in GitHub Actions gelaufen~~ — **doch, mehrfach; siehe eigene Sektion unten. Bleibt rot, bewusst pausiert.**
 - Vorschlag 3 (GitHub-Tooling) damit komplett abgeschlossen: cargo-deny + knip + cargo-nextest + cargo-machete alle umgesetzt und verifiziert.
 - Rest wie in den Vorgänger-Einträgen unverändert offen: CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer.
+
+### Fortsetzung 2 derselben Session: E2E-CI live debuggt, `pnpm audit`-Fund, bewusst pausiert
+
+> Nach dem Push von Phase-2 fiel dem User sofort ein echter `pnpm audit`-Fehler in der Security-CI auf (Commit `33998f3` behebt ihn), und danach ging die E2E-Diagnose live in GitHub Actions weiter — 5 echte CI-Zyklen, am Ende bewusst pausiert statt weiter zu raten.
+
+#### Was passierte
+
+15. **`pnpm audit`-Fund** (Commit `33998f3`): erster echter CI-Lauf (`security.yml`) zeigte 2 echte Vulnerabilities (RCE `GHSA-5c6j-r48x-rmvq`, DoS `GHSA-qj8w-gfj5-8c6v`) über `e2e > @wdio/mocha-framework > mocha > serialize-javascript@6.0.2`. `mocha` deklariert weiterhin `^6.0.2`, aber keine 6.x-Version ist gepatcht (Fix erst ab `7.0.5`) — per `pnpm-workspace.yaml`-Override erzwungen. `cargo audit`/`cargo deny` liefen im selben Lauf bereits grün.
+16. **E2E-CI live debuggt, 5 echte Zyklen** (Commits `efdf46d`, `61e9367`, `a521a3c`, `bedb82b`):
+    - **Zyklus 1**: erster echter Lauf zeigte `libEGL warning: DRI3 error: Could not get DRI3 device` kurz vor einem Titel-Timeout (15s) — Runner hat keine echte GPU. Fix: `WEBKIT_DISABLE_COMPOSITING_MODE=1` + `LIBGL_ALWAYS_SOFTWARE=1`.
+    - **Zyklus 2**: DRI3-Warnung weg, Titel-Timeout bleibt. Hypothese: bare Xvfb ohne Window-Manager laesst GTK-Fenster nie "mappen". Fix: `fluxbox` im Hintergrund + `actions/upload-artifact`-Schritt (`if: always()`) ergaenzt, um die App-eigenen `tracing`-Logs sichtbar zu machen (im CI-Log erscheinen sonst nur GTK/dbind-Warnungen auf stderr, nicht der App-eigene stdout-Stream).
+    - **Zyklus 3**: Artifact-Download zeigte den echten Haenger: `setup()` blieb exakt nach "DB-Integrität nach Migration ok" stecken — die Tray-Icon-Registrierung geht auf Linux über D-Bus (StatusNotifierItem/-Watcher), der ohne echte Desktop-Umgebung nicht existiert. Fix: `SUBTRACKED_E2E_TEST`-Env-Var laesst `lib.rs` die Tray-Erstellung ueberspringen (nur im E2E-CI-Job gesetzt, Produktivbuilds unveraendert).
+    - **Zyklus 4**: Tray-Skip greift nachweislich (Log zeigt "Tray-Icon uebersprungen"), `setup()` läuft jetzt sauber bis `Ok(())` durch — Titel-Timeout bleibt trotzdem, wieder nach exakt ~15,1s.
+    - **Zyklus 5** (Diagnose, kein Fix): Timeout testweise 15s→60s erhöht, um "nur langsam" (Software-Rendering ohne GPU) von "grundsätzlich kaputt" zu unterscheiden. Ergebnis: nach vollen 60s immer noch nichts — **definitiv kein Timing-Problem**.
+17. **Bewusst pausiert**: Rust-Backend läuft in jedem Zyklus nachweislich sauber durch (App-Log komplett, kein Crash), die WebDriver-Session ist jedes Mal technisch gesund (valide Session-ID, `browserName: "wry"` v0.55.1) — aber `browser.getTitle()` wird nie `"SubTracked"`. Das ist ein tieferliegendes Kompatibilitätsproblem zwischen `tauri-driver`/`wry 0.55.1` und der GH-`ubuntu-latest`-Runner-Kombination, keine einfache Config-Anpassung mehr. Auf Rücksprache mit dem User hier gestoppt statt einen 6. CI-Zyklus zu raten.
+
+#### Wichtiger Kontext: `E2E` ist KEIN Pflicht-Check
+
+Repository-Ruleset `protect-main` (`gh api repos/TCGTVV/SubTracked/rulesets/17858352`) verlangt nur `"Lint, Tests, Cargo"` (`checks.yml`), `"cargo audit"`, `"pnpm audit"` als required status checks. `E2E` ist NICHT gelistet — der rote Job blockiert also keine Merges/Pushes, ist rein informativ. Kein Grund zur Eile, das vor dem nächsten produktiven Feature zu reparieren.
+
+#### Nächste Diagnoseschritte für den nächsten Agenten (noch nicht versucht)
+
+- **Screenshot statt Titel**: `browser.saveScreenshot()` in den Test einbauen, um zu sehen, ob das Fenster wirklich leer/schwarz bleibt oder ob z.B. nur `getTitle()` speziell durch `tauri-driver`/`wry`s WebDriver-Proxy nicht korrekt durchgereicht wird (waere ein reines Getter-Problem, kein Rendering-Problem).
+- Alternative/andere `wry`- oder `tauri-driver`-Version probieren, oder ein aelteres Ubuntu-Image (`ubuntu-22.04` statt `ubuntu-latest`) — moeglich, dass es eine Versions-Inkompatibilitaet mit dem aktuellen `ubuntu-latest`-Mesa/WebKitGTK-Stack ist.
+- `.github/workflows/e2e.yml` und `mem:frontend_test_setup` (Abschnitt "Status seit 2026-07-14") haben den vollen Diagnose-Verlauf — vor weiteren Versuchen dort nachlesen, um die 5 bereits ausgeschlossenen Hypothesen nicht zu wiederholen.
 
 ---
 
