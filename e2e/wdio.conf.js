@@ -36,7 +36,9 @@ export const config = {
   framework: "mocha",
   mochaOpts: {
     ui: "bdd",
-    timeout: 60000,
+    // Muss ueber dem 60s-waitUntil im Test liegen, sonst killt Mocha den Test
+    // bevor waitUntil selbst timeoutet und die eigentliche Fehlermeldung zeigt.
+    timeout: 90000,
   },
   reporters: ["spec"],
 
