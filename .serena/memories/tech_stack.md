@@ -15,8 +15,9 @@
 ## Qualität & Tooling
 
 **Frontend:** Biome (Lint+Format, `pnpm lint`), Vitest 4 + RTL + axe-core (`pnpm test:run`, jsdom-Environment), Knip (unbenutzte Dateien/Exports/Typen, `pnpm knip`, Config `knip.json`). Details zu Vitest/RTL/axe-Gotchas (Radix-Portal-Queries, jsdom-Stubs, Mock-Pattern): `mem:frontend_test_setup`.
+**E2E:** WebdriverIO + `tauri-driver` in `e2e/` (eigenes pnpm-Workspace-Package). Nur in CI lauffaehig (`webkit2gtk-driver`+`xvfb` fehlen lokal auf CachyOS). Details + verworfene Alternative (`@wdio/tauri-service` embedded provider): `mem:frontend_test_setup`.
 **Rust:** cargo-nextest (Testrunner, `cargo nextest run` in `src-tauri/`), rustfmt/clippy (`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`), cargo-machete (unbenutzte Dependencies, `cargo machete`), cargo-deny (Lizenzen/Bans/Sources, Config `src-tauri/deny.toml`).
-**CI:** GitHub Actions. `checks.yml` — Lint, Knip, Vitest, cargo fmt/clippy/nextest/machete, TS-Bindings-Frische-Check, sqlx-Cache-Frische-Check. `security.yml` — pnpm audit, cargo-audit, cargo-deny (nur bans/licenses/sources — Advisories deckt cargo-audit ab).
+**CI:** GitHub Actions. `checks.yml` — Lint, Knip, Vitest, cargo fmt/clippy/nextest/machete, TS-Bindings-Frische-Check, sqlx-Cache-Frische-Check. `security.yml` — pnpm audit, cargo-audit, cargo-deny (nur bans/licenses/sources — Advisories deckt cargo-audit ab). `e2e.yml` — WebdriverIO-E2E-Smoke-Test gegen die gebaute App (ubuntu-latest, einziger Ort, an dem das ueberhaupt laeuft).
 **Pre-Commit:** Lefthook, vier parallele Jobs (biome, vitest, cargo fmt, cargo clippy) — bewusst **ohne** nextest/knip/machete, um Commits schnell zu halten; die volle Prüfung läuft in CI.
 
 ## SQLite-Pfad

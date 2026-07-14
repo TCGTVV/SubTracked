@@ -41,6 +41,7 @@ src-tauri/                Rust
   src/recurrence.rs       Rust-Fälligkeitsberechnung (GETESTET)
   migrations/             SQL-Migrationen (0001_init.sql, ...)
   Cargo.toml              Rust-Abhängigkeiten
+e2e/                      WebdriverIO-E2E-Smoke-Test (eigenes pnpm-Package), nur in CI lauffähig
 ```
 
 ## Befehle

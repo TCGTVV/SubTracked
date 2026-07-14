@@ -23,5 +23,5 @@ Vor "fertig":
 
 - **Vitest/RTL**: `pnpm test:run` fuer Frontend-Unit- und Komponenten-Smoke-Tests.
 - **Rust-Tests**: `cd src-tauri && cargo nextest run`, aktuell vor allem Recurrence und Reminder-Format-Helfer.
-- **CI**: GitHub Actions faehrt Lint, Knip, Vitest, cargo fmt, cargo clippy, cargo nextest, cargo machete (`checks.yml`) sowie cargo-audit und cargo-deny/Lizenzen+Bans+Sources (`security.yml`).
+- **CI**: GitHub Actions faehrt Lint, Knip, Vitest, cargo fmt, cargo clippy, cargo nextest, cargo machete (`checks.yml`) sowie cargo-audit und cargo-deny/Lizenzen+Bans+Sources (`security.yml`) sowie einen WebdriverIO-E2E-Smoke-Test (`e2e.yml`, `mem:frontend_test_setup` fuer Details). Der E2E-Test laeuft NICHT lokal (braucht `webkit2gtk-driver`, fehlt auf der Dev-Maschine) — nicht Teil der lokalen "vor fertig"-Checks oben.
 - Wenn Checks aus Zeit-/Umgebungsgruenden nicht liefen, im finalen Bericht ausdruecklich sagen.

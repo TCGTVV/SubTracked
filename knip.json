@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignore": ["src-tauri/**"],
+  "ignore": ["src-tauri/**", "e2e/**"],
   "ignoreIssues": {
     "src/components/ui/**": ["exports", "types"]
   }
