@@ -59,6 +59,9 @@ jobs:
       - name: Biome (lint + format)
         run: pnpm lint
 
+      - name: Knip (unused files/exports/types)
+        run: pnpm knip
+
       - name: Vitest (unit tests)
         run: pnpm test:run
 

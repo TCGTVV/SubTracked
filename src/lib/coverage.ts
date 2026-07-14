@@ -274,7 +274,7 @@ export function computeMonthlyBaseline(
 }
 
 /** Kosten-Aufschlüsselung einer Kategorie (auf Monatsbasis normiert). */
-export interface CategoryCost {
+interface CategoryCost {
   /** Kategorie-Label; null = ohne Kategorie. */
   category: string | null;
   monthlyCents: number;
@@ -282,7 +282,7 @@ export interface CategoryCost {
 }
 
 /** Ein teures Abo im Kosten-Überblick (auf Monatsbasis normiert). */
-export interface TopSubscriptionCost {
+interface TopSubscriptionCost {
   id: number;
   name: string;
   monthlyCents: number;
@@ -434,7 +434,7 @@ export function computeUpcoming(
   return items;
 }
 
-export interface MonthlyLoad {
+interface MonthlyLoad {
   /** Kalendermonat als "YYYY-MM" (lokal). */
   month: string;
   cents: number;
@@ -498,7 +498,7 @@ export function computeYearlyLoad(
     .sort((a, b) => b.totalCents - a.totalCents);
 }
 
-export interface ArchivedSaving {
+interface ArchivedSaving {
   id: number;
   name: string;
   /** Archivierungsdatum als ISO "YYYY-MM-DD" (lokal). */
