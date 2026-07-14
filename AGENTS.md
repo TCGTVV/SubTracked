@@ -71,7 +71,7 @@ pnpm tauri build
 
 - `pnpm tauri dev` startet und das Fenster öffnet sich ohne Rust-Fehler.
 - `pnpm build` kompiliert TypeScript und baut das Frontend.
-- Relevante Tests/Checks laufen (`pnpm test:run`, `pnpm lint`, `pnpm knip`, bei Rust-Änderungen `cargo nextest run`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`).
+- Relevante Tests/Checks laufen (`pnpm test:run`, `pnpm lint`, `pnpm knip`, bei Rust-Änderungen `cargo nextest run`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo machete`).
 - Keine Secrets committen.
 
 ## Zweite Augen — Code-Review-Konvention

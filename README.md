@@ -174,6 +174,7 @@ pnpm knip                                       # Unbenutzte Dateien/Exports/Typ
 pnpm test:run                                   # Vitest (Frontend-Unit-Tests)
 cd src-tauri && cargo nextest run                # Rust-Tests (Recurrence-Logik)
 cd src-tauri && cargo clippy --all-targets -- -D warnings
+cd src-tauri && cargo machete                    # Unbenutzte Cargo.toml-Dependencies
 ```
 
 [Lefthook](https://github.com/evilmartians/lefthook) hängt sich beim Commit automatisch ein und fährt diese parallel; Push triggert GitHub Actions als zusätzlichen Lauf.
