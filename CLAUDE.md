@@ -41,6 +41,17 @@
 
 Die feedback-Memory `feedback_serena.md` enthält die historische Eskalation (6 User-Korrekturen) und detailliertere Begründungen. Diese Datei (`CLAUDE.md`) ist die operative Kurzform.
 
+## REGEL 3 — Ein Commit pro Feature, immer
+
+**Jede abgeschlossene, in sich sinnvolle Änderung wird sofort committet — nicht am Sitzungsende gesammelt.** Am 2026-07-14 lief eine ganze Session mit sechs unabhängigen Features (cargo-deny, knip, cargo-nextest, cargo-machete, Memory-Split, E2E-Test) durch, ohne dass auch nur ein Commit entstand. Der User musste das nachträglich einfordern; die sechs Features mussten danach mühsam mit rekonstruierten Zwischenständen in sechs saubere Commits zerlegt werden (per `git add <Datei>` selektiv + temporär zurückgebaute Zwischenstände für gemeinsam genutzte Dateien) — unnötiger Aufwand, der durch laufendes Committen gar nicht erst entstanden wäre.
+
+**Vorgehen:**
+
+1. Sobald ein Feature/Fix funktional fertig und verifiziert ist (Tests/Checks grün) → **sofort committen**, bevor das nächste Feature beginnt. Nicht auf "Sitzungsende" oder "User fragt danach" warten.
+2. Ein Commit = eine kohärente Änderung, die für sich genommen Sinn ergibt und beschreibbar ist. Nicht mehrere unabhängige Features in einen Commit packen, auch wenn sie in derselben Sitzung entstehen.
+3. Bei Unsicherheit, ob etwas schon "fertig genug" für einen Commit ist: lieber fragen als sammeln.
+4. Gilt unabhängig davon, ob der User explizit "commit das" sagt — Commit-Disziplin ist Default-Verhalten in diesem Projekt, keine Ausnahme-Anfrage.
+
 ---
 
 Weitere Konventionen siehe `AGENTS.md` (Stack, Source-Map, Pflicht-Invarianten) und `HANDOVER.md` (Session-Verlauf).
