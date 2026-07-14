@@ -77,12 +77,17 @@ jobs:
       # nicht den eigentlichen Titel-Timeout (2. CI-Lauf). Ohne einen laufenden
       # Window-Manager bleibt ein GTK-Fenster unter Xvfb oft in einem nie
       # "gemappten" Zwischenzustand haengen -- fluxbox (minimal) im Hintergrund
-      # statt nur xvfb-run soll das beheben.
+      # statt nur xvfb-run soll das beheben. SUBTRACKED_E2E_TEST: App-eigenes
+      # tracing-Log (3. CI-Lauf, Artifact-Upload) zeigte den echten Haenger --
+      # setup() blieb exakt bei der Tray-Icon-Registrierung stecken (D-Bus
+      # StatusNotifierWatcher fehlt ohne echte Desktop-Umgebung). lib.rs
+      # ueberspringt die Tray-Erstellung, wenn diese Variable gesetzt ist.
       - name: Run WebdriverIO E2E tests
         working-directory: e2e
         env:
           WEBKIT_DISABLE_COMPOSITING_MODE: "1"
           LIBGL_ALWAYS_SOFTWARE: "1"
+          SUBTRACKED_E2E_TEST: "1"
         run: |
           Xvfb :99 -screen 0 1280x1024x24 &
           export DISPLAY=:99

@@ -151,36 +151,48 @@ pub fn run() {
                 }
             });
 
-            let show_item = MenuItem::with_id(app, "show", "Fenster zeigen", true, None::<&str>)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
-
-            let mut tray_builder = TrayIconBuilder::new()
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        show_main_window(tray.app_handle());
-                    }
-                });
-            if let Some(icon) = app.default_window_icon() {
-                tray_builder = tray_builder.icon(icon.clone());
+            // Tray-Icon-Registrierung geht auf Linux ueber D-Bus
+            // (StatusNotifierItem/-Watcher) und kann ohne laufende Desktop-Umgebung
+            // (z.B. bare Xvfb im E2E-CI-Job) unbegrenzt haengen bleiben, weil kein
+            // StatusNotifierWatcher-Dienst existiert -- das blockierte dort das
+            // gesamte setup() und damit den Fensterinhalt. Deshalb im E2E-Testlauf
+            // uebersprungen (Env-Var wird nur vom e2e-CI-Job gesetzt, siehe
+            // .github/workflows/e2e.yml).
+            if std::env::var_os("SUBTRACKED_E2E_TEST").is_some() {
+                tracing::info!("Tray-Icon uebersprungen (SUBTRACKED_E2E_TEST gesetzt)");
             } else {
-                tracing::warn!(
-                    "Kein Default-Window-Icon gefunden; Tray wird ohne explizites Icon gebaut."
-                );
+                let show_item =
+                    MenuItem::with_id(app, "show", "Fenster zeigen", true, None::<&str>)?;
+                let quit_item = MenuItem::with_id(app, "quit", "Beenden", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+                let mut tray_builder = TrayIconBuilder::new()
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => show_main_window(app),
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            show_main_window(tray.app_handle());
+                        }
+                    });
+                if let Some(icon) = app.default_window_icon() {
+                    tray_builder = tray_builder.icon(icon.clone());
+                } else {
+                    tracing::warn!(
+                        "Kein Default-Window-Icon gefunden; Tray wird ohne explizites Icon gebaut."
+                    );
+                }
+                tray_builder.build(app)?;
             }
-            tray_builder.build(app)?;
 
             Ok(())
         })
