@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM subscription_price_history WHERE subscription_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "fd53aa3afb8c1bbfb2340107d4456a146138c355b0458a8ddc51a048c58e7cae"
+}

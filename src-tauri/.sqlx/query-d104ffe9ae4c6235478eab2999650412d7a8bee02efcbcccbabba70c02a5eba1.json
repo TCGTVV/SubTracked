@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE subscriptions SET active = ?, archived_at = CASE WHEN ? THEN NULL WHEN archived_at IS NULL THEN datetime('now') ELSE archived_at END WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "d104ffe9ae4c6235478eab2999650412d7a8bee02efcbcccbabba70c02a5eba1"
+}

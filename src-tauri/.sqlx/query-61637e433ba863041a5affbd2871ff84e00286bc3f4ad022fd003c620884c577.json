@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscriptions (id, name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, pending_amount_cents, pending_from) VALUES (2, 'Spotify', 999, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1, 1199, '2025-06-01')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "61637e433ba863041a5affbd2871ff84e00286bc3f4ad022fd003c620884c577"
+}

@@ -1,0 +1,6 @@
+[env]
+# sqlx compile-time query!/query_as!-Makros nutzen per Default den committeten
+# .sqlx-Cache statt einer lebenden DB (force=false: eine lokal gesetzte
+# DATABASE_URL/SQLX_OFFLINE=false gewinnt weiterhin, z.B. beim Aendern von
+# Queries + `cargo sqlx prepare`).
+SQLX_OFFLINE = { value = "true", force = false }

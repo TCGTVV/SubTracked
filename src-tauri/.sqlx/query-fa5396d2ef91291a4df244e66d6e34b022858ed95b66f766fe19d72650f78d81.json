@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT amount_cents, pending_amount_cents FROM subscriptions WHERE id = 2",
+  "describe": {
+    "columns": [
+      {
+        "name": "amount_cents",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "amount_cents"
+          }
+        }
+      },
+      {
+        "name": "pending_amount_cents",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "pending_amount_cents"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "fa5396d2ef91291a4df244e66d6e34b022858ed95b66f766fe19d72650f78d81"
+}

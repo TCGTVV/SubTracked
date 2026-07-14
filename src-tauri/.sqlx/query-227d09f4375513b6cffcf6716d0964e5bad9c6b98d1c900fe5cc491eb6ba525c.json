@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE accounts SET name = ?, note = ?, currency = ?, balance_cents = ?, min_buffer_cents = ?, balance_updated_at = datetime('now') WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "227d09f4375513b6cffcf6716d0964e5bad9c6b98d1c900fe5cc491eb6ba525c"
+}

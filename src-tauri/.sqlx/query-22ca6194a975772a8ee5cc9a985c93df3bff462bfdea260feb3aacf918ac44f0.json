@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT r.due_date as due_date, s.name as subscription_name, r.sent_at as sent_at FROM reminders r JOIN subscriptions s ON r.subscription_id = s.id ORDER BY r.sent_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "due_date",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reminders",
+            "name": "due_date"
+          }
+        }
+      },
+      {
+        "name": "subscription_name",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "sent_at",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "reminders",
+            "name": "sent_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "22ca6194a975772a8ee5cc9a985c93df3bff462bfdea260feb3aacf918ac44f0"
+}

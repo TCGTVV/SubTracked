@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT cancel_mode, cancel_period_value, cancel_period_unit, cancel_date FROM subscriptions WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "cancel_mode",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_mode"
+          }
+        }
+      },
+      {
+        "name": "cancel_period_value",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_period_value"
+          }
+        }
+      },
+      {
+        "name": "cancel_period_unit",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_period_unit"
+          }
+        }
+      },
+      {
+        "name": "cancel_date",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_date"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "7ad271baed4d303e05762b3030e4df99f3846423f0f7e6e611b166e0b9599321"
+}

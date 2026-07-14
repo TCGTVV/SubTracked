@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT balance_cents FROM accounts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "balance_cents",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "accounts",
+            "name": "balance_cents"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "99756afdb520d4aa46f54a544aecc6dcfbfb5db4b0d8dbcc79e1dd0352fbefcd"
+}

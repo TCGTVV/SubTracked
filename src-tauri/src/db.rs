@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use ts_rs::TS;
 
 pub struct AppState {
     pub db: SqlitePool,
@@ -48,21 +49,27 @@ impl ReminderState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/generated/Subscription.ts")]
 pub struct Subscription {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
+    #[ts(type = "number")]
     pub amount_cents: i64,
     pub currency: String,
+    #[ts(type = "number | null")]
     pub account_id: Option<i64>,
     pub interval: String,
     pub anchor_date: String,
+    #[ts(type = "number")]
     pub lead_days: i64,
     pub active: bool,
     pub notify: bool,
     /// Kündigungsmodus: None = nicht getrackt, "period" = Frist, "date" = festes Datum.
     pub cancel_mode: Option<String>,
+    #[ts(type = "number | null")]
     pub cancel_period_value: Option<i64>,
     pub cancel_period_unit: Option<String>,
     pub cancel_date: Option<String>,
@@ -81,33 +88,42 @@ pub struct Subscription {
     /// (validation.rs). Trial-/Probeabo = amount_cents 0 + gesetzte Änderung.
     /// serde-default, damit Alt-Backups ohne die Felder importierbar bleiben.
     #[serde(default)]
+    #[ts(type = "number | null")]
     pub pending_amount_cents: Option<i64>,
     /// Wirksamkeitsdatum (ISO "YYYY-MM-DD") der geplanten Preisänderung.
     #[serde(default)]
     pub pending_from: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/generated/Account.ts")]
 pub struct Account {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
     pub note: Option<String>,
     pub currency: String,
+    #[ts(type = "number")]
     pub balance_cents: i64,
+    #[ts(type = "number")]
     pub min_buffer_cents: i64,
     /// SQLite `datetime('now')` string (UTC). Absent on Tauri-command input — set server-side.
     #[serde(default)]
     pub balance_updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/generated/Income.ts")]
 pub struct Income {
+    #[ts(type = "number")]
     pub id: i64,
     pub name: String,
+    #[ts(type = "number")]
     pub amount_cents: i64,
     pub currency: String,
+    #[ts(type = "number | null")]
     pub account_id: Option<i64>,
     pub interval: String,
     pub anchor_date: String,
@@ -156,11 +172,15 @@ pub struct NewSubscription {
     pub pending_from: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow, TS)]
 #[serde(rename_all = "camelCase")]
+#[ts(export, export_to = "../../src/generated/PriceHistoryEntry.ts")]
 pub struct PriceHistoryEntry {
+    #[ts(type = "number")]
     pub id: i64,
+    #[ts(type = "number")]
     pub subscription_id: i64,
+    #[ts(type = "number")]
     pub amount_cents: i64,
     pub currency: String,
     pub changed_at: String,

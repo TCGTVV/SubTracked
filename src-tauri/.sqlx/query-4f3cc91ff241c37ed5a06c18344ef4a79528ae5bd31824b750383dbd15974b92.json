@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT id, name, amount_cents, pending_amount_cents, interval FROM subscriptions WHERE active = 1 AND one_time = 0 AND amount_cents > 0",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "amount_cents",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "amount_cents"
+          }
+        }
+      },
+      {
+        "name": "pending_amount_cents",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "pending_amount_cents"
+          }
+        }
+      },
+      {
+        "name": "interval",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "interval"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "4f3cc91ff241c37ed5a06c18344ef4a79528ae5bd31824b750383dbd15974b92"
+}

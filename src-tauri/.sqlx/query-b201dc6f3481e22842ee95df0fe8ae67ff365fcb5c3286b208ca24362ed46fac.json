@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE subscriptions SET amount_cents = ?, pending_amount_cents = NULL, pending_from = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "b201dc6f3481e22842ee95df0fe8ae67ff365fcb5c3286b208ca24362ed46fac"
+}

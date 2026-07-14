@@ -96,35 +96,35 @@ async fn has_applied_migrations(pool: &SqlitePool) -> Result<bool, BoxError> {
 }
 
 async fn applied_versions(pool: &SqlitePool) -> Result<Vec<i64>, BoxError> {
-    let table_exists: Option<(String,)> = sqlx::query_as(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    let table_exists = sqlx::query!(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'"
     )
     .fetch_optional(pool)
     .await?;
     if table_exists.is_none() {
         return Ok(Vec::new());
     }
-    let rows: Vec<(i64,)> = sqlx::query_as("SELECT version FROM _sqlx_migrations")
+    let rows = sqlx::query!(r#"SELECT version as "version!: i64" FROM _sqlx_migrations"#)
         .fetch_all(pool)
         .await?;
-    Ok(rows.into_iter().map(|(v,)| v).collect())
+    Ok(rows.into_iter().map(|r| r.version).collect())
 }
 
 async fn integrity_check(pool: &SqlitePool) -> Result<String, BoxError> {
     // Bei Schaden liefert integrity_check mehrere Fehlerzeilen statt nur "ok".
-    let rows: Vec<(String,)> = sqlx::query_as("PRAGMA integrity_check")
+    let rows = sqlx::query!(r#"PRAGMA integrity_check"#)
         .fetch_all(pool)
         .await?;
     Ok(rows
         .into_iter()
-        .map(|(s,)| s)
+        .map(|r| r.integrity_check.unwrap_or_default())
         .collect::<Vec<_>>()
         .join("; "))
 }
 
 async fn foreign_key_violations(pool: &SqlitePool) -> Result<usize, BoxError> {
     // Eine Zeile pro Verletzung (Tabelle, rowid, Eltern-Tabelle, fkid).
-    let rows = sqlx::query("PRAGMA foreign_key_check")
+    let rows = sqlx::query!("PRAGMA foreign_key_check")
         .fetch_all(pool)
         .await?;
     Ok(rows.len())

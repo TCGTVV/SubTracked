@@ -71,18 +71,22 @@ pub async fn export_subscriptions_csv(
     state: State<'_, AppState>,
     path: String,
 ) -> Result<(), String> {
-    let subs = sqlx::query_as::<_, Subscription>(
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
-         FROM subscriptions ORDER BY name",
+    let subs = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+           lead_days, active as "active: bool", notify as "notify: bool",
+           cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
+           category, one_time as "one_time: bool", archived_at,
+           pending_amount_cents, pending_from
+           FROM subscriptions ORDER BY name"#
     )
     .fetch_all(&state.db)
     .await
     .map_err(|e| e.to_string())?;
-    let accounts = sqlx::query_as::<_, Account>(
-        "SELECT id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at \
-         FROM accounts ORDER BY name",
+    let accounts = sqlx::query_as!(
+        Account,
+        r#"SELECT id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at
+           FROM accounts ORDER BY name"#
     )
     .fetch_all(&state.db)
     .await

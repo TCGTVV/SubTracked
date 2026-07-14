@@ -211,45 +211,48 @@ fn effective_amount_cents(sub: &Subscription, on: NaiveDate) -> i64 {
     sub.amount_cents
 }
 
-/// Schaltet fällige geplante Preisänderungen scharf (`pending_from` <= heute):
-/// Betrag übernehmen, Preis-Historie-Eintrag zum Wirksamkeitsdatum, pending-Felder
-/// leeren. Läuft vor jedem Reminder-Check (Start + stündlich) und bewusst auch für
-/// archivierte Abos, damit deren Preisstand nach Reaktivierung stimmt.
 pub(crate) async fn apply_due_price_changes(
     pool: &SqlitePool,
     today: NaiveDate,
 ) -> Result<u32, String> {
-    let due: Vec<(i64, i64, String, String)> = sqlx::query_as(
-        "SELECT id, pending_amount_cents, currency, pending_from FROM subscriptions \
-         WHERE pending_amount_cents IS NOT NULL AND pending_from IS NOT NULL AND pending_from <= ?",
+    let today_str = today.to_string();
+    let due = sqlx::query!(
+        r#"SELECT id, pending_amount_cents as "pending_amount_cents!: i64", currency,
+           pending_from as "pending_from!: String"
+           FROM subscriptions
+           WHERE pending_amount_cents IS NOT NULL AND pending_from IS NOT NULL AND pending_from <= ?"#,
+        today_str
     )
-    .bind(today.to_string())
     .fetch_all(pool)
     .await
     .map_err(|e| e.to_string())?;
 
     let mut applied = 0u32;
-    for (id, cents, currency, from) in due {
+    for row in due {
+        let id = row.id;
+        let cents = row.pending_amount_cents;
+        let currency = row.currency;
+        let from = row.pending_from;
         let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
-        sqlx::query(
+        sqlx::query!(
             "UPDATE subscriptions \
              SET amount_cents = ?, pending_amount_cents = NULL, pending_from = NULL \
              WHERE id = ?",
+            cents,
+            id,
         )
-        .bind(cents)
-        .bind(id)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscription_price_history \
                (subscription_id, amount_cents, currency, changed_at) \
              VALUES (?, ?, ?, datetime(?))",
+            id,
+            cents,
+            currency,
+            from,
         )
-        .bind(id)
-        .bind(cents)
-        .bind(&currency)
-        .bind(&from)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -339,9 +342,6 @@ async fn dispatch_due_reminders(
     Ok(sent)
 }
 
-/// Orchestriert den Reminder-Check: laedt aktive Abos, berechnet faellige
-/// Erinnerungen ([`compute_due_reminders`]) und dispatcht sie
-/// ([`dispatch_due_reminders`]).
 pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u32, String> {
     let granted = matches!(
         app.notification()
@@ -359,11 +359,14 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
         tracing::error!(error = %e, "Anwenden geplanter Preisänderungen fehlgeschlagen");
     }
 
-    let subs = sqlx::query_as::<_, Subscription>(
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
-         FROM subscriptions WHERE active = 1",
+    let subs = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+           lead_days, active as "active: bool", notify as "notify: bool",
+           cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
+           category, one_time as "one_time: bool", archived_at,
+           pending_amount_cents, pending_from
+           FROM subscriptions WHERE active = 1"#
     )
     .fetch_all(pool)
     .await
@@ -380,12 +383,12 @@ async fn reminder_already_sent(
     due_date: &str,
     kind: &str,
 ) -> Result<bool, String> {
-    let found: Option<(i64,)> = sqlx::query_as(
-        "SELECT 1 FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ? LIMIT 1",
+    let found = sqlx::query!(
+        r#"SELECT 1 as "found!: i64" FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ? LIMIT 1"#,
+        subscription_id,
+        due_date,
+        kind
     )
-    .bind(subscription_id)
-    .bind(due_date)
-    .bind(kind)
     .fetch_optional(pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -398,12 +401,12 @@ async fn insert_reminder_if_new(
     due_date: &str,
     kind: &str,
 ) -> Result<bool, String> {
-    let res = sqlx::query(
+    let res = sqlx::query!(
         "INSERT OR IGNORE INTO reminders (subscription_id, due_date, kind) VALUES (?, ?, ?)",
+        subscription_id,
+        due_date,
+        kind
     )
-    .bind(subscription_id)
-    .bind(due_date)
-    .bind(kind)
     .execute(pool)
     .await
     .map_err(|e| e.to_string())?;
@@ -416,14 +419,16 @@ async fn delete_reminder_reservation(
     due_date: &str,
     kind: &str,
 ) -> Result<(), String> {
-    sqlx::query("DELETE FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ?")
-        .bind(subscription_id)
-        .bind(due_date)
-        .bind(kind)
-        .execute(pool)
-        .await
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    sqlx::query!(
+        "DELETE FROM reminders WHERE subscription_id = ? AND due_date = ? AND kind = ?",
+        subscription_id,
+        due_date,
+        kind
+    )
+    .execute(pool)
+    .await
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 fn format_amount_for_notification(amount_minor: i64, currency: &str) -> String {
@@ -590,19 +595,19 @@ mod tests {
     async fn apply_due_price_changes_applies_only_due_pendings() {
         let pool = test_pool().await;
         // Abo 1 (Seed): Aenderung faellig, Abo 2: erst in der Zukunft.
-        sqlx::query(
+        sqlx::query!(
             "UPDATE subscriptions SET pending_amount_cents = 2499, pending_from = '2025-02-01' \
-             WHERE id = 1",
+             WHERE id = 1"
         )
         .execute(&pool)
         .await
         .unwrap();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify, pending_amount_cents, pending_from) \
              VALUES (2, 'Spotify', 999, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1, \
-                     1199, '2025-06-01')",
+                     1199, '2025-06-01')"
         )
         .execute(&pool)
         .await
@@ -611,40 +616,42 @@ mod tests {
         let applied = apply_due_price_changes(&pool, d(2025, 2, 3)).await.unwrap();
         assert_eq!(applied, 1);
 
-        let (amount, pending_amount, pending_from): (i64, Option<i64>, Option<String>) =
-            sqlx::query_as(
-                "SELECT amount_cents, pending_amount_cents, pending_from \
-                 FROM subscriptions WHERE id = 1",
-            )
-            .fetch_one(&pool)
-            .await
-            .unwrap();
-        assert_eq!(amount, 2499, "faelliger geplanter Preis wird uebernommen");
+        let row = sqlx::query!(
+            "SELECT amount_cents, pending_amount_cents, pending_from \
+             FROM subscriptions WHERE id = 1"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            row.amount_cents, 2499,
+            "faelliger geplanter Preis wird uebernommen"
+        );
         assert!(
-            pending_amount.is_none() && pending_from.is_none(),
+            row.pending_amount_cents.is_none() && row.pending_from.is_none(),
             "pending-Felder geleert"
         );
 
         // Preis-Historie bekommt einen Eintrag zum Wirksamkeitsdatum.
-        let (hist_amount, changed_at): (i64, String) = sqlx::query_as(
-            "SELECT amount_cents, changed_at FROM subscription_price_history \
-             WHERE subscription_id = 1 ORDER BY changed_at DESC LIMIT 1",
+        let hist = sqlx::query!(
+            r#"SELECT amount_cents, changed_at as "changed_at!: String" FROM subscription_price_history
+             WHERE subscription_id = 1 ORDER BY changed_at DESC LIMIT 1"#
         )
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(hist_amount, 2499);
-        assert_eq!(changed_at, "2025-02-01 00:00:00");
+        assert_eq!(hist.amount_cents, 2499);
+        assert_eq!(hist.changed_at, "2025-02-01 00:00:00");
 
         // Zukuenftige Aenderung bleibt unangetastet.
-        let (a2, p2): (i64, Option<i64>) = sqlx::query_as(
-            "SELECT amount_cents, pending_amount_cents FROM subscriptions WHERE id = 2",
+        let row2 = sqlx::query!(
+            "SELECT amount_cents, pending_amount_cents FROM subscriptions WHERE id = 2"
         )
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(a2, 999);
-        assert_eq!(p2, Some(1199));
+        assert_eq!(row2.amount_cents, 999);
+        assert_eq!(row2.pending_amount_cents, Some(1199));
 
         // Idempotent: zweiter Lauf findet nichts mehr.
         let again = apply_due_price_changes(&pool, d(2025, 2, 3)).await.unwrap();
@@ -893,11 +900,11 @@ mod tests {
             .expect("apply migrations");
         // Subscription-Row fuer FK-Bindung der reminders-Tabelle (FK an per
         // sqlx-Default). subscription_id = 1 wird in den Tests genutzt.
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify) \
-             VALUES (1, 'Netflix', 1799, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1)",
+             VALUES (1, 'Netflix', 1799, 'EUR', NULL, 'monthly', '2025-02-15', 7, 1, 1)"
         )
         .execute(&pool)
         .await
@@ -917,11 +924,11 @@ mod tests {
     }
 
     async fn reservation_exists(pool: &SqlitePool, subscription_id: i64, due_date: &str) -> bool {
-        let row: Option<(i64,)> = sqlx::query_as(
-            "SELECT 1 FROM reminders WHERE subscription_id = ? AND due_date = ? LIMIT 1",
+        let row = sqlx::query!(
+            r#"SELECT 1 as "found!: i64" FROM reminders WHERE subscription_id = ? AND due_date = ? LIMIT 1"#,
+            subscription_id,
+            due_date
         )
-        .bind(subscription_id)
-        .bind(due_date)
         .fetch_optional(pool)
         .await
         .unwrap();
@@ -976,14 +983,11 @@ mod tests {
         );
     }
 
-    /// Pfad #3: Idempotenz — eine bereits vorhandene Reservierung blockiert
-    /// sowohl INSERT als auch show(). Der Dispatcher darf an einer schon
-    /// gesendeten Erinnerung nicht erneut versuchen.
     #[tokio::test]
     async fn dispatch_skips_already_reserved_reminder() {
         let pool = test_pool().await;
-        sqlx::query(
-            "INSERT INTO reminders (subscription_id, due_date, kind) VALUES (1, '2025-02-15', 'payment')",
+        sqlx::query!(
+            "INSERT INTO reminders (subscription_id, due_date, kind) VALUES (1, '2025-02-15', 'payment')"
         )
             .execute(&pool)
             .await

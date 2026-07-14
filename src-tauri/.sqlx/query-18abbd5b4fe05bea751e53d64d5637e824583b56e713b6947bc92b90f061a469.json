@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscription_price_history (id, subscription_id, amount_cents, currency, changed_at) VALUES (1, 1, 1799, 'EUR', '2026-01-15 09:00:00')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "18abbd5b4fe05bea751e53d64d5637e824583b56e713b6947bc92b90f061a469"
+}

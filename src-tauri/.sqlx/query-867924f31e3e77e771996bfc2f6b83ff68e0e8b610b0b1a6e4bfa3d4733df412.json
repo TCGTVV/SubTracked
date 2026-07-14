@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT balance_updated_at FROM accounts WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "balance_updated_at",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "accounts",
+            "name": "balance_updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "867924f31e3e77e771996bfc2f6b83ff68e0e8b610b0b1a6e4bfa3d4733df412"
+}

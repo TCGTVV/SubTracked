@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT amount_cents, changed_at as \"changed_at!: String\" FROM subscription_price_history\n             WHERE subscription_id = 1 ORDER BY changed_at DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "amount_cents",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscription_price_history",
+            "name": "amount_cents"
+          }
+        }
+      },
+      {
+        "name": "changed_at!: String",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscription_price_history",
+            "name": "changed_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "324a4426da05ab47e7e7e7b146f7ab3663638efcb627c22ecb73ddcf3493b8e4"
+}

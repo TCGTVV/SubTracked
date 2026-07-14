@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM reminders WHERE subscription_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "96051ea4c690229cc10075fe67e7f9f93395cc5115d5e09898830ca85b501eda"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscriptions (id, name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 19
+    },
+    "nullable": []
+  },
+  "hash": "541c29251ad06495e8faff95ea2c26aaa73379aece2804576491d1b71f7aa518"
+}

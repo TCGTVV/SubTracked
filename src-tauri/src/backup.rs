@@ -54,45 +54,51 @@ pub struct BackupFile {
     pub reminders: Vec<ReminderRow>,
 }
 
-/// Liest alle Tabellen in einen `BackupFile`. `ORDER BY id` macht den Export
-/// deterministisch (stabiler Diff zwischen zwei Backups).
 pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
-    let accounts = sqlx::query_as::<_, Account>(
-        "SELECT id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at \
-         FROM accounts ORDER BY id",
+    let accounts = sqlx::query_as!(
+        Account,
+        r#"SELECT id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at
+           FROM accounts ORDER BY id"#
     )
     .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
 
-    let subscriptions = sqlx::query_as::<_, Subscription>(
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, \
-         lead_days, active, notify, cancel_mode, cancel_period_value, cancel_period_unit, \
-         cancel_date, category, one_time, archived_at, pending_amount_cents, pending_from \
-         FROM subscriptions ORDER BY id",
+    let subscriptions = sqlx::query_as!(
+        Subscription,
+        r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+           lead_days, active as "active: bool", notify as "notify: bool",
+           cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
+           category, one_time as "one_time: bool", archived_at,
+           pending_amount_cents, pending_from
+           FROM subscriptions ORDER BY id"#
     )
     .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
 
-    let incomes = sqlx::query_as::<_, Income>(
-        "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time \
-         FROM incomes ORDER BY id",
+    let incomes = sqlx::query_as!(
+        Income,
+        r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
+           active as "active: bool", one_time as "one_time: bool"
+           FROM incomes ORDER BY id"#
     )
     .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
 
-    let price_history = sqlx::query_as::<_, PriceHistoryEntry>(
-        "SELECT id, subscription_id, amount_cents, currency, changed_at \
-         FROM subscription_price_history ORDER BY id",
+    let price_history = sqlx::query_as!(
+        PriceHistoryEntry,
+        r#"SELECT id, subscription_id, amount_cents, currency, changed_at
+           FROM subscription_price_history ORDER BY id"#
     )
     .fetch_all(db)
     .await
     .map_err(|e| e.to_string())?;
 
-    let reminders = sqlx::query_as::<_, ReminderRow>(
-        "SELECT id, subscription_id, due_date, sent_at FROM reminders ORDER BY id",
+    let reminders = sqlx::query_as!(
+        ReminderRow,
+        r#"SELECT id, subscription_id, due_date, sent_at FROM reminders ORDER BY id"#
     )
     .fetch_all(db)
     .await
@@ -256,123 +262,128 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
     Ok(())
 }
 
-/// Ersetzt den gesamten Datenbestand durch den Backup-Inhalt (Restore-Semantik).
-/// Alles in einer Transaktion: Bei jedem Fehler rollt SQLite zurück, es entsteht
-/// kein Teilzustand. IDs werden erhalten, damit FK-Verknüpfungen (Konto↔Abo,
-/// Abo↔Historie/Reminder) korrekt bleiben.
 pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), String> {
     validate_backup(backup)?;
 
     let mut tx = db.begin().await.map_err(|e| e.to_string())?;
 
     // DELETE: Kinder zuerst (FK-Constraints sind in sqlx aktiv und werden sofort
-    // geprüft). Statische Literale, weil sqlx 0.9 dynamisches Query-SQL ablehnt.
-    for stmt in [
-        "DELETE FROM reminders",
-        "DELETE FROM subscription_price_history",
-        "DELETE FROM incomes",
-        "DELETE FROM subscriptions",
-        "DELETE FROM accounts",
-    ] {
-        sqlx::query(stmt)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| e.to_string())?;
-    }
+    // geprüft). Einzeln statt in einer Schleife ueber ein Array, damit jede
+    // Anweisung als Literal fuer sqlx::query! compile-time-verifiziert wird.
+    sqlx::query!("DELETE FROM reminders")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM subscription_price_history")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM incomes")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM subscriptions")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM accounts")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // INSERT: Eltern zuerst, IDs explizit übernehmen.
     for a in &backup.accounts {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO accounts \
                (id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at) \
              VALUES (?, ?, ?, ?, ?, ?, ?)",
+            a.id,
+            a.name,
+            a.note,
+            a.currency,
+            a.balance_cents,
+            a.min_buffer_cents,
+            a.balance_updated_at,
         )
-        .bind(a.id)
-        .bind(&a.name)
-        .bind(&a.note)
-        .bind(&a.currency)
-        .bind(a.balance_cents)
-        .bind(a.min_buffer_cents)
-        .bind(&a.balance_updated_at)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     for s in &backup.subscriptions {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscriptions \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify, cancel_mode, cancel_period_value, \
                 cancel_period_unit, cancel_date, category, one_time, archived_at, \
                 pending_amount_cents, pending_from) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            s.id,
+            s.name,
+            s.amount_cents,
+            s.currency,
+            s.account_id,
+            s.interval,
+            s.anchor_date,
+            s.lead_days,
+            s.active,
+            s.notify,
+            s.cancel_mode,
+            s.cancel_period_value,
+            s.cancel_period_unit,
+            s.cancel_date,
+            s.category,
+            s.one_time,
+            s.archived_at,
+            s.pending_amount_cents,
+            s.pending_from,
         )
-        .bind(s.id)
-        .bind(&s.name)
-        .bind(s.amount_cents)
-        .bind(&s.currency)
-        .bind(s.account_id)
-        .bind(&s.interval)
-        .bind(&s.anchor_date)
-        .bind(s.lead_days)
-        .bind(s.active)
-        .bind(s.notify)
-        .bind(&s.cancel_mode)
-        .bind(s.cancel_period_value)
-        .bind(&s.cancel_period_unit)
-        .bind(&s.cancel_date)
-        .bind(&s.category)
-        .bind(s.one_time)
-        .bind(&s.archived_at)
-        .bind(s.pending_amount_cents)
-        .bind(&s.pending_from)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     for i in &backup.incomes {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO incomes \
                (id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            i.id,
+            i.name,
+            i.amount_cents,
+            i.currency,
+            i.account_id,
+            i.interval,
+            i.anchor_date,
+            i.active,
+            i.one_time,
         )
-        .bind(i.id)
-        .bind(&i.name)
-        .bind(i.amount_cents)
-        .bind(&i.currency)
-        .bind(i.account_id)
-        .bind(&i.interval)
-        .bind(&i.anchor_date)
-        .bind(i.active)
-        .bind(i.one_time)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     for p in &backup.price_history {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscription_price_history \
                (id, subscription_id, amount_cents, currency, changed_at) \
              VALUES (?, ?, ?, ?, ?)",
+            p.id,
+            p.subscription_id,
+            p.amount_cents,
+            p.currency,
+            p.changed_at,
         )
-        .bind(p.id)
-        .bind(p.subscription_id)
-        .bind(p.amount_cents)
-        .bind(&p.currency)
-        .bind(&p.changed_at)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
     }
     for r in &backup.reminders {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO reminders (id, subscription_id, due_date, sent_at) \
              VALUES (?, ?, ?, ?)",
+            r.id,
+            r.subscription_id,
+            r.due_date,
+            r.sent_at,
         )
-        .bind(r.id)
-        .bind(r.subscription_id)
-        .bind(&r.due_date)
-        .bind(&r.sent_at)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -482,40 +493,38 @@ mod tests {
         pool
     }
 
-    /// Legt einen kleinen, vollständig verknüpften Bestand an: Konto → Abo
-    /// (mit Preis-Historie + Reminder) und eine Einnahme.
     async fn seed(db: &SqlitePool) {
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO accounts (id, name, note, currency, balance_cents, min_buffer_cents, balance_updated_at) \
-             VALUES (1, 'Giro', 'Hauptkonto', 'EUR', 120000, 50000, '2026-06-01 10:00:00')",
+             VALUES (1, 'Giro', 'Hauptkonto', 'EUR', 120000, 50000, '2026-06-01 10:00:00')"
         )
         .execute(db)
         .await
         .unwrap();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscriptions (id, name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify) \
-             VALUES (1, 'Netflix', 1799, 'EUR', 1, 'monthly', '2026-01-15', 7, 1, 1)",
+             VALUES (1, 'Netflix', 1799, 'EUR', 1, 'monthly', '2026-01-15', 7, 1, 1)"
         )
         .execute(db)
         .await
         .unwrap();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO subscription_price_history (id, subscription_id, amount_cents, currency, changed_at) \
-             VALUES (1, 1, 1799, 'EUR', '2026-01-15 09:00:00')",
+             VALUES (1, 1, 1799, 'EUR', '2026-01-15 09:00:00')"
         )
         .execute(db)
         .await
         .unwrap();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO reminders (id, subscription_id, due_date, sent_at) \
-             VALUES (1, 1, '2026-02-15', '2026-02-08 08:00:00')",
+             VALUES (1, 1, '2026-02-15', '2026-02-08 08:00:00')"
         )
         .execute(db)
         .await
         .unwrap();
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO incomes (id, name, amount_cents, currency, account_id, interval, anchor_date, active) \
-             VALUES (1, 'Gehalt', 250000, 'EUR', 1, 'monthly', '2026-01-30', 1)",
+             VALUES (1, 'Gehalt', 250000, 'EUR', 1, 'monthly', '2026-01-30', 1)"
         )
         .execute(db)
         .await
@@ -540,7 +549,6 @@ mod tests {
         assert_eq!(backup.reminders, restored.reminders);
     }
 
-    /// Restore ersetzt den bestehenden Bestand vollständig (kein Merge).
     #[tokio::test]
     async fn restore_replaces_existing_data() {
         let source = test_pool().await;
@@ -549,9 +557,9 @@ mod tests {
 
         let target = test_pool().await;
         // Anderer Vorbestand, der verschwinden muss.
-        sqlx::query(
+        sqlx::query!(
             "INSERT INTO accounts (id, name, note, currency, balance_cents, min_buffer_cents) \
-             VALUES (99, 'Altkonto', NULL, 'USD', 1, 0)",
+             VALUES (99, 'Altkonto', NULL, 'USD', 1, 0)"
         )
         .execute(&target)
         .await

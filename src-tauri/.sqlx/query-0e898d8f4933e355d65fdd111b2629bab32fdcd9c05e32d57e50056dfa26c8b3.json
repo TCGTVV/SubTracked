@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT cancel_mode, cancel_date FROM subscriptions WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "cancel_mode",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_mode"
+          }
+        }
+      },
+      {
+        "name": "cancel_date",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "cancel_date"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "0e898d8f4933e355d65fdd111b2629bab32fdcd9c05e32d57e50056dfa26c8b3"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE subscriptions SET name = ?, amount_cents = ?, currency = ?, interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 17
+    },
+    "nullable": []
+  },
+  "hash": "e56ed42e4914a824770b27007ec3a401f4f1a1c639b616d4338993f511ad0bf6"
+}
