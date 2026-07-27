@@ -11,6 +11,18 @@ overrides:
   # Setup (nur der "spec"-Reporter laeuft), aber pnpm audit flaggt den
   # deklarierten Graphen unabhaengig von der tatsaechlichen Nutzung.
   serialize-javascript: '>=7.0.5'
+  # fast-xml-parser (ueber e2e > @wdio/cli > ... > edgedriver) < 5.10.1:
+  # GHSA-8r6m-32jq-jx6q, wiederholte DOCTYPE-Deklarationen setzen das
+  # Entity-Expansion-Limit zurueck. Nur E2E-Tooling, kein Runtime-Pfad.
+  fast-xml-parser: '>=5.10.1'
+  # postcss (ueber vite) <= 8.5.17: GHSA-r28c-9q8g-f849, Path Traversal ueber
+  # Previous-Source-Map-Auto-Loading (sourceMappingURL) legt beliebige
+  # .map-Dateien offen.
+  postcss: '>=8.5.18'
+  # brace-expansion (ueber e2e > @wdio/cli > ... > minimatch/glob) < 5.0.8:
+  # GHSA-mh99-v99m-4gvg, ReDoS ueber unbegrenzte Expansion-Laenge. Nur
+  # E2E-Tooling, kein Runtime-Pfad.
+  brace-expansion: '>=5.0.8'
 
 allowBuilds:
   # edgedriver/geckodriver sind transitive @wdio/cli-Deps fuer Browser-Treiber-
