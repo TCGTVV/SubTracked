@@ -3,6 +3,7 @@ import {
   ArchiveRestore,
   CalendarClock,
   CalendarX,
+  FlaskConical,
   Pencil,
   Plus,
   Trash2,
@@ -20,6 +21,7 @@ import { IncomeDialog } from "./components/IncomeDialog";
 import { NotificationPermissionBanner } from "./components/NotificationPermissionBanner";
 import { OverviewSection } from "./components/OverviewSection";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { SimulationSection } from "./components/SimulationSection";
 import { StatusCard } from "./components/StatusCard";
 import { SubscriptionDialog } from "./components/SubscriptionDialog";
 import { SubscriptionFilterBar } from "./components/SubscriptionFilterBar";
@@ -57,11 +59,35 @@ interface CardActionsProps {
   onDelete: () => void;
   active: boolean;
   name: string;
+  /** Nur für Abos: Simulations-Toggle („was wäre, wenn ich das kündige?"). */
+  simulatedOut?: boolean;
+  onSimulateToggle?: () => void;
 }
 
-function CardActions({ onEdit, onToggle, onDelete, active, name }: CardActionsProps) {
+function CardActions({
+  onEdit,
+  onToggle,
+  onDelete,
+  active,
+  name,
+  simulatedOut,
+  onSimulateToggle,
+}: CardActionsProps) {
   return (
     <div className="mt-auto flex gap-1 pt-1">
+      {onSimulateToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onSimulateToggle}
+          aria-pressed={simulatedOut}
+          aria-label={`${name} in der Simulation ${simulatedOut ? "wieder einblenden" : "ausblenden"}`}
+          title="Was wäre, wenn ich das kündige?"
+          className={cn(simulatedOut && "bg-primary/10 text-primary")}
+        >
+          <FlaskConical />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" onClick={onEdit} aria-label={`${name} bearbeiten`}>
         <Pencil />
       </Button>
@@ -193,6 +219,16 @@ function App() {
   const [demoPending, setDemoPending] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [filterOptions, setFilterOptions] = useState<SubListOptions>(DEFAULT_SUB_LIST_OPTIONS);
+  // Was-wäre-wenn-Simulation: IDs der Abos, die testweise wegfallen (nur UI-State, nie gespeichert).
+  const [simulatedOut, setSimulatedOut] = useState<ReadonlySet<number>>(() => new Set());
+
+  function toggleSimulated(id: number) {
+    setSimulatedOut((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
   const activeIncomes = useMemo(() => incomes.filter((i) => i.active), [incomes]);
@@ -202,6 +238,15 @@ function App() {
     return hasLiveCashflow(activeSubs, today) || hasLiveCashflow(activeIncomes, today);
   }, [activeSubs, activeIncomes]);
   const archivedCount = subs.length - activeSubs.length;
+  const simulationSection = (
+    <SimulationSection
+      subscriptions={activeSubs}
+      accounts={accounts}
+      incomes={activeIncomes}
+      excludedIds={simulatedOut}
+      onReset={() => setSimulatedOut(new Set())}
+    />
+  );
   const preFilteredSubs = showArchived ? subs : activeSubs;
   const visibleSubs = useMemo(
     () => applyFilterAndSort(preFilteredSubs, filterOptions),
@@ -445,6 +490,7 @@ function App() {
                 onChanged={reloadAccounts}
               />
 
+              {simulationSection}
               {activeSubs.length > 0 && <CostSummarySection subscriptions={activeSubs} />}
               {activeSubs.length > 0 && <YearlyLoadSection subscriptions={activeSubs} />}
               {hasActiveCashflow && (
@@ -473,6 +519,7 @@ function App() {
           {/* ABOS */}
           {!isEmpty && view === "subs" && (
             <>
+              {simulationSection}
               {archivedCount > 0 && (
                 <label className="flex items-center gap-2 text-sm text-muted-foreground">
                   <input
@@ -523,6 +570,9 @@ function App() {
                             {account && <> · {account}</>}
                             {sub.category && <> · {sub.category}</>}
                             {sub.oneTime && <> · einmalig</>}
+                            {sub.active && simulatedOut.has(sub.id) && (
+                              <> · in Simulation ausgeblendet</>
+                            )}
                             {sub.active &&
                               sub.amountCents === 0 &&
                               sub.pendingAmountCents != null && <> · Probeabo</>}
@@ -538,6 +588,8 @@ function App() {
                           onEdit={() => startEdit(sub)}
                           onToggle={() => void handleToggleActive(sub)}
                           onDelete={() => void handleDelete(sub)}
+                          simulatedOut={simulatedOut.has(sub.id)}
+                          onSimulateToggle={sub.active ? () => toggleSimulated(sub.id) : undefined}
                         />
                       </CashflowCard>
                     );

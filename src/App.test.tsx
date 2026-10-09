@@ -216,6 +216,57 @@ describe("App", () => {
     expect(reloadAll).toHaveBeenCalled();
   });
 
+  it("blendet ein Abo per Simulations-Toggle aus und setzt die Simulation zurück", () => {
+    const netflix: Subscription = {
+      id: 12,
+      name: "Netflix",
+      amountCents: 1799,
+      currency: "EUR",
+      accountId: account.id,
+      interval: "monthly",
+      anchorDate: "2026-06-12",
+      leadDays: 7,
+      active: true,
+      notify: true,
+      cancelMode: null,
+      cancelPeriodValue: null,
+      cancelPeriodUnit: null,
+      cancelDate: null,
+      category: null,
+      oneTime: false,
+      archivedAt: null,
+      pendingAmountCents: null,
+      pendingFrom: null,
+    };
+    mockUseSubscriptions.mockReturnValue({
+      subs: [netflix],
+      accounts: [account],
+      incomes: [],
+      loading: false,
+      error: null,
+      setError: vi.fn(),
+      reloadAll: vi.fn(),
+      reloadAccounts: vi.fn(),
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Abos" }));
+    expect(screen.queryByRole("heading", { name: /Was wäre, wenn/ })).not.toBeInTheDocument();
+
+    const toggle = screen.getByRole("button", { name: "Netflix in der Simulation ausblenden" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(toggle);
+
+    expect(screen.getByRole("heading", { name: /Was wäre, wenn/ })).toBeInTheDocument();
+    expect(screen.getByText(/in Simulation ausgeblendet/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Netflix in der Simulation wieder einblenden" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulation zurücksetzen" }));
+    expect(screen.queryByRole("heading", { name: /Was wäre, wenn/ })).not.toBeInTheDocument();
+  });
+
   it("hat keine axe-Verstöße (App-Shell mit Empty-State)", async () => {
     render(<App />);
     await expectNoAxeViolations();
