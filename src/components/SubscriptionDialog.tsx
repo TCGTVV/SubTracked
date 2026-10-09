@@ -18,9 +18,11 @@ import type {
   CancelUnit,
   Interval,
   PriceHistoryEntry,
+  ShiftRule,
   Subscription,
 } from "../types";
 import { DateField } from "./DateField";
+import { ShiftRuleField } from "./ShiftRuleField";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -220,6 +222,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
   const [oneTime, setOneTime] = useState(subscription?.oneTime ?? false);
   const [anchorDate, setAnchorDate] = useState(subscription?.anchorDate ?? todayISO());
   const [leadDays, setLeadDays] = useState(subscription?.leadDays ?? 60);
+  const [shiftRule, setShiftRule] = useState<ShiftRule>(subscription?.shiftRule ?? "none");
   const [notify, setNotify] = useState(subscription?.notify ?? true);
   const [cancelMode, setCancelMode] = useState<typeof NO_CANCEL | CancelMode>(
     subscription?.cancelMode ?? NO_CANCEL,
@@ -379,6 +382,7 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
         oneTime,
         anchorDate,
         leadDays,
+        shiftRule,
         notify,
         cancelMode: cancelMode === NO_CANCEL ? null : cancelMode,
         cancelPeriodValue: cancelMode === "period" ? cancelPeriodValue : null,
@@ -734,6 +738,13 @@ export function SubscriptionDialog({ open, subscription, accounts, onClose, onSa
                 )}
               </div>
             </div>
+
+            <ShiftRuleField
+              id={`${anchorId}-shift`}
+              value={shiftRule}
+              onChange={setShiftRule}
+              kind="outflow"
+            />
 
             <div className="flex items-center gap-2.5">
               <Checkbox

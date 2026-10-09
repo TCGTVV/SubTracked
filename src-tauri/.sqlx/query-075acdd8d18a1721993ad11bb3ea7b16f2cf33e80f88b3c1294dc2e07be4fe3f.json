@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n               active as \"active: bool\", one_time as \"one_time: bool\"\n               FROM incomes WHERE active = 1 ORDER BY name",
+  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n               active as \"active: bool\", one_time as \"one_time: bool\", shift_rule\n               FROM incomes ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -101,6 +101,17 @@
             "name": "one_time"
           }
         }
+      },
+      {
+        "name": "shift_rule",
+        "ordinal": 9,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "incomes",
+            "name": "shift_rule"
+          }
+        }
       }
     ],
     "parameters": {
@@ -115,8 +126,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "dd224f9f5519106934c0dcaa9bb061eed0d3ae54a26a2543e1f4185a72757959"
+  "hash": "075acdd8d18a1721993ad11bb3ea7b16f2cf33e80f88b3c1294dc2e07be4fe3f"
 }

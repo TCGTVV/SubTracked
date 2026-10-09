@@ -22,7 +22,8 @@ use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription, Subs
 use crate::file_grants::{FileGrants, GrantKind};
 use crate::validation::{
     validate_account_fields, validate_amount_cents, validate_anchor_date, validate_cancellation,
-    validate_currency, validate_interval, validate_name, validate_subscription_fields,
+    validate_currency, validate_interval, validate_name, validate_shift_rule,
+    validate_subscription_fields,
 };
 
 /// Aktuelle Backup-Format-Version. Bei Schema-Änderungen nach Release hochzählen
@@ -75,7 +76,7 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
            lead_days, active as "active: bool", notify as "notify: bool",
            cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
            category, one_time as "one_time: bool", archived_at,
-           pending_amount_cents, pending_from
+           pending_amount_cents, pending_from, shift_rule
            FROM subscriptions ORDER BY id"#
     )
     .fetch_all(db)
@@ -85,7 +86,7 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     let incomes = sqlx::query_as!(
         Income,
         r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-           active as "active: bool", one_time as "one_time: bool"
+           active as "active: bool", one_time as "one_time: bool", shift_rule
            FROM incomes ORDER BY id"#
     )
     .fetch_all(db)
@@ -239,6 +240,7 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             s.cancel_date.as_deref(),
         )
         .map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
+        validate_shift_rule(&s.shift_rule).map_err(|e| format!("Abo \"{}\": {e}", s.name))?;
         if let Some(account_id) = s.account_id {
             validate_existing_id(&account_ids, account_id, &label, "Konto")?;
         }
@@ -251,6 +253,7 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
         validate_currency(&i.currency).map_err(|e| format!("{}: {e}", label()))?;
         validate_interval(&i.interval).map_err(|e| format!("{}: {e}", label()))?;
         validate_anchor_date(&i.anchor_date).map_err(|e| format!("{}: {e}", label()))?;
+        validate_shift_rule(&i.shift_rule).map_err(|e| format!("{}: {e}", label()))?;
         if let Some(account_id) = i.account_id {
             validate_existing_id(&account_ids, account_id, &label(), "Konto")?;
         }
@@ -349,8 +352,8 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
                (id, name, amount_cents, currency, account_id, interval, anchor_date, \
                 lead_days, active, notify, cancel_mode, cancel_period_value, \
                 cancel_period_unit, cancel_date, category, one_time, archived_at, \
-                pending_amount_cents, pending_from) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                pending_amount_cents, pending_from, shift_rule) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             s.id,
             s.name,
             s.amount_cents,
@@ -370,6 +373,7 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             s.archived_at,
             s.pending_amount_cents,
             s.pending_from,
+            s.shift_rule,
         )
         .execute(&mut *tx)
         .await
@@ -378,8 +382,8 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
     for i in &backup.incomes {
         sqlx::query!(
             "INSERT INTO incomes \
-               (id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               (id, name, amount_cents, currency, account_id, interval, anchor_date, active, one_time, shift_rule) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             i.id,
             i.name,
             i.amount_cents,
@@ -389,6 +393,7 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             i.anchor_date,
             i.active,
             i.one_time,
+            i.shift_rule,
         )
         .execute(&mut *tx)
         .await
@@ -624,6 +629,51 @@ mod tests {
         restore_backup(&target, &backup).await.unwrap();
         let restored = collect_backup(&target).await.unwrap();
         assert_eq!(backup.skips, restored.skips);
+    }
+
+    #[tokio::test]
+    async fn roundtrip_preserves_shift_rules_and_rejects_unknown_ones() {
+        let source = test_pool().await;
+        seed(&source).await;
+        sqlx::query("UPDATE subscriptions SET shift_rule = 'next' WHERE id = 1")
+            .execute(&source)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE incomes SET shift_rule = 'previous' WHERE id = 1")
+            .execute(&source)
+            .await
+            .unwrap();
+        let backup = collect_backup(&source).await.unwrap();
+        assert_eq!(backup.subscriptions[0].shift_rule, "next");
+        assert_eq!(backup.incomes[0].shift_rule, "previous");
+
+        let target = test_pool().await;
+        restore_backup(&target, &backup).await.unwrap();
+        let restored = collect_backup(&target).await.unwrap();
+        assert_eq!(restored.subscriptions[0].shift_rule, "next");
+        assert_eq!(restored.incomes[0].shift_rule, "previous");
+
+        let mut bad = collect_backup(&source).await.unwrap();
+        bad.subscriptions[0].shift_rule = "sideways".into();
+        assert!(restore_backup(&target, &bad).await.is_err());
+    }
+
+    /// Backups aus der Zeit vor Migration 0017 kennen kein `shiftRule`.
+    #[tokio::test]
+    async fn old_backup_without_shift_rule_imports_as_none() {
+        let source = test_pool().await;
+        seed(&source).await;
+        let mut json = serde_json::to_value(collect_backup(&source).await.unwrap()).unwrap();
+        for table in ["subscriptions", "incomes"] {
+            for row in json[table].as_array_mut().unwrap() {
+                row.as_object_mut().unwrap().remove("shiftRule");
+            }
+        }
+        let backup: BackupFile = serde_json::from_value(json).expect("ohne shiftRule lesbar");
+        assert_eq!(backup.subscriptions[0].shift_rule, "none");
+        assert_eq!(backup.incomes[0].shift_rule, "none");
+        let target = test_pool().await;
+        restore_backup(&target, &backup).await.expect("Import");
     }
 
     /// Backups aus der Zeit vor Migration 0016 kennen kein `skips`-Feld.

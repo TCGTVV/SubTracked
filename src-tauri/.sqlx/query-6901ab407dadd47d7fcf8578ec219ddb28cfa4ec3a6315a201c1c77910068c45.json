@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active, one_time, shift_rule) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "6901ab407dadd47d7fcf8578ec219ddb28cfa4ec3a6315a201c1c77910068c45"
+}

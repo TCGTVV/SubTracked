@@ -1,5 +1,6 @@
 import { addDays, addMonths, differenceInMonths, startOfDay, startOfMonth } from "date-fns";
-import type { Account, Income, Subscription } from "../types";
+import type { Account, Income, Interval, ShiftRule, Subscription } from "../types";
+import { shiftToBankDay } from "./bankdays";
 import { parseStrictISODate, toISODateLocal } from "./format";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
@@ -36,11 +37,46 @@ export interface AccountCoverage {
 const UNASSIGNED_KEY = "__unassigned__";
 const UNASSIGNED_LABEL = "(kein Konto zugeordnet)";
 
+/** Mehr als Wochenende + Feiertagsbrücke (Karfreitag–Ostermontag = 4 Tage) verschiebt keine
+ *  Regel; so weit wird das Fenster für die nominalen Termine geweitet. */
+const SHIFT_MARGIN_DAYS = 7;
+
+/**
+ * Buchungstage eines wiederkehrenden Postens im Fenster [from, until]. Ohne Verschiebungsregel
+ * sind das die nominalen Termine. Mit Regel (`next`/`previous`) wird jeder Termin auf einen
+ * Bankarbeitstag verschoben; dafür müssen nominale Termine knapp außerhalb des Fensters
+ * mitbetrachtet werden (ein Samstag vor `from` bucht evtl. erst am Montag darin).
+ * `skipped` (nominale ISO-Termine) entfallen vor der Verschiebung.
+ */
+function recurringBookingDates(
+  anchor: Date,
+  interval: Interval,
+  rule: ShiftRule | undefined,
+  from: Date,
+  until: Date,
+  skipped?: readonly string[],
+): Date[] {
+  const margin = rule === "next" || rule === "previous" ? SHIFT_MARGIN_DAYS : 0;
+  const nominal = dueDatesWithin(anchor, interval, addDays(from, -margin), addDays(until, margin));
+  const lower = startOfDay(from);
+  const upper = startOfDay(until);
+  const out: Date[] = [];
+  for (const n of nominal) {
+    if (skipped?.includes(toISODateLocal(n))) continue;
+    const booking = shiftToBankDay(n, rule);
+    if (booking >= lower && booking <= upper) out.push(booking);
+  }
+  return out;
+}
+
 function incomeDatesWithin(income: Income, from: Date, until: Date): Date[] {
   const anchor = parseStrictISODate(income.anchorDate);
   if (!anchor) return [];
-  if (!income.oneTime) return dueDatesWithin(anchor, income.interval, from, until);
-  return anchor >= from && anchor <= until ? [anchor] : [];
+  if (!income.oneTime) {
+    return recurringBookingDates(anchor, income.interval, income.shiftRule, from, until);
+  }
+  const booking = shiftToBankDay(anchor, income.shiftRule);
+  return booking >= from && booking <= until ? [booking] : [];
 }
 
 /** Fälligkeitstermine eines Abos im Fenster. Einmalige Ausgaben (`oneTime`) liefern
@@ -50,14 +86,19 @@ function subscriptionDatesWithin(sub: Subscription, from: Date, until: Date): Da
   const anchor = parseStrictISODate(sub.anchorDate);
   if (!anchor) return [];
   if (!sub.oneTime) {
-    const dates = dueDatesWithin(anchor, sub.interval, from, until);
-    // Übersprungene Termine ("Dienst pausiert") finden nicht statt.
-    const skipped = sub.skippedDates;
-    return skipped && skipped.length > 0
-      ? dates.filter((d) => !skipped.includes(toISODateLocal(d)))
-      : dates;
+    // Übersprungene Termine ("Dienst pausiert") finden nicht statt; die Verschiebung auf
+    // Bankarbeitstage betrifft nur den Buchungstag, nicht den nominalen Termin.
+    return recurringBookingDates(
+      anchor,
+      sub.interval,
+      sub.shiftRule,
+      from,
+      until,
+      sub.skippedDates,
+    );
   }
-  return anchor >= from && anchor <= until ? [anchor] : [];
+  const booking = shiftToBankDay(anchor, sub.shiftRule);
+  return booking >= from && booking <= until ? [booking] : [];
 }
 
 /**

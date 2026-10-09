@@ -1,0 +1,251 @@
+{
+  "_comment": "Geteilte Bankarbeitstag-Vektoren fuer TS (src/lib/bankdays.ts) und Rust (src-tauri/src/bankdays.rs). Bankarbeitstag = Mo-Fr ausser bundeseinheitliche Feiertage: Neujahr, Karfreitag, Ostermontag, 1. Mai, Christi Himmelfahrt, Pfingstmontag, 3. Oktober, 1. und 2. Weihnachtstag. Regionale Feiertage (Heilige Drei Koenige, Fronleichnam, Reformationstag, ...) zaehlen bewusst NICHT. Ostersonntag je Jahr unabhaengig nachgeschlagen (nicht aus der Implementierung abgeleitet).",
+  "holidays": [
+    {
+      "year": 2024,
+      "easter": "2024-03-31",
+      "dates": [
+        "2024-01-01",
+        "2024-03-29",
+        "2024-04-01",
+        "2024-05-01",
+        "2024-05-09",
+        "2024-05-20",
+        "2024-10-03",
+        "2024-12-25",
+        "2024-12-26"
+      ]
+    },
+    {
+      "year": 2025,
+      "easter": "2025-04-20",
+      "dates": [
+        "2025-01-01",
+        "2025-04-18",
+        "2025-04-21",
+        "2025-05-01",
+        "2025-05-29",
+        "2025-06-09",
+        "2025-10-03",
+        "2025-12-25",
+        "2025-12-26"
+      ]
+    },
+    {
+      "year": 2026,
+      "easter": "2026-04-05",
+      "dates": [
+        "2026-01-01",
+        "2026-04-03",
+        "2026-04-06",
+        "2026-05-01",
+        "2026-05-14",
+        "2026-05-25",
+        "2026-10-03",
+        "2026-12-25",
+        "2026-12-26"
+      ]
+    },
+    {
+      "year": 2027,
+      "easter": "2027-03-28",
+      "dates": [
+        "2027-01-01",
+        "2027-03-26",
+        "2027-03-29",
+        "2027-05-01",
+        "2027-05-06",
+        "2027-05-17",
+        "2027-10-03",
+        "2027-12-25",
+        "2027-12-26"
+      ]
+    },
+    {
+      "year": 2028,
+      "easter": "2028-04-16",
+      "dates": [
+        "2028-01-01",
+        "2028-04-14",
+        "2028-04-17",
+        "2028-05-01",
+        "2028-05-25",
+        "2028-06-05",
+        "2028-10-03",
+        "2028-12-25",
+        "2028-12-26"
+      ]
+    },
+    {
+      "year": 2029,
+      "easter": "2029-04-01",
+      "dates": [
+        "2029-01-01",
+        "2029-03-30",
+        "2029-04-02",
+        "2029-05-01",
+        "2029-05-10",
+        "2029-05-21",
+        "2029-10-03",
+        "2029-12-25",
+        "2029-12-26"
+      ]
+    },
+    {
+      "year": 2030,
+      "easter": "2030-04-21",
+      "dates": [
+        "2030-01-01",
+        "2030-04-19",
+        "2030-04-22",
+        "2030-05-01",
+        "2030-05-30",
+        "2030-06-10",
+        "2030-10-03",
+        "2030-12-25",
+        "2030-12-26"
+      ]
+    }
+  ],
+  "shift": [
+    {
+      "name": "weekday_unchanged_next",
+      "date": "2026-03-18",
+      "rule": "next",
+      "expected": "2026-03-18"
+    },
+    {
+      "name": "weekday_unchanged_previous",
+      "date": "2026-03-18",
+      "rule": "previous",
+      "expected": "2026-03-18"
+    },
+    {
+      "name": "none_keeps_saturday",
+      "date": "2026-01-31",
+      "rule": "none",
+      "expected": "2026-01-31"
+    },
+    {
+      "name": "saturday_next_goes_to_monday",
+      "date": "2026-01-31",
+      "rule": "next",
+      "expected": "2026-02-02"
+    },
+    {
+      "name": "saturday_previous_goes_to_friday",
+      "date": "2026-01-31",
+      "rule": "previous",
+      "expected": "2026-01-30"
+    },
+    {
+      "name": "sunday_next_goes_to_monday",
+      "date": "2026-03-15",
+      "rule": "next",
+      "expected": "2026-03-16"
+    },
+    {
+      "name": "sunday_previous_goes_to_friday",
+      "date": "2026-03-15",
+      "rule": "previous",
+      "expected": "2026-03-13"
+    },
+    {
+      "name": "new_year_thursday_next",
+      "date": "2026-01-01",
+      "rule": "next",
+      "expected": "2026-01-02"
+    },
+    {
+      "name": "new_year_thursday_previous_crosses_year",
+      "date": "2026-01-01",
+      "rule": "previous",
+      "expected": "2025-12-31"
+    },
+    {
+      "name": "good_friday_next_skips_easter_monday",
+      "date": "2026-04-03",
+      "rule": "next",
+      "expected": "2026-04-07"
+    },
+    {
+      "name": "good_friday_previous",
+      "date": "2026-04-03",
+      "rule": "previous",
+      "expected": "2026-04-02"
+    },
+    {
+      "name": "easter_monday_next",
+      "date": "2026-04-06",
+      "rule": "next",
+      "expected": "2026-04-07"
+    },
+    {
+      "name": "labour_day_friday_next_skips_weekend",
+      "date": "2026-05-01",
+      "rule": "next",
+      "expected": "2026-05-04"
+    },
+    {
+      "name": "labour_day_friday_previous",
+      "date": "2026-05-01",
+      "rule": "previous",
+      "expected": "2026-04-30"
+    },
+    {
+      "name": "ascension_thursday_next",
+      "date": "2026-05-14",
+      "rule": "next",
+      "expected": "2026-05-15"
+    },
+    { "name": "whit_monday_next", "date": "2026-05-25", "rule": "next", "expected": "2026-05-26" },
+    {
+      "name": "unity_day_saturday_next",
+      "date": "2026-10-03",
+      "rule": "next",
+      "expected": "2026-10-05"
+    },
+    {
+      "name": "unity_day_saturday_previous",
+      "date": "2026-10-03",
+      "rule": "previous",
+      "expected": "2026-10-02"
+    },
+    {
+      "name": "christmas_friday_next_skips_boxing_day_weekend",
+      "date": "2026-12-25",
+      "rule": "next",
+      "expected": "2026-12-28"
+    },
+    {
+      "name": "christmas_friday_previous",
+      "date": "2026-12-25",
+      "rule": "previous",
+      "expected": "2026-12-24"
+    },
+    {
+      "name": "month_end_saturday_next_crosses_month",
+      "date": "2026-02-28",
+      "rule": "next",
+      "expected": "2026-03-02"
+    },
+    {
+      "name": "leap_day_2028_is_tuesday_unchanged_next",
+      "date": "2028-02-29",
+      "rule": "next",
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "leap_day_2028_is_tuesday_unchanged_previous",
+      "date": "2028-02-29",
+      "rule": "previous",
+      "expected": "2028-02-29"
+    },
+    {
+      "name": "easter_week_2027_good_friday_next",
+      "date": "2027-03-26",
+      "rule": "next",
+      "expected": "2027-03-30"
+    }
+  ]
+}

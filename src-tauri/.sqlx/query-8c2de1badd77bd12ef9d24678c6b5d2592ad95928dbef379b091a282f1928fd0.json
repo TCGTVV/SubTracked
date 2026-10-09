@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n               lead_days, active as \"active: bool\", notify as \"notify: bool\",\n               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,\n               category, one_time as \"one_time: bool\", archived_at,\n               pending_amount_cents, pending_from\n               FROM subscriptions ORDER BY name",
+  "query": "SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,\n               lead_days, active as \"active: bool\", notify as \"notify: bool\",\n               cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,\n               category, one_time as \"one_time: bool\", archived_at,\n               pending_amount_cents, pending_from, shift_rule\n               FROM subscriptions ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -211,6 +211,17 @@
             "name": "pending_from"
           }
         }
+      },
+      {
+        "name": "shift_rule",
+        "ordinal": 19,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "shift_rule"
+          }
+        }
       }
     ],
     "parameters": {
@@ -235,8 +246,9 @@
       false,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "d919323dc248812235a19d5608b6f6400ec5a13a5e8907f252b741072c103911"
+  "hash": "8c2de1badd77bd12ef9d24678c6b5d2592ad95928dbef379b091a282f1928fd0"
 }

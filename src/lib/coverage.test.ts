@@ -448,6 +448,68 @@ describe("übersprungene Termine (skippedDates)", () => {
   });
 });
 
+describe("Verschiebung auf Bankarbeitstage (shiftRule)", () => {
+  // Monatsletzter: 31.01. (Sa), 28.02. (Sa), 31.03. (Di) in 2026.
+  const monthEnd = (overrides: Partial<Subscription> = {}) =>
+    sub({ anchorDate: "2026-01-31", ...overrides });
+  const FROM = new Date(2026, 1, 1);
+
+  it("ohne Regel bleiben die nominalen Termine", () => {
+    const [bucket] = computeCoverage([monthEnd()], [acc(1, "Giro")], 2, FROM);
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-02-28", "2026-03-31"]);
+  });
+
+  it("'next' bucht auf den nächsten Bankarbeitstag, auch wenn der nominale Termin vor dem Fenster liegt", () => {
+    const [bucket] = computeCoverage([monthEnd({ shiftRule: "next" })], [acc(1, "Giro")], 2, FROM);
+    // 31.01. (Sa, vor dem Fenster) → Mo 02.02.; 28.02. (Sa) → Mo 02.03.; 31.03. (Di) unverändert.
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-02-02", "2026-03-02", "2026-03-31"]);
+  });
+
+  it("'previous' bucht Einnahmen auf den vorigen Bankarbeitstag", () => {
+    const salary = income({ anchorDate: "2026-02-28", shiftRule: "previous" });
+    const [bucket] = computeCoverage([], [acc(1, "Giro")], 2, FROM, [salary]);
+    // 28.02. (Sa) → Fr 27.02.; 28.03. (Sa) → Fr 27.03. (Anker-additiv: immer der 28.)
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-02-27", "2026-03-27"]);
+  });
+
+  it("Termin, der wegen 'previous' vor dem Fenster landet, fällt heraus", () => {
+    // Nominal Sonntag 15.03. → Freitag 13.03.; Fenster beginnt am 14.03.
+    const s = sub({ anchorDate: "2026-03-15", shiftRule: "previous" });
+    const [bucket] = computeCoverage([s], [acc(1, "Giro")], 2, new Date(2026, 2, 14));
+    // Fenster 14.03.–14.05.: der März-Termin (gebucht Fr 13.03.) fehlt, der Mai-Termin (15.05.) liegt dahinter.
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-04-15"]);
+  });
+
+  it("Skips beziehen sich auf den nominalen Termin, nicht auf den Buchungstag", () => {
+    const [bucket] = computeCoverage(
+      [monthEnd({ shiftRule: "next", skippedDates: ["2026-02-28"] })],
+      [acc(1, "Giro")],
+      2,
+      FROM,
+    );
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-02-02", "2026-03-31"]);
+  });
+
+  it("computeUpcoming zeigt den verschobenen Buchungstag", () => {
+    const items = computeUpcoming([monthEnd({ shiftRule: "next" })], [acc(1, "Giro")], 40, FROM);
+    expect(items.map((i) => i.date)).toEqual(["2026-02-02", "2026-03-02"]);
+  });
+
+  it("verschiebt einmalige Ausgaben ebenfalls", () => {
+    const once = sub({ oneTime: true, anchorDate: "2026-02-28", shiftRule: "next" });
+    const [bucket] = computeCoverage([once], [acc(1, "Giro")], 2, FROM);
+    expect(bucket?.items.map((i) => i.date)).toEqual(["2026-03-02"]);
+  });
+
+  it("verschiebt die Kontoprognose: Saldo kippt erst am Buchungstag", () => {
+    // Saldo 5 €, Abbuchung 10 € nominal Sa 28.02. → Mo 02.03.
+    const account = acc(1, "Giro", { balanceCents: 500 });
+    const s = sub({ anchorDate: "2026-02-28", shiftRule: "next" });
+    const [bucket] = computeCoverage([s], [account], 2, FROM);
+    expect(bucket?.firstBelowZeroDate).toBe("2026-03-02");
+  });
+});
+
 describe("hasLiveCashflow", () => {
   const today = "2026-10-09";
 

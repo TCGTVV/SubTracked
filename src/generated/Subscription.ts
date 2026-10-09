@@ -30,4 +30,9 @@ pendingAmountCents: number | null,
 /**
  * Wirksamkeitsdatum (ISO "YYYY-MM-DD") der geplanten Preisänderung.
  */
-pendingFrom: string | null, };
+pendingFrom: string | null, 
+/**
+ * Verschiebung bei Wochenende/Feiertag: "none" | "next" | "previous" (siehe
+ * bankdays.rs, Migration 0017). serde-default, damit Alt-Backups importierbar bleiben.
+ */
+shiftRule: string, };
