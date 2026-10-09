@@ -23,6 +23,13 @@ Verbindliche Regeln stehen in `AGENTS.md` ("Konventionen (verbindlich)"). Hier n
 - Bereits angewendete Migrationen niemals editieren — neue Schema-Aenderungen immer als neue Datei (sqlx prüft die Checksumme; das gilt auch für bekannte Mängel in 0007/0009/0010).
 - **Tabellen-Rebuild (Muster 0007/0009/0010) vermeiden**, wenn es geht: `-- no-transaction` + `DROP`/`RENAME` ist nicht crash-atomar (Power-Loss zwischen Drop und Rename), und `sqlite_sequence` wird nicht mitgeführt (nach dem Rebuild ID-Wiedervergabe für gelöschte Maximal-IDs möglich). Der Auto-Snapshot in `db_backup.rs` fängt den Crash-Fall ab, ersetzt aber keinen sauberen Ansatz. Müssen Constraints nachgerüstet werden, sind `CREATE TRIGGER … RAISE(ABORT, …)` (siehe 0015) der rebuild-freie Weg. Ist ein Rebuild unvermeidbar: `INSERT OR REPLACE INTO sqlite_sequence` für die neue Tabelle ergänzen und einen Migrationstest schreiben.
 
+## Datei-Zugriff (seit 2026-10-09)
+
+- Der Renderer übergibt **nie** einen freien Dateipfad an Rust. Datei-Commands (`export_backup`, `import_backup`, `export_subscriptions_csv`, `preview_csv_import`, `reconcile_csv`) nehmen ein `token`, das `pick_save_file`/`pick_open_file` (Rust öffnet den nativen Dialog) in `src-tauri/src/file_grants.rs` ausgestellt hat: einmal gültig, an Lesen/Schreiben gebunden.
+- Neuer Command mit Dateizugriff → Token über `FileGrants::take(&token, GrantKind::…)` einlösen, im Frontend `PickedFile` aus `src/lib/db.ts` durchreichen. Kein `@tauri-apps/plugin-dialog` im Renderer, `dialog:default` steht nicht mehr in `capabilities/default.json`.
+- Schema-Integrität: Migration `0015` setzt Trigger, die `validation.rs` spiegeln. Ändert sich eine Regel in `validation.rs`, braucht es eine neue Migration (`DROP TRIGGER` + `CREATE TRIGGER`), nicht nur eine Code-Änderung.
+- Dynamisches SQL in sqlx 0.9 (auch Tests): `sqlx::query(sqlx::AssertSqlSafe(String))`.
+
 ## Sprache
 
 Alle nutzer-sichtbaren UI-Texte sind **deutsch**. Code-Identifier/Kommentare folgen dieser Linie nicht zwingend (Mischung im Repo vorhanden).

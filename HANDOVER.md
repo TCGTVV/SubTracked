@@ -9,6 +9,55 @@
 
 ---
 
+## 2026-10-09 — Claude: BACKLOG-Triage, 2 Review-Bugs, DB-Integritäts-Trigger, Datei-Token statt Renderer-Pfade, Was-wäre-wenn-Simulation
+
+> Session-Auftrag: „was hat sich getan" → BACKLOG durchgehen, alle vorgeschlagenen Punkte in einem Rutsch umsetzen, überholte Themen bewerten, Plan vorher festlegen und einhalten. Ein Commit pro Schritt (REGEL 3), Reihenfolge wie geplant.
+>
+> **Nachtrag zur Lücke seit 2026-07-14:** Commit `bf20a15` (2026-07-27) hob `fast-xml-parser`, `postcss`, `brace-expansion` (3× High aus `pnpm audit`) per `pnpm-workspace.yaml`-Override auf gepatchte Versionen. Hatte keinen HANDOVER-Eintrag.
+
+### Was passierte (Commit-Reihenfolge)
+
+1. **BACKLOG-Triage** (`c8c04ce`): Dialog-Wrapper-`onClose` obsolet (Dialog.tsx gibt es nicht mehr); Review-Befund 4 (0007 crash-sicher) und 7 (`sqlite_sequence`) **nicht umsetzbar** — 0007 ist angewendet und darf wegen der sqlx-Checksumme nicht editiert werden, Crash-Risiko ist seit 2026-06-18 durch `db_backup.rs` mitigiert, ID-Wiedervergabe ist durch das transaktionale Aufräumen in `delete_subscription` harmlos. TS/Rust-Typen-Item war durch ts-rs schon erledigt. Reload-Pattern und Fallow (11,5k TS-LOC < 20k) bewusst zurückgestellt. Rebuild-Gotchas in `mem:conventions`.
+2. **PriceHistoryGraph** (`45d8fa6`): „Konstant" nur bei gleichem Betrag *und* gleicher Währung; sonst Anfang/Ende je in eigener Währung, kein NaN.
+3. **Review-Befund 8** (`de07c19`): `hasLiveCashflow()` in `coverage.ts`; die UI-Gates in `App.tsx` zählen vergangene Einmal-Buchungen nicht mehr als aktiven Cashflow. Coverage/Upcoming taten das schon.
+4. **DB-Integritäts-Trigger** (`44dfd65`, Migration `0015`): `BEFORE INSERT/UPDATE`-Trigger auf `subscriptions`/`incomes`/`accounts`, die `validation.rs` spiegeln. **Bewusst Trigger statt CHECK**, weil CHECK nachrüsten einen Tabellen-Rebuild (DROP/RENAME) bedeutet — genau das Risiko aus Befund 4/7. 4 Rust-Tests; `.sqlx`-Cache bleibt gültig (`cargo sqlx prepare --check` lokal geprüft).
+5. **Datei-Pfade nicht mehr vom Renderer** (`96623e5`): neues Modul `file_grants.rs`. `pick_save_file`/`pick_open_file` öffnen den nativen Dialog in Rust und geben ein einmal gültiges, an Lesen/Schreiben gebundenes Token zurück; `export_backup`, `import_backup`, `export_subscriptions_csv`, `preview_csv_import`, `reconcile_csv` lösen nur noch Tokens ein. `dialog:default` und `@tauri-apps/plugin-dialog` aus dem Renderer entfernt. Frontend: `pickSaveFile`/`pickOpenFile` in `db.ts`, `PickedFile {token, path}` (`path` nur zur Anzeige).
+6. **Was-wäre-wenn-Simulation** (`1304606`): `computeSimulation` ([simulation.ts](src/lib/simulation.ts)), `SimulationSection`, Flask-Toggle pro aktiver Abo-Card. Reiner UI-State in `App.tsx` (`simulatedOut`), nichts persistiert. Erscheint in Übersicht und Abo-Ansicht.
+
+### Verifikation
+
+- Frontend: `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm knip`, `pnpm test:run` → 350 Tests grün (vorher 331).
+- Rust: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo nextest run` → 126 Tests grün (vorher 118). Mit `--features ts-rs-export` ebenfalls grün (130 Tests), `src/generated/` unverändert.
+- Lefthook lief bei jedem Commit grün.
+- **Nicht verifiziert:** der echte native Datei-Dialog im laufenden Tauri-Fenster (kein GUI-Zugriff). Token-Logik ist per Rust-Test abgedeckt, die UI per gemocktem `db.ts`. **Bitte einmal manuell:** Backup exportieren, Backup importieren, Abos als CSV exportieren, Bankauszug importieren/abgleichen. Dasselbe gilt für die Simulation im echten Fenster (Optik).
+- E2E-CI weiterhin rot/pausiert (unverändert, kein Pflicht-Check).
+
+### Wichtige Entscheidungen + Begründung
+
+- **Trigger statt CHECK (Migration 0015):** siehe Punkt 4. Nebenwirkung: ein Bestands-Datensatz, der die Regeln verletzt, ließe sich nicht mehr per UPDATE ändern (INSERTs sowieso nicht). Die App-Validierung hat solche Daten bisher nie zugelassen. Currency-Whitelist bewusst nicht im Schema.
+- **Token statt Pfad (nicht „Pfad validieren"):** Ein Pfad-Allowlisting hätte den legitimen Fall „Nutzer wählt beliebigen Ort" eingeschränkt. Mit Token kann ein XSS nur Pfade ansteuern, die der Nutzer gerade selbst im nativen Dialog gewählt hat.
+- **Simulation als eigene Sektion, nicht in der StatusCard:** StatusCard bleibt unverändert (anderer Zweck, eigene Tests); die Sektion zeigt dafür Kosten *und* Konten.
+
+### Gotchas / Stolperfallen
+
+- `sqlx` 0.9: `sqlx::query()` nimmt nur `'static`-Literale; dynamisches SQL (auch in Tests) braucht `sqlx::AssertSqlSafe(String)`. Tests mit `sqlx::query` statt `query!` lassen den `.sqlx`-Cache unberührt.
+- `axe-core` hängt unter `vi.useFakeTimers()` (Timeout 5 s) — im axe-Test `vi.useRealTimers()` aufrufen.
+- Auf dieser Maschine (macOS) fehlten `cargo-nextest`, `cargo-deny`, `cargo-machete`; `cargo-nextest` ist jetzt installiert, die anderen beiden nicht (CI deckt sie ab).
+- `tauri-build` validiert `capabilities/*.json` gegen die kompilierten Plugins: `dialog:default` konnte sauber entfallen, weil das Rust-Plugin weiter registriert ist und serverseitig keine Permission braucht.
+- `CLAUDE.md` enthält noch Linux-Pfade (`/home/legr/...`) für die Auto-Memory — du arbeitest jetzt auf macOS (`/Users/leopoldgrund/.claude/projects/...`). Nicht angefasst.
+
+### Geänderte/neue Memories
+
+- `conventions`: Tabellen-Rebuild-Gotchas (Trigger statt CHECK, `sqlite_sequence`), Abschnitt zu Datei-Zugriff per Token.
+- `core`: Source-Map um `file_grants.rs` und `simulation.ts` ergänzt.
+
+### Offen / nicht geklärt
+
+- Manueller Test des nativen Datei-Dialogs und der Simulations-Optik (siehe Verifikation).
+- E2E-CI (siehe Eintrag 2026-07-14), CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ In-App-Branding, `DialogDescription`-Aufräumer, optional passwortverschlüsseltes Backup.
+
+---
+
 ## 2026-07-14 — Claude: Serena-Pin, Compile-time-SQL + Rust→TS-Typgenerierung, Code-Review-Fixes; Fortsetzung: cargo-deny/knip/nextest/machete, Memory-Split, E2E-Test, Commit-Disziplin
 
 > Session-Auftrag: keine BACKLOG-Nummer — der User bat um allgemeine Architektur-/Effizienz-Vorschläge für die Zusammenarbeit mit Agents. Drei Vorschlagsblöcke entstanden im Gespräch: (1) Agent-Effizienz, (2) Architektur-Ergänzungen, (3) GitHub-Tooling. (1) und (2) wurden in dieser Session umgesetzt; (3) ist offen, siehe unten.
