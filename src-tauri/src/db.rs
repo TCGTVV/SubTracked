@@ -98,6 +98,15 @@ pub struct Subscription {
     /// Wirksamkeitsdatum (ISO "YYYY-MM-DD") der geplanten Preisänderung.
     #[serde(default)]
     pub pending_from: Option<String>,
+    /// Verschiebung bei Wochenende/Feiertag: "none" | "next" | "previous" (siehe
+    /// bankdays.rs, Migration 0017). serde-default, damit Alt-Backups importierbar bleiben.
+    #[serde(default = "default_shift_rule")]
+    pub shift_rule: String,
+}
+
+/// Standard der Verschiebungsregel: keine Verschiebung (bisheriges Verhalten).
+fn default_shift_rule() -> String {
+    "none".to_string()
 }
 
 /// Alle Subscription-Spalten, `ORDER BY name`. Geteilt von `commands::list_subscriptions`
@@ -118,7 +127,7 @@ pub(crate) async fn fetch_subscriptions(
                lead_days, active as "active: bool", notify as "notify: bool",
                cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
                category, one_time as "one_time: bool", archived_at,
-               pending_amount_cents, pending_from
+               pending_amount_cents, pending_from, shift_rule
                FROM subscriptions WHERE active = 1 ORDER BY name"#
         )
         .fetch_all(pool)
@@ -131,7 +140,7 @@ pub(crate) async fn fetch_subscriptions(
                lead_days, active as "active: bool", notify as "notify: bool",
                cancel_mode, cancel_period_value, cancel_period_unit, cancel_date,
                category, one_time as "one_time: bool", archived_at,
-               pending_amount_cents, pending_from
+               pending_amount_cents, pending_from, shift_rule
                FROM subscriptions ORDER BY name"#
         )
         .fetch_all(pool)
@@ -183,6 +192,9 @@ pub struct Income {
     pub active: bool,
     #[serde(default)]
     pub one_time: bool,
+    /// Verschiebung bei Wochenende/Feiertag (siehe `Subscription::shift_rule`).
+    #[serde(default = "default_shift_rule")]
+    pub shift_rule: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -196,6 +208,8 @@ pub struct NewIncome {
     pub anchor_date: String,
     pub active: Option<bool>,
     pub one_time: Option<bool>,
+    #[serde(default)]
+    pub shift_rule: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -223,6 +237,9 @@ pub struct NewSubscription {
     pub pending_amount_cents: Option<i64>,
     #[serde(default)]
     pub pending_from: Option<String>,
+    /// Verschiebungsregel (s. Subscription); None = "none".
+    #[serde(default)]
+    pub shift_rule: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]

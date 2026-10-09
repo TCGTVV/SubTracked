@@ -70,12 +70,14 @@ pub async fn add_subscription(
     let active = sub.active.unwrap_or(true);
     let notify = sub.notify.unwrap_or(true);
     let one_time = sub.one_time.unwrap_or(false);
+    let shift_rule = sub.shift_rule.as_deref().unwrap_or("none");
+    crate::validation::validate_shift_rule(shift_rule)?;
     let res = sqlx::query!(
         "INSERT INTO subscriptions \
            (name, amount_cents, currency, account_id, interval, anchor_date, lead_days, active, notify, \
             cancel_mode, cancel_period_value, cancel_period_unit, cancel_date, category, one_time, \
-            pending_amount_cents, pending_from) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            pending_amount_cents, pending_from, shift_rule) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         sub.name,
         sub.amount_cents,
         sub.currency,
@@ -93,6 +95,7 @@ pub async fn add_subscription(
         one_time,
         sub.pending_amount_cents,
         sub.pending_from,
+        shift_rule,
     )
     .execute(&state.db)
     .await
@@ -295,6 +298,7 @@ pub(crate) async fn update_subscription_in_db(
         sub.cancel_period_unit.as_deref(),
         sub.cancel_date.as_deref(),
     )?;
+    crate::validation::validate_shift_rule(&sub.shift_rule)?;
     let current = sqlx::query!(
         "SELECT account_id, amount_cents, currency FROM subscriptions WHERE id = ?",
         sub.id
@@ -318,7 +322,8 @@ pub(crate) async fn update_subscription_in_db(
              SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
                  cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
-                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ? \
+                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ?, \
+                 shift_rule = ? \
              WHERE id = ?",
             sub.name,
             sub.amount_cents,
@@ -337,6 +342,7 @@ pub(crate) async fn update_subscription_in_db(
             sub.one_time,
             sub.pending_amount_cents,
             sub.pending_from,
+            sub.shift_rule,
             sub.id,
         )
         .execute(db)
@@ -348,7 +354,8 @@ pub(crate) async fn update_subscription_in_db(
              SET name = ?, amount_cents = ?, currency = ?, \
                  interval = ?, anchor_date = ?, lead_days = ?, active = ?, notify = ?, \
                  cancel_mode = ?, cancel_period_value = ?, cancel_period_unit = ?, cancel_date = ?, \
-                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ? \
+                 category = ?, one_time = ?, pending_amount_cents = ?, pending_from = ?, \
+                 shift_rule = ? \
              WHERE id = ?",
             sub.name,
             sub.amount_cents,
@@ -366,6 +373,7 @@ pub(crate) async fn update_subscription_in_db(
             sub.one_time,
             sub.pending_amount_cents,
             sub.pending_from,
+            sub.shift_rule,
             sub.id,
         )
         .execute(db)
@@ -513,7 +521,7 @@ pub async fn list_incomes(
         sqlx::query_as!(
             Income,
             r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-               active as "active: bool", one_time as "one_time: bool"
+               active as "active: bool", one_time as "one_time: bool", shift_rule
                FROM incomes WHERE active = 1 ORDER BY name"#
         )
         .fetch_all(&state.db)
@@ -523,7 +531,7 @@ pub async fn list_incomes(
         sqlx::query_as!(
             Income,
             r#"SELECT id, name, amount_cents, currency, account_id, interval, anchor_date,
-               active as "active: bool", one_time as "one_time: bool"
+               active as "active: bool", one_time as "one_time: bool", shift_rule
                FROM incomes ORDER BY name"#
         )
         .fetch_all(&state.db)
@@ -548,9 +556,11 @@ pub async fn add_income(state: State<'_, AppState>, income: NewIncome) -> Result
     }
     let active = income.active.unwrap_or(true);
     let one_time = income.one_time.unwrap_or(false);
+    let shift_rule = income.shift_rule.as_deref().unwrap_or("none");
+    crate::validation::validate_shift_rule(shift_rule)?;
     let result = sqlx::query!(
-        "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active, one_time) \
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO incomes (name, amount_cents, currency, account_id, interval, anchor_date, active, one_time, shift_rule) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         income.name,
         income.amount_cents,
         income.currency,
@@ -559,6 +569,7 @@ pub async fn add_income(state: State<'_, AppState>, income: NewIncome) -> Result
         income.anchor_date,
         active,
         one_time,
+        shift_rule,
     )
     .execute(&state.db)
     .await
@@ -577,6 +588,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
     validate_currency(&income.currency)?;
     validate_interval(&income.interval)?;
     validate_anchor_date(&income.anchor_date)?;
+    crate::validation::validate_shift_rule(&income.shift_rule)?;
     let current = sqlx::query!("SELECT account_id FROM incomes WHERE id = ?", income.id)
         .fetch_optional(&state.db)
         .await
@@ -588,7 +600,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
         }
         sqlx::query!(
             "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, account_id = ?, \
-             interval = ?, anchor_date = ?, active = ?, one_time = ? WHERE id = ?",
+             interval = ?, anchor_date = ?, active = ?, one_time = ?, shift_rule = ? WHERE id = ?",
             income.name,
             income.amount_cents,
             income.currency,
@@ -597,6 +609,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
             income.anchor_date,
             income.active,
             income.one_time,
+            income.shift_rule,
             income.id,
         )
         .execute(&state.db)
@@ -605,7 +618,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
     } else {
         sqlx::query!(
             "UPDATE incomes SET name = ?, amount_cents = ?, currency = ?, \
-             interval = ?, anchor_date = ?, active = ?, one_time = ? WHERE id = ?",
+             interval = ?, anchor_date = ?, active = ?, one_time = ?, shift_rule = ? WHERE id = ?",
             income.name,
             income.amount_cents,
             income.currency,
@@ -613,6 +626,7 @@ pub async fn update_income(state: State<'_, AppState>, income: Income) -> Result
             income.anchor_date,
             income.active,
             income.one_time,
+            income.shift_rule,
             income.id,
         )
         .execute(&state.db)
@@ -782,6 +796,7 @@ mod tests {
             archived_at: None,
             pending_amount_cents: None,
             pending_from: None,
+            shift_rule: "none".to_string(),
         }
     }
 
@@ -1109,6 +1124,42 @@ mod tests {
             .expect("Abo löschbar, sobald die Skips weg sind");
         tx.commit().await.unwrap();
         assert!(skip_dates(&db, sub.id).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_rejects_unknown_shift_rule_and_stores_valid_ones() {
+        let db = test_pool().await;
+        let mut sub = insert_sub(&db, None).await;
+        sub.shift_rule = "sideways".into();
+        let err = update_subscription_in_db(&db, &sub)
+            .await
+            .expect_err("unbekannte Regel");
+        assert!(err.contains("Verschiebungsregel"), "{err}");
+
+        sub.shift_rule = "next".into();
+        update_subscription_in_db(&db, &sub)
+            .await
+            .expect("gültige Regel");
+        let stored: String =
+            sqlx::query_scalar("SELECT shift_rule FROM subscriptions WHERE id = ?")
+                .bind(sub.id)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(stored, "next");
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_unknown_shift_rule() {
+        let db = test_pool().await;
+        let err = exec(
+            &db,
+            "INSERT INTO incomes (name, amount_cents, currency, interval, anchor_date, shift_rule) \
+             VALUES ('Gehalt', 100, 'EUR', 'monthly', '2026-01-01', 'sideways')",
+        )
+        .await
+        .expect_err("CHECK greift");
+        assert!(err.to_lowercase().contains("check"), "{err}");
     }
 
     // --- Schema-Trigger (Migration 0015): zweite Verteidigungslinie neben validation.rs ---

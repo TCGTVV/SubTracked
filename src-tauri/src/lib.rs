@@ -1,4 +1,5 @@
 mod backup;
+mod bankdays;
 mod commands;
 mod csv_export;
 mod csv_import;

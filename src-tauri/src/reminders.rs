@@ -5,6 +5,7 @@ use sqlx::SqlitePool;
 use tauri::AppHandle;
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
+use crate::bankdays::shift_to_bank_day;
 use crate::db::Subscription;
 use crate::recurrence::{cancel_deadline, next_due_date, parse_iso_date_strict};
 use crate::validation::validate_lead_days;
@@ -62,7 +63,12 @@ struct DueReminder {
     subscription_name: String,
     amount_cents: i64,
     currency: String,
+    /// Nominaler Termin (anchor + k·step) — Schlüssel der Idempotenz in `reminders`.
     due_date: NaiveDate,
+    /// Tatsächlicher Buchungstag nach Wochenend-/Feiertags-Verschiebung (siehe
+    /// `bankdays.rs`); ohne Verschiebungsregel identisch zu `due_date`. Maßgeblich für
+    /// Vorlauf und Anzeige.
+    booking_date: NaiveDate,
     kind: ReminderKind,
 }
 
@@ -70,21 +76,31 @@ struct DueReminder {
 /// der Reminder-Check aufgibt (Schutz vor Endlosschleife bei absurd vielen Skips).
 const MAX_CONSECUTIVE_SKIPS: usize = 60;
 
-/// Nächster nicht übersprungener Termin ab `from` (inklusive). `None`, wenn mehr als
+/// Nächster nicht übersprungener Termin, dessen **Buchungstag** (nach Verschiebung) heute
+/// oder später liegt. Liefert `(nominaler Termin, Buchungstag)`; `None`, wenn mehr als
 /// [`MAX_CONSECUTIVE_SKIPS`] Termine in Folge übersprungen sind.
+///
+/// Die Suche startet eine Woche vor `today`: Eine Verschiebung kann einen nominal
+/// vergangenen Termin (z.B. Samstag) auf einen Buchungstag in der Zukunft (Montag) legen,
+/// und umgekehrt einen nominal künftigen auf einen bereits vergangenen. Ohne Verschiebung
+/// reduziert sich das auf „nächster Termin ab heute".
 fn next_unskipped_due(
     sub_id: i64,
     anchor: NaiveDate,
     interval: &str,
-    from: NaiveDate,
+    shift_rule: &str,
+    today: NaiveDate,
     skips: &HashSet<(i64, NaiveDate)>,
-) -> Result<Option<NaiveDate>, String> {
-    let mut due = next_due_date(anchor, interval, from)?;
-    for _ in 0..=MAX_CONSECUTIVE_SKIPS {
-        if !skips.contains(&(sub_id, due)) {
-            return Ok(Some(due));
+) -> Result<Option<(NaiveDate, NaiveDate)>, String> {
+    let mut from = today - Duration::days(7);
+    // Die Obergrenze deckt übersprungene Termine plus wenige Randtermine vor `today` ab.
+    for _ in 0..=(MAX_CONSECUTIVE_SKIPS + 8) {
+        let due = next_due_date(anchor, interval, from)?;
+        from = due + Duration::days(1);
+        let booking = shift_to_bank_day(due, shift_rule);
+        if booking >= today && !skips.contains(&(sub_id, due)) {
+            return Ok(Some((due, booking)));
         }
-        due = next_due_date(anchor, interval, due + Duration::days(1))?;
     }
     Ok(None)
 }
@@ -131,20 +147,24 @@ fn compute_due_reminders_with_skips(
                     error = %e,
                     "Zahlungs-Erinnerung (einmalig) wegen ungueltigem Vorlauf uebersprungen"
                 );
-            } else if anchor >= today {
-                let remind_from = anchor - Duration::days(sub.lead_days);
-                if today >= remind_from {
-                    let amount_cents = effective_amount_cents(sub, anchor);
-                    // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
-                    if amount_cents > 0 {
-                        out.push(DueReminder {
-                            subscription_id: sub.id,
-                            subscription_name: sub.name.clone(),
-                            amount_cents,
-                            currency: sub.currency.clone(),
-                            due_date: anchor,
-                            kind: ReminderKind::Payment,
-                        });
+            } else {
+                let booking = shift_to_bank_day(anchor, &sub.shift_rule);
+                if booking >= today {
+                    let remind_from = booking - Duration::days(sub.lead_days);
+                    if today >= remind_from {
+                        let amount_cents = effective_amount_cents(sub, booking);
+                        // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
+                        if amount_cents > 0 {
+                            out.push(DueReminder {
+                                subscription_id: sub.id,
+                                subscription_name: sub.name.clone(),
+                                amount_cents,
+                                currency: sub.currency.clone(),
+                                due_date: anchor,
+                                booking_date: booking,
+                                kind: ReminderKind::Payment,
+                            });
+                        }
                     }
                 }
             }
@@ -160,13 +180,13 @@ fn compute_due_reminders_with_skips(
                 "Zahlungs-Erinnerung wegen ungueltigem Vorlauf uebersprungen"
             );
         } else {
-            match next_unskipped_due(sub.id, anchor, &sub.interval, today, skips) {
+            match next_unskipped_due(sub.id, anchor, &sub.interval, &sub.shift_rule, today, skips) {
                 // Alle in Frage kommenden Termine übersprungen → keine Zahlungs-Erinnerung.
                 Ok(None) => {}
-                Ok(Some(due)) => {
-                    let remind_from = due - Duration::days(sub.lead_days);
+                Ok(Some((due, booking))) => {
+                    let remind_from = booking - Duration::days(sub.lead_days);
                     if today >= remind_from {
-                        let amount_cents = effective_amount_cents(sub, due);
+                        let amount_cents = effective_amount_cents(sub, booking);
                         // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
                         if amount_cents > 0 {
                             out.push(DueReminder {
@@ -175,6 +195,7 @@ fn compute_due_reminders_with_skips(
                                 amount_cents,
                                 currency: sub.currency.clone(),
                                 due_date: due,
+                                booking_date: booking,
                                 kind: ReminderKind::Payment,
                             });
                         }
@@ -217,6 +238,7 @@ fn compute_due_reminders_with_skips(
                         amount_cents,
                         currency: sub.currency.clone(),
                         due_date: deadline,
+                        booking_date: deadline,
                         kind: ReminderKind::Cancel,
                     });
                 }
@@ -343,7 +365,7 @@ async fn dispatch_due_reminders(
                 format!("{} fällig", d.subscription_name),
                 format!(
                     "{}: {}. Konto rechtzeitig decken.",
-                    d.due_date.format("%d.%m.%Y"),
+                    d.booking_date.format("%d.%m.%Y"),
                     format_amount_for_notification(d.amount_cents, &d.currency),
                 ),
             ),
@@ -530,6 +552,7 @@ mod tests {
             archived_at: None,
             pending_amount_cents: None,
             pending_from: None,
+            shift_rule: "none".to_string(),
         }
     }
 
@@ -601,6 +624,97 @@ mod tests {
             .collect();
         let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
         assert!(due.is_empty());
+    }
+
+    // --- Verschiebung auf Bankarbeitstage ---
+
+    fn shifted_sub(id: i64, anchor: &str, lead_days: i64, rule: &str) -> Subscription {
+        let mut s = sub(id, anchor, lead_days, true);
+        s.shift_rule = rule.to_string();
+        s
+    }
+
+    #[test]
+    fn next_rule_moves_booking_to_following_bank_day_but_keeps_nominal_key() {
+        // Nominal Samstag 2026-02-28; „next" → Montag 2026-03-02. Vorlauf 3 Tage → ab 27.02.
+        let subs = vec![shifted_sub(1, "2026-01-28", 3, "next")];
+        let due = compute_due_reminders(&subs, d(2026, 2, 27)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(
+            due[0].due_date,
+            d(2026, 2, 28),
+            "Schlüssel bleibt der nominale Termin"
+        );
+        assert_eq!(due[0].booking_date, d(2026, 3, 2));
+    }
+
+    #[test]
+    fn lead_window_counts_from_booking_date_not_nominal_date() {
+        // Ohne Verschiebung läge der Vorlauf (3 Tage vor Sa 28.02.) bei 25.02.; mit „next"
+        // beginnt er erst 3 Tage vor Mo 02.03., also am 27.02.
+        let none = vec![shifted_sub(1, "2026-01-28", 3, "none")];
+        let next = vec![shifted_sub(1, "2026-01-28", 3, "next")];
+        assert_eq!(
+            compute_due_reminders(&none, d(2026, 2, 25)).unwrap().len(),
+            1
+        );
+        assert!(compute_due_reminders(&next, d(2026, 2, 25))
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            compute_due_reminders(&next, d(2026, 2, 27)).unwrap().len(),
+            1
+        );
+    }
+
+    #[test]
+    fn nominal_date_in_the_past_still_reminds_when_booking_is_today_or_later() {
+        // Sonntag 01.03. nominal, „next" → Montag 02.03. Heute ist der Sonntag selbst:
+        // der nominale Termin ist heute, der Buchungstag morgen — Erinnerung bleibt gültig.
+        let subs = vec![shifted_sub(1, "2026-01-01", 5, "next")]; // monatlich am 1.
+        let due = compute_due_reminders(&subs, d(2026, 3, 1)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].booking_date, d(2026, 3, 2));
+        // Am Montag selbst (Buchungstag) gibt es sie ebenfalls noch.
+        let due = compute_due_reminders(&subs, d(2026, 3, 2)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].due_date, d(2026, 3, 1));
+    }
+
+    #[test]
+    fn previous_rule_ends_the_reminder_once_the_earlier_booking_day_has_passed() {
+        // Nominal So 15.03.2026, „previous" → Fr 13.03. Am Sa 14.03. ist der Termin bereits
+        // gebucht; der Reminder rückt auf den April-Termin (Mi 15.04., noch außerhalb).
+        let subs = vec![shifted_sub(1, "2026-01-15", 3, "previous")];
+        assert_eq!(
+            compute_due_reminders(&subs, d(2026, 3, 12)).unwrap().len(),
+            1
+        );
+        assert!(compute_due_reminders(&subs, d(2026, 3, 14))
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn none_rule_behaves_exactly_like_before() {
+        let subs = vec![shifted_sub(1, "2025-01-15", 7, "none")];
+        let due = compute_due_reminders(&subs, d(2025, 2, 10)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].due_date, d(2025, 2, 15));
+        assert_eq!(due[0].booking_date, d(2025, 2, 15));
+    }
+
+    #[test]
+    fn one_time_expense_uses_shifted_booking_date() {
+        // Einmalig Samstag 2026-02-28, „next" → Montag. Vorlauf 1 Tag.
+        let mut s = shifted_sub(1, "2026-02-28", 1, "next");
+        s.one_time = true;
+        assert!(compute_due_reminders(&[s.clone()], d(2026, 2, 27))
+            .unwrap()
+            .is_empty());
+        let due = compute_due_reminders(&[s], d(2026, 3, 1)).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].booking_date, d(2026, 3, 2));
     }
 
     #[test]
@@ -1014,6 +1128,7 @@ mod tests {
             amount_cents: 1799,
             currency: "EUR".into(),
             due_date: d(2025, 2, 15),
+            booking_date: d(2025, 2, 15),
             kind: ReminderKind::Payment,
         }
     }

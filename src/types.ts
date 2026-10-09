@@ -29,15 +29,25 @@ export type CancelUnit = "days" | "weeks" | "months";
 
 export type Account = GeneratedAccount;
 
-export type Income = Omit<GeneratedIncome, "interval"> & {
+/**
+ * Verschiebung des Buchungstags bei Wochenende/Feiertag: `none` = Termin bleibt,
+ * `next` = nächster, `previous` = voriger Bankarbeitstag (siehe `lib/bankdays.ts`).
+ */
+export type ShiftRule = "none" | "next" | "previous";
+
+// `shiftRule` ist in Rust immer gesetzt, im Frontend aber optional typisiert (fehlt = "none"),
+// damit Fixtures/Aufrufer, die die Verschiebung nicht kennen, unverändert bleiben.
+export type Income = Omit<GeneratedIncome, "interval" | "shiftRule"> & {
   interval: Interval;
+  shiftRule?: ShiftRule;
 };
 
 export type Subscription = Omit<
   GeneratedSubscription,
-  "interval" | "cancelMode" | "cancelPeriodUnit"
+  "interval" | "cancelMode" | "cancelPeriodUnit" | "shiftRule"
 > & {
   interval: Interval;
+  shiftRule?: ShiftRule;
   /** Kündigungsmodus; null = keine Kündigung getrackt. */
   cancelMode: CancelMode | null;
   /** Einheit bei cancelMode === "period", sonst null. */

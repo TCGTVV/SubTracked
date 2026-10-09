@@ -43,6 +43,17 @@ pub fn validate_interval(interval: &str) -> Result<(), String> {
     interval_step(interval).map(|_| ())
 }
 
+/// Verschiebungsregel bei Wochenende/Feiertag: `none`, `next` oder `previous`.
+pub fn validate_shift_rule(rule: &str) -> Result<(), String> {
+    if !crate::bankdays::SHIFT_RULES.contains(&rule) {
+        return Err(format!(
+            "Unbekannte Verschiebungsregel: {rule}. Erlaubt: {}.",
+            crate::bankdays::SHIFT_RULES.join(", ")
+        ));
+    }
+    Ok(())
+}
+
 pub fn validate_anchor_date(date: &str) -> Result<(), String> {
     parse_iso_date_strict(date).map(|_| ())
 }

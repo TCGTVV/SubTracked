@@ -119,6 +119,7 @@ mod tests {
             archived_at: None,
             pending_amount_cents: None,
             pending_from: None,
+            shift_rule: "none".to_string(),
         }
     }
 

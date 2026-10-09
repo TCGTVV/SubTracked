@@ -177,9 +177,25 @@ describe("SubscriptionDialog", () => {
         interval: "monthly",
         leadDays: 60,
         notify: true,
+        shiftRule: "none",
       }),
     );
     expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("zeigt die gespeicherte Verschiebungsregel an und schickt sie beim Speichern mit", async () => {
+    mockUpdateSubscription.mockResolvedValue(undefined);
+    renderDialog({ ...existingSub, shiftRule: "next" });
+
+    expect(screen.getByLabelText("Wochenende / Feiertag")).toHaveTextContent(
+      "Nächster Bankarbeitstag",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() => expect(mockUpdateSubscription).toHaveBeenCalledTimes(1));
+    expect(mockUpdateSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({ id: existingSub.id, shiftRule: "next" }),
+    );
   });
 
   it("ruft updateSubscription mit ID + active im Edit-Modus", async () => {

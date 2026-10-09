@@ -11,8 +11,9 @@ import {
   todayISO,
 } from "../lib/format";
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
-import type { Account, Income, Interval } from "../types";
+import type { Account, Income, Interval, ShiftRule } from "../types";
 import { DateField } from "./DateField";
+import { ShiftRuleField } from "./ShiftRuleField";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -66,6 +67,7 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
     income?.oneTime ? "monthly" : (income?.interval ?? "monthly"),
   );
   const [anchorDate, setAnchorDate] = useState(income?.anchorDate ?? todayISO());
+  const [shiftRule, setShiftRule] = useState<ShiftRule>(income?.shiftRule ?? "none");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -112,6 +114,7 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
           oneTime,
           interval,
           anchorDate,
+          shiftRule,
         });
       } else {
         await addIncome({
@@ -123,6 +126,7 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
           interval,
           anchorDate,
           active: true,
+          shiftRule,
         });
       }
       onSaved();
@@ -283,6 +287,13 @@ export function IncomeDialog({ open, income, accounts, onClose, onSaved }: Props
                 </p>
               )}
             </div>
+
+            <ShiftRuleField
+              id={`${anchorId}-shift`}
+              value={shiftRule}
+              onChange={setShiftRule}
+              kind="income"
+            />
 
             {error && (
               <Alert variant="destructive">
