@@ -92,10 +92,27 @@ jobs:
         # Tag ist z.B. "v0.2.0"; die Installer-Dateinamen nutzen "0.2.0" (ohne v).
         run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # `createUpdaterArtifacts` in tauri.conf.json verlangt den privaten Updater-Schlüssel; ohne ihn
+      # bricht der Bundle-Schritt erst nach Minuten mit einer schwer lesbaren Meldung ab. Hier
+      # scheitern wir früh und verständlich. Schlüssel erzeugen: `pnpm tauri signer generate`
+      # (siehe RELEASE.md → Updater).
+      - name: Check updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY fehlt. Ohne den privaten Updater-Schlüssel lassen sich keine Update-Artefakte signieren. Siehe RELEASE.md (Abschnitt Updater)."
+            exit 1
+          fi
+
       - name: Build & publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signiert die Update-Artefakte (.sig); der öffentliche Gegenpart steht in tauri.conf.json.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           # Den bereits gepushten Tag verwenden, keinen neuen erzeugen.
           tagName: ${{ github.ref_name }}
@@ -134,6 +151,9 @@ jobs:
           # Entwurf: erst prüfen, dann manuell veröffentlichen.
           releaseDraft: true
           prerelease: false
+          # latest.json für den In-App-Updater mitliefern (wird erst mit dem Veröffentlichen des
+          # Drafts über /releases/latest/download/latest.json erreichbar).
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
 
   checksums:

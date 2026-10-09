@@ -11,6 +11,31 @@ Solo-Projekt, lokal-first. Es gibt keinen Auto-Promotion-Pfad — jedes Release 
 5. **Smoke-Checkliste durchgehen** (siehe unten) — auf jedem OS, das released wird.
 6. **Draft veröffentlichen**, erst wenn alle Plattformen abgenommen sind. Vorher nicht.
 
+## Updater (seit v0.6.0)
+
+Die App kann sich selbst aktualisieren (Einstellungen → Updates → „Nach Updates suchen"). Es wird nur auf Klick geprüft und installiert; nichts läuft im Hintergrund.
+
+**Wie es funktioniert:** `tauri.conf.json` verweist auf `https://github.com/TCGTVV/SubTracked/releases/latest/download/latest.json`. Diese Datei hängt `tauri-action` an jeden Release (zusammen mit den signierten Update-Paketen und `.sig`-Dateien). Sie ist erst erreichbar, wenn der **Draft veröffentlicht** wird — ein Draft ist für die Update-Prüfung unsichtbar. Die App prüft die Signatur gegen den öffentlichen Schlüssel in `tauri.conf.json` (`plugins.updater.pubkey`); ein Update ohne passende Signatur wird abgelehnt.
+
+**Einmalige Einrichtung (vor dem ersten Release mit Updater):**
+
+1. Der private Schlüssel liegt lokal unter `~/.tauri/subtracked-updater.key` (erzeugt mit `pnpm tauri signer generate`). **Sichere ihn in einem Passwortmanager.** Geht er verloren, kann keine installierte Version mehr ein Update annehmen — dann hilft nur ein neues Schlüsselpaar und eine manuelle Neuinstallation für alle Nutzer.
+2. GitHub → Repo → Settings → Secrets and variables → Actions → New repository secret:
+   - `TAURI_SIGNING_PRIVATE_KEY` = kompletter Inhalt der Datei `subtracked-updater.key`
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` = Passwort des Schlüssels (der aktuelle Schlüssel hat **keins**: das Secret leer anlegen oder weglassen)
+3. Fehlt das erste Secret, bricht der Release-Job sofort mit einer klaren Meldung ab (Schritt „Check updater signing key").
+
+**Lokal bündeln** braucht ab jetzt dieselben Variablen, sonst scheitert `pnpm tauri build` beim Signieren:
+`TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/subtracked-updater.key)" TAURI_SIGNING_PRIVATE_KEY_PASSWORD="" pnpm tauri build`
+
+**Verifiziert (2026-10-09, lokal macOS):** `pnpm tauri build --bundles app` mit gesetztem Schlüssel erzeugt `SubTracked.app.tar.gz` und die zugehörige `.sig`. **Gotcha auf dieser Maschine (macOS 27, Xcode-`strip`):** Der Release-Build brach zunächst beim Laden des Proc-Macro-Dylibs `libsqlx_macros` mit „mis-aligned LINKEDIT string pool" ab — das automatische `strip` nach dem Linken beschädigt es. Abhilfe nur für den lokalen Build: `CARGO_PROFILE_RELEASE_STRIP=none CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_STRIP=none` vor den `pnpm tauri build`-Befehl setzen. Ob die GitHub-Runner betroffen sind, ist ungeprüft (sie nutzen eine ältere Toolchain; die bisherigen Release-Läufe waren grün).
+
+**Grenzen:**
+- Wer noch eine Version **ohne** Updater (≤ 0.5.x) hat, muss einmal manuell auf 0.6.0 wechseln; erst danach funktionieren Updates in der App.
+- Linux: Selbst-Update nur mit der **AppImage**-Version; `.deb`/`.rpm` aktualisiert man über die Paketverwaltung bzw. durch Neuinstallation.
+- macOS/Windows-Updates sind weiterhin **unsigniert im Sinne von Code-Signing** (Gatekeeper/SmartScreen); die Update-Signatur ist davon unabhängig und schützt vor manipulierten Update-Paketen, nicht vor fehlender Entwickler-Identität.
+- **Nicht getestet:** ein echtes Update von einer installierten Vorversion auf eine neue. Das geht erst, sobald zwei Releases mit Updater existieren: v0.6.0 installieren, v0.6.1 veröffentlichen, in der App aktualisieren.
+
 ## Release-Page für normale Nutzer
 
 Der GitHub-Release muss ohne Projektwissen verständlich sein: was laden, was beim ersten Start erwartet wird, und dass die App lokal-first arbeitet.

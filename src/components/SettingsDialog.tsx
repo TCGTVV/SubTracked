@@ -16,6 +16,7 @@ import {
   sendTestNotification,
 } from "../lib/db";
 import { toUserMessage } from "../lib/errors";
+import { UpdateSection } from "./UpdateSection";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -322,6 +323,8 @@ export function SettingsDialog({
               </Button>
             </div>
           </section>
+
+          <UpdateSection />
 
           <section className="flex flex-col gap-2">
             <h3 className="font-semibold">App / Support</h3>
