@@ -30,10 +30,11 @@ import { useColorScheme } from "./hooks/useColorScheme";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { cancelDeadlineDisplay } from "./lib/cancellation";
+import { hasLiveCashflow } from "./lib/coverage";
 import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
 import { hasDemoData, loadDemoData, removeDemoData } from "./lib/demo";
 import { toUserMessage } from "./lib/errors";
-import { formatAmount, formatNextDue } from "./lib/format";
+import { formatAmount, formatNextDue, toISODateLocal } from "./lib/format";
 import {
   applyFilterAndSort,
   DEFAULT_SUB_LIST_OPTIONS,
@@ -195,7 +196,11 @@ function App() {
 
   const activeSubs = useMemo(() => subs.filter((s) => s.active), [subs]);
   const activeIncomes = useMemo(() => incomes.filter((i) => i.active), [incomes]);
-  const hasActiveCashflow = activeSubs.length > 0 || activeIncomes.length > 0;
+  // Vergangene Einmal-Buchungen bleiben `active`, erzeugen aber keinen Cashflow mehr.
+  const hasActiveCashflow = useMemo(() => {
+    const today = toISODateLocal(new Date());
+    return hasLiveCashflow(activeSubs, today) || hasLiveCashflow(activeIncomes, today);
+  }, [activeSubs, activeIncomes]);
   const archivedCount = subs.length - activeSubs.length;
   const preFilteredSubs = showArchived ? subs : activeSubs;
   const visibleSubs = useMemo(
