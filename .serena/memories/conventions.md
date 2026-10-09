@@ -20,7 +20,8 @@ Verbindliche Regeln stehen in `AGENTS.md` ("Konventionen (verbindlich)"). Hier n
 
 - Neue Datei in `src-tauri/migrations/`, Namensschema `NNNN_zweck.sql` (vierstellig hochgezählt).
 - Migrationen laufen via `sqlx::migrate!("./migrations")`; es gibt keine manuelle Migrations-Vec mehr in `lib.rs`.
-- Bereits angewendete Migrationen niemals editieren — neue Schema-Aenderungen immer als neue Datei.
+- Bereits angewendete Migrationen niemals editieren — neue Schema-Aenderungen immer als neue Datei (sqlx prüft die Checksumme; das gilt auch für bekannte Mängel in 0007/0009/0010).
+- **Tabellen-Rebuild (Muster 0007/0009/0010) vermeiden**, wenn es geht: `-- no-transaction` + `DROP`/`RENAME` ist nicht crash-atomar (Power-Loss zwischen Drop und Rename), und `sqlite_sequence` wird nicht mitgeführt (nach dem Rebuild ID-Wiedervergabe für gelöschte Maximal-IDs möglich). Der Auto-Snapshot in `db_backup.rs` fängt den Crash-Fall ab, ersetzt aber keinen sauberen Ansatz. Müssen Constraints nachgerüstet werden, sind `CREATE TRIGGER … RAISE(ABORT, …)` (siehe 0015) der rebuild-freie Weg. Ist ein Rebuild unvermeidbar: `INSERT OR REPLACE INTO sqlite_sequence` für die neue Tabelle ergänzen und einen Migrationstest schreiben.
 
 ## Sprache
 
