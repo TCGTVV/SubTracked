@@ -129,8 +129,12 @@ jobs:
             - Linux Fedora/openSUSE/RHEL: `SubTracked-${{ steps.version.outputs.value }}-1.x86_64.rpm`
             - Linux universell: `SubTracked_${{ steps.version.outputs.value }}_amd64.AppImage`
 
-            Die `.app.tar.gz`-Assets für macOS werden für spätere Updater-/Automationspfade mitgebaut; normale Nutzer nehmen die `.dmg`.
+            Die `.app.tar.gz`-/`.sig`-Assets und `latest.json` sind für den In-App-Updater; normale Nutzer nehmen die `.dmg`.
             `SHA256SUMS.txt` enthält die Prüfsummen aller Release-Assets.
+
+            ## Update auf diese Version
+
+            Ab dieser Version kann sich SubTracked selbst aktualisieren (Einstellungen → Updates → „Nach Updates suchen"). Wer noch **0.5.x oder älter** nutzt, installiert diese Version einmal manuell; danach genügt der Update-Button. Unter Linux funktioniert das Selbst-Update nur mit der AppImage-Version.
 
             ## Hinweis zu unsignierten Builds
 
@@ -142,10 +146,15 @@ jobs:
             ## Enthalten
 
             - Konten mit Saldo, Mindestpuffer und Cashflow-Forecast
-            - Abos mit Erinnerungen, Archivierung, Preis-Historie und zweiwöchentlichem Intervall
-            - wiederkehrende und einmalige Einnahmen
+            - Abos mit Erinnerungen, Archivierung, Preis-Historie und flexiblen Intervallen
+            - wiederkehrende und einmalige Einnahmen und Ausgaben
+            - einzelne Abbuchungen überspringen („Dienst pausiert")
+            - Verschiebung auf Bankarbeitstage bei Wochenende/Feiertag
+            - manuelle Wechselkurse für Abos und Einnahmen in Fremdwährung
+            - Was-wäre-wenn-Simulation für Kündigungen
+            - Bankauszug-Import und -Abgleich per CSV
             - lokale SQLite-Datenbank und JSON-Backup/Restore
-            - native Notifications, Tray und Autostart
+            - native Notifications, Tray, Autostart und In-App-Updater
 
             Smoke-getestet auf Linux, macOS und Windows. Details und Source-Build-Anleitung stehen im README.
           # Entwurf: erst prüfen, dann manuell veröffentlichen.
