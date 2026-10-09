@@ -45,14 +45,34 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [x] **Legacy lead_days bei Read nicht re-validiert** (2026-06-08, Review; gefixt 2026-06-08, Codex) — `compute_due_reminders` prueft `lead_days` jetzt pro Abo mit `validate_lead_days`; negative oder >365 werden mit `tracing::warn!` geskippt, statt das Vorlauffenster kaputtzurechnen. Test deckt gemischten Batch mit ungueltigen und gueltigen Werten ab.
 - [x] **Anchor-Date strict-on-write, lenient-on-read** (2026-06-08, Review; gefixt 2026-06-08, Codex) — Neuer gemeinsamer `parse_iso_date_strict`-Helper in `recurrence.rs`; `validate_anchor_date` und `compute_due_reminders` nutzen denselben strikten `YYYY-MM-DD`-Parser. Tests decken unpadded Legacy-Datum im Read-Pfad ab.
 
-### Offene Punkte aus Session 2026-10-09
+### Offene Punkte (Stand 2026-10-09, nach Skip/Verschiebung/Updater/Wechselkurse)
 
-- [ ] **Manueller Test: nativer Datei-Dialog** — Rust öffnet den Dialog jetzt selbst (`file_grants.rs`); getestet sind nur Token-Logik (Rust) und UI gegen gemocktes `db.ts`. Einmal im laufenden Tauri-Fenster durchspielen: Backup exportieren, Backup importieren, Abos als CSV exportieren, Bankauszug importieren, Bankauszug abgleichen — jeweils auch mit „Abbrechen" im Dialog. Auf Linux (WebKitGTK) und Windows gegenprüfen, falls verfügbar.
-- [ ] **Manueller Test: Simulations-Optik** — `SimulationSection` + Flask-Toggle in der Abo-Card im echten Fenster ansehen (Hell/Dunkel, schmale Breite).
-- [ ] **Echte DB gegen Migration-0015-Trigger prüfen** — vor dem ersten Start mit der echten DB (oder auf einer Kopie) per `sqlite3` suchen, ob Bestandszeilen die neuen Regeln verletzen (`amount_cents <= 0` ohne Trial-Ausnahme, `lead_days` außerhalb 0..365, Booleans ≠ 0/1, Puffer < 0). Solche Zeilen ließen sich sonst nicht mehr per UPDATE ändern. Die Migration läuft mit Auto-Snapshot (`db_backup.rs`), ein Rollback ist also möglich.
-- [ ] **`CLAUDE.md` auf macOS-Pfade aktualisieren** — Regel 1 nennt noch `/home/legr/.claude/projects/...` für die Auto-Memory; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
-- [ ] **Lokale Rust-Tools nachziehen** — `cargo-deny` und `cargo-machete` fehlen auf dieser Maschine (nur CI prüft sie); `cargo-nextest` ist installiert.
-- [ ] **Weiterhin offen aus früheren Sessions:** CSV-Praxistest mit echtem Bank-Auszug (**Parser 2026-10-09 gehärtet** gegen synthetische DKB-/ING-/Sparkasse-/N26-/comdirect-Aufbauten: Vorspann-Zeilen, Windows-1252/UTF-16, Zwei-Jahres-Datum, Unicode-Minus, Soll/Haben, Mehrzeiler-Felder, Empfänger vor Verwendungszweck als Gruppenschlüssel — aber nie mit einer echten Datei geprüft; die synthetischen Fixtures sind aus dem Gedächtnis nachgebaut), App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer, optional passwortverschlüsseltes Backup, E2E-CI-Job (rot/pausiert, siehe HANDOVER 2026-07-14).
+Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist committet, aber **noch nicht gepusht**; die Commits davor (Simulation, Datei-Token, Trigger) sind auf `origin`. Nichts davon wurde bisher im laufenden Fenster abgenommen. Reihenfolge = sinnvolle Abarbeitung.
+
+**A. Vor dem nächsten Release (v0.6.0) — nur du kannst das**
+- [ ] **Updater in Betrieb nehmen.** (1) Privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern (er hat **kein** Passwort; wird er verloren, nimmt keine installierte Version mehr Updates an). (2) GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen — ohne das bricht der Release-Job bewusst im Schritt „Check updater signing key" ab. (3) Danach v0.6.0 releasen und mit einem späteren v0.6.1 den **echten** Update-Pfad durchspielen (alte Version installieren → neue veröffentlichen → in der App aktualisieren); erst dann ist der Updater verifiziert. Details: RELEASE.md → Updater.
+- [ ] **Version bumpen** auf 0.6.0 (`src-tauri/tauri.conf.json`, `package.json`, `src-tauri/Cargo.toml`) — bewusst nicht gemacht, das ist die Release-Entscheidung.
+- [ ] **Release-Text in `release.yml` aktualisieren:** „Enthalten" kennt Skip, Wochenend-Verschiebung, Wechselkurse, Simulation und Updater noch nicht; der Satz zu den `.app.tar.gz`-Assets („für spätere Updater-Pfade") stimmt nach dem Updater nicht mehr. Hinweis ergänzen, dass Nutzer von ≤ 0.5.x einmal manuell auf 0.6.0 wechseln müssen.
+- [ ] **Smoke-Checkliste in RELEASE.md erweitern** um die neuen Flows: Termin überspringen/zurücknehmen, Verschiebungsregel setzen (Prognose-Datum ändert sich), Wechselkurs anlegen (≈-Kennzeichnung), „Nach Updates suchen" (auch offline: sauberer Fehler), Backup-Roundtrip mit den neuen Tabellen.
+- [ ] **Beim ersten Release-Lauf beobachten:** ob der macOS-Runner am `strip`-Schritt scheitert (lokal auf macOS 27 tat er das, siehe RELEASE.md); ob `tauri-action` `latest.json` anhängt; ob `cargo deny`/`cargo audit` in der CI grün bleiben (lokal grün).
+
+**B. Manuelle Abnahme im laufenden Fenster (nichts davon wurde gesehen)**
+- [ ] **Nativer Datei-Dialog** (Rust öffnet ihn, Renderer bekommt nur ein Token): Backup exportieren/importieren, Abos als CSV exportieren, Bankauszug importieren und abgleichen — jeweils auch „Abbrechen". Linux (WebKitGTK) und Windows gegenprüfen, falls verfügbar.
+- [ ] **Neue UI:** Skip-Button auf der Abo-Card und in „Demnächst" samt „Rückgängig"; Auswahl „Wochenende / Feiertag" im Abo- und Einnahme-Dialog; Einstellungen → Wechselkurse und → Updates; Simulations-Sektion + Flask-Toggle (Hell/Dunkel, schmale Breite).
+- [ ] **CSV mit einem echten (anonymisierten) Bankauszug.** Der Parser wurde 2026-10-09 gehärtet (Vorspann, Windows-1252/UTF-16, Zwei-Jahres-Datum, Unicode-Minus, Soll/Haben, Mehrzeilen-Felder, Empfänger vor Verwendungszweck), aber nur gegen **aus dem Gedächtnis nachgebaute** DKB-/ING-/Sparkasse-/N26-/comdirect-Aufbauten getestet.
+- [ ] **Echte DB gegen die neuen Migrationen prüfen** (auf einer Kopie): 0015 (Integritäts-Trigger) lässt Bestandszeilen unangetastet, würde aber UPDATEs auf Zeilen ablehnen, die die Regeln verletzen (`amount_cents <= 0` ohne Trial-Ausnahme, `lead_days` außerhalb 0..365, Booleans ≠ 0/1, Puffer < 0). 0016–0018 sind reine `CREATE TABLE`/`ADD COLUMN`. Vor jeder Migration legt `db_backup.rs` einen Snapshot an.
+
+**C. Hygiene**
+- [ ] **`CLAUDE.md` auf macOS-Pfade umstellen** — Regel 1 nennt noch `/home/legr/.claude/projects/...`; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
+- [ ] **`cargo-machete` lokal installieren** (`cargo-deny` und `cargo-nextest` sind jetzt da; Machete prüft sonst nur die CI).
+- [ ] **E2E-CI-Job** ist rot und pausiert (kein Pflicht-Check), Verlauf in HANDOVER 2026-07-14.
+
+**D. Bewusst nicht umgesetzt — Ideen für später**
+- [ ] Termin *verschieben* statt nur entfallen lassen; Zeitraum-Pause („bis Datum X") als Ein-Klick.
+- [ ] Buchungstag (statt nominalem Termin) auf der Abo-Card anzeigen; 24./31.12. als Nicht-Bankarbeitstage; Bundesland-Feiertage.
+- [ ] Auto-Kurse (widerspricht bisher „kein Netzwerkzugriff für Daten"); Hinweis „Kurs veraltet"; Kurs pro Abo statt pro Währungspaar.
+- [ ] Passwortverschlüsseltes Backup; App-Icon ≠ neues In-App-Branding; `DialogDescription`-Aufräumer.
+- [ ] Code-Signing macOS/Windows (siehe Distribution & Setup) — braucht Konten/Zertifikate.
 
 ## 🔨 Jetzt (Oberfläche)
 

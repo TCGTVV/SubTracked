@@ -44,14 +44,15 @@
 - `sed -E` auf macOS kennt kein `\s` → `[[:space:]]` nehmen.
 - Fixtures mit Währungen: die Whitelist ist EUR, USD, GBP, CHF, **KRW** (kein JPY!). Zero-Decimal ist nur KRW.
 - `axe-core` hängt unter Fake-Timers → im axe-Test `vi.useRealTimers()` (siehe Teil 1).
+- **IDE zeigt „SQLX_OFFLINE=true but there is no cached data" in `commands.rs`/`db.rs`, obwohl alles kompiliert:** rust-analyzer hat die `query!`-Makros expandiert, während `.sqlx/*.json` per Pfad-Stash kurz fehlten, und nie neu geladen. Echt ist der Zustand grün (`cargo check`/`clippy`/`nextest` mit Standard-`SQLX_OFFLINE=true`, 96 `.sqlx`-Dateien getrackt). Abhilfe: Command Palette → „rust-analyzer: Restart server" (notfalls „Developer: Reload Window"). Tritt nach jedem Stash/Checkout auf, der `.sqlx` berührt.
 
-### Offen / vom User zu erledigen
+### Offen
 
-- **Updater in Betrieb nehmen** (ohne das bricht der nächste Release-Job bewusst ab): privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern, GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen (Details RELEASE.md → Updater), dann v0.6.0 releasen und mit einem späteren v0.6.1 den echten Update-Pfad durchspielen. Version steht noch auf 0.5.1 (kein Bump gemacht — Release-Entscheidung).
-- **Echter CSV-Test** mit einem realen (anonymisierten) Bankauszug.
-- **Manuelle UI-Abnahme** der neuen Dialoge/Sektionen und des Datei-Dialogs.
-- **Code-Signing** (Konten/Zertifikate nötig) — Voraussetzungen im BACKLOG.
-- Nicht umgesetzt, bewusst: Termin *verschieben* (nur Entfall), Buchungstag auf der Abo-Card, Auto-Kurse, Bundesland-Feiertage.
+Die vollständige, nach Priorität geordnete Liste steht in **BACKLOG.md → „Offene Punkte (Stand 2026-10-09 …)"** (A: vor Release, B: manuelle Abnahme, C: Hygiene, D: bewusst nicht umgesetzt) — dort pflegen, nicht hier duplizieren. Kurzfassung der Blocker:
+
+- **Updater in Betrieb nehmen** (Schlüssel sichern, Secret `TAURI_SIGNING_PRIVATE_KEY`, v0.6.0 → v0.6.1 durchspielen); sonst bricht der nächste Release-Job bewusst ab. Version steht noch auf **0.5.1**.
+- **Nichts aus Teil 2 ist im laufenden Fenster gesehen** worden; echter CSV-Test und echter Update-Lauf fehlen.
+- Teil 1 (bis `5bdb3f9`) ist gepusht, **Teil 2 (ab `7e7dce2`) liegt nur lokal**.
 
 ---
 
