@@ -17,6 +17,7 @@ Diese im Repo gepflegten Dateien sind verbindlich und sollten zuerst gelesen wer
   - `src/lib/db.ts` — typed Frontend-Bridge zu Tauri-Commands via `invoke<T>()`; kein direkter SQLite-Zugriff mehr im Webview.
   - `src/lib/recurrence.ts` — Fälligkeit (`nextDueDate`, `dueDatesWithin`). Anker-additive Logik, GETESTET.
   - `src/lib/coverage.ts` — Kontodeckungs-/Abfluss-Prognose (`computeCoverage`, `computeMonthlyBaseline`).
+  - `src/lib/simulation.ts` — Was-wäre-wenn (`computeSimulation`): Kosten + Kontoprognose mit/ohne ausgeblendete Abos; reiner UI-State, UI in `SimulationSection.tsx`.
   - `src/lib/format.ts` — deutsche Geld-/Datumsformatierung, tolerant lokalisierte Betragseingabe, Currency-Subdivisions (KRW = 1).
   - `src/hooks/` — App-Orchestrierung (`useSubscriptions`, `useNotificationPermission`).
   - `src/components/` — Dialoge/Views; komponentennahe RTL-Smoke-Tests liegen daneben.
@@ -25,6 +26,7 @@ Diese im Repo gepflegten Dateien sind verbindlich und sollten zuerst gelesen wer
   - `src/lib.rs` — Tauri-Builder, tracing-Setup, sqlx-Pool, Migrations, Tray, Window-Verhalten, Reminder-Scheduler.
   - `src/db.rs` — Tauri-managed `AppState { db: SqlitePool }` und serde/sqlx-Structs.
   - `src/commands.rs` — einzige DB-Command-Schicht für Frontend-Invokes.
+  - `src/file_grants.rs` — Einmal-Tokens für Datei-Zugriff (Rust öffnet den nativen Dialog); Details in `mem:conventions` → „Datei-Zugriff".
   - `src/reminders.rs` — Rust-Reminder-Loop-Logik; Reminder-Row bedeutet "Notification erfolgreich angestossen".
   - `src/recurrence.rs` — Rust-Parallele zur anker-additiven Recurrence-Logik, mit Tests.
   - `migrations/` — SQL-Migrationen via `sqlx::migrate!("./migrations")`; bereits angewandte Migrationen nie ändern.
