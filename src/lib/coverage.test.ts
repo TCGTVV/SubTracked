@@ -8,6 +8,7 @@ import {
   computeUpcoming,
   computeYearlyLoad,
   effectiveAmountCents,
+  hasLiveCashflow,
 } from "./coverage";
 
 const sub = (overrides: Partial<Subscription> = {}): Subscription => ({
@@ -407,6 +408,39 @@ describe("Einmalige Ausgaben (oneTime)", () => {
     const summary = computeCostSummary(subs);
     expect(summary[0]?.subscriptionCount).toBe(1);
     expect(summary[0]?.monthlyCents).toBe(1000);
+  });
+});
+
+describe("hasLiveCashflow", () => {
+  const today = "2026-10-09";
+
+  it("ist false für eine leere Liste", () => {
+    expect(hasLiveCashflow([], today)).toBe(false);
+  });
+
+  it("zählt wiederkehrende Einträge immer, auch mit altem Ankerdatum", () => {
+    expect(hasLiveCashflow([{ oneTime: false, anchorDate: "2020-01-01" }], today)).toBe(true);
+  });
+
+  it("ignoriert einmalige Einträge in der Vergangenheit", () => {
+    expect(hasLiveCashflow([{ oneTime: true, anchorDate: "2026-10-08" }], today)).toBe(false);
+  });
+
+  it("zählt einmalige Einträge heute und in der Zukunft", () => {
+    expect(hasLiveCashflow([{ oneTime: true, anchorDate: today }], today)).toBe(true);
+    expect(hasLiveCashflow([{ oneTime: true, anchorDate: "2026-12-01" }], today)).toBe(true);
+  });
+
+  it("genügt ein lebender Eintrag unter vergangenen", () => {
+    expect(
+      hasLiveCashflow(
+        [
+          { oneTime: true, anchorDate: "2025-01-01" },
+          { oneTime: false, anchorDate: "2025-01-01" },
+        ],
+        today,
+      ),
+    ).toBe(true);
   });
 });
 

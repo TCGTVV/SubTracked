@@ -54,6 +54,19 @@ function subscriptionDatesWithin(sub: Subscription, from: Date, until: Date): Da
 }
 
 /**
+ * Gibt es unter den (bereits aktiven) Einträgen mindestens einen, der noch Buchungen
+ * erzeugen kann? Wiederkehrende immer; einmalige nur, solange ihr Datum nicht vor
+ * `todayIso` ("YYYY-MM-DD") liegt. Dient den UI-Gates, damit Cashflow-Sektionen nicht
+ * für lauter bereits vergangene Einmalbuchungen angezeigt werden.
+ */
+export function hasLiveCashflow(
+  items: ReadonlyArray<{ oneTime: boolean; anchorDate: string }>,
+  todayIso: string,
+): boolean {
+  return items.some((item) => !item.oneTime || item.anchorDate >= todayIso);
+}
+
+/**
  * Effektiver Betrag eines Abos an einem Stichtag (ISO "YYYY-MM-DD"): ab
  * `pendingFrom` gilt der geplante Preis, davor der aktuelle. Spiegel der
  * Rust-Logik (`effective_amount_cents` in reminders.rs). 0 = Trial-Phase.
