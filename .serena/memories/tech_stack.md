@@ -9,6 +9,7 @@
 - **Logging:** `tracing` + `tracing-subscriber` (Feature `env-filter`) + `tracing-appender`. Zwei Layer im Setup-Block: stdout + Daily-Rolling-File in `app_log_dir()` (max. 7 Tagesdateien). Default-Level `info`, Override via `RUST_LOG`.
 - **Notifications:** `tauri-plugin-notification ~2.3`. Permission-Check über `permission_state() == PermissionState::Granted`.
 - **Autostart:** `tauri-plugin-autostart ~2.5` (Desktop-only, per `cfg`-Gate).
+- **Updater:** `tauri-plugin-updater 2` (Desktop-only), Commands in `updater.rs`; Pubkey + Endpoint (`…/releases/latest/download/latest.json`) in `tauri.conf.json`, privater Schlüssel nur lokal/als GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY`. Lokales Bundling braucht dieselbe Env-Variable; auf macOS 27 zusätzlich `CARGO_PROFILE_RELEASE_STRIP=none` (Details `RELEASE.md`). `deny.toml` erlaubt deshalb `CDLA-Permissive-2.0`.
 - **Util-Frontend:** `date-fns ^4` (für `recurrence.ts`/`coverage.ts`/`format.ts`).
 - **Paketmanager:** `pnpm@11.3.0`. Benötigt Node.js ≥ 22.13 (`node:sqlite`-Builtin). `pnpm-workspace.yaml` setzt `allowBuilds.esbuild`/`allowBuilds.lefthook` = true (lefthook braucht das postinstall-Script für die Go-Binary).
 
