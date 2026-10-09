@@ -9,7 +9,53 @@
 
 ---
 
-## 2026-10-09 — Claude: BACKLOG-Triage, 2 Review-Bugs, DB-Integritäts-Trigger, Datei-Token statt Renderer-Pfade, Was-wäre-wenn-Simulation
+## 2026-10-09 (Teil 2) — Claude: CSV-Parser gehärtet, Skip/Pause, Wochenend-Verschiebung, Updater, Wechselkurse
+
+> Auftrag: „mach alle in einem Rutsch, meter machen" nach der Backlog-Empfehlung. Plan vorab festgelegt und eingehalten: A CSV → B Skip → C Verschiebung → D Updater → E Wechselkurse; Code-Signing nur dokumentiert (braucht Konten). **Gepusht ist nichts** aus diesem Teil — alle Commits liegen lokal auf `main`.
+
+### Was passierte (Commit-Reihenfolge)
+
+1. **CSV-Parser gehärtet** (`7e7dce2`): Kopfzeile wird gesucht (ING/DKB/comdirect schreiben Vorspann), Windows-1252/UTF-16 lesbar (`read_to_string` scheiterte an Sparkasse/ING-Dateien), Unicode-Minus/nachgestelltes Minus/Klammern bleiben Abbuchungen (vorher wurde `−` still verworfen → Gutschrift), Empfänger-Spalte vor Verwendungszweck als Gruppenschlüssel, Zwei-Jahres-Datum, Soll/Haben, Mehrzeilen-Felder. 12 Tests mit **synthetischen**, aus dem Gedächtnis nachgebauten Bank-Aufbauten — nie gegen eine echte Datei geprüft.
+2. **Skip/Pause einzelner Abbuchungen** (`be274c0`, Migration 0016): Tabelle `subscription_skips`; ein übersprungener Termin entfällt in Prognose, Demnächst, Jahresplan, Simulation und Erinnerung (Reminder rückt auf den nächsten nicht übersprungenen). Frontend hängt Skips als `Subscription.skippedDates` an die Abos → ein einziger Filter in `subscriptionDatesWithin`.
+3. **Wochenend-/Feiertags-Verschiebung** (`876c227`, Migration 0017): Regel `none`/`next`/`previous` pro Abo/Einnahme. Easter-Algorithmus + Bankarbeitstage doppelt (Rust/TS) gegen **unabhängig nachgeschlagene** Vektoren. Reminder: Vorlauf zählt ab Buchungstag, der nominale Termin bleibt Idempotenz-Schlüssel (Regelwechsel sendet nichts doppelt).
+4. **Updater** (`58532a8`): Plugin + Rust-Commands (Renderer ohne Updater-Permission), `UpdateSection`, `createUpdaterArtifacts`, signierte Release-Pipeline mit frühem Secret-Check. Schlüsselpaar lokal erzeugt.
+5. **Wechselkurse** (`887dc7c`, Migration 0018): manuelle Kurse je Währungspaar (Mikro-Einheiten, kein Float), Umrechnung nur mit hinterlegtem Kurs (direkt oder Kehrwert, nie über Dritte), jeder umgerechnete Posten mit „≈" und Originalbetrag gekennzeichnet.
+
+### Verifikation
+
+- Frontend: `pnpm lint`, `tsc --noEmit`, `pnpm knip`, `pnpm test:run` → **464 Tests** grün (vorher 350).
+- Rust: `cargo fmt --check`, `clippy -D warnings`, `cargo nextest run` → **169 Tests** (mit `--features ts-rs-export` 175), `cargo sqlx prepare --check -- --tests` frisch, `cargo deny check bans licenses sources` ok, `cargo audit` Exit 0 (nur „unmaintained"-Warnungen).
+- Updater: **lokal** signierter Bundle-Build (`pnpm tauri build --bundles app`) erzeugt `SubTracked.app.tar.gz` + `.sig`.
+- **Nicht verifiziert:** ein echtes Update zwischen zwei Releases; die neuen Dialoge/Optik im laufenden Fenster (Skip-Button, Verschiebungs-Auswahl, Update-/Kurs-Sektion); der native Datei-Dialog aus Teil 1.
+
+### Wichtige Entscheidungen + Begründung
+
+- **Skips als `skippedDates` am Abo statt Parameter-Plumbing**: eine Stelle (`subscriptionDatesWithin`) statt fünf Komponenten-Props; Nachteil: das Feld ist kein DB-Feld des Abos, der Hook setzt es.
+- **Nominaler Termin bleibt der Schlüssel** (Skips, Erinnerungen), Verschiebung betrifft nur den Buchungstag — sonst würde ein Regelwechsel bereits gesendete Erinnerungen entwerten.
+- **Bankarbeitstag = nur bundeseinheitliche Feiertage**; die App kennt kein Bundesland. 24./31.12. zählen als Bankarbeitstag.
+- **Kurse je Währungspaar, nicht je Abo**: ein Kurs wirkt für alle Posten, die Pflege ist einmalig. Nie Dritt-Währungs-Routing (würde einen nicht hinterlegten Kurs still erfinden).
+- **Updater in Rust, nicht im Renderer**: gleiche Linie wie bei den Datei-Pfaden — ein kompromittierter Renderer bekommt keine neue Fähigkeit außer „prüfen/installieren des signierten Updates".
+
+### Gotchas / Stolperfallen
+
+- **Lokaler macOS-Release-Build** (macOS 27, Xcode-`strip`) scheitert mit „mis-aligned LINKEDIT string pool" beim Laden von `libsqlx_macros`. Abhilfe: `CARGO_PROFILE_RELEASE_STRIP=none CARGO_PROFILE_RELEASE_BUILD_OVERRIDE_STRIP=none`. `opt-level=0` für Build-Overrides allein half nicht. Ob GitHub-Runner betroffen sind, ist ungeprüft.
+- **`cargo-deny` fing eine CI-Lücke ab**: der Updater zieht `webpki-root-certs` (CDLA-Permissive-2.0) in den Baum → in `deny.toml` erlaubt. Auf dieser Maschine jetzt `cargo-deny` und `cargo-nextest` installiert (`cargo-machete` weiterhin nicht).
+- `git stash` war einmal ein Versehen im Befehl (nach `cargo audit`) und hat uncommittete Arbeit weggestellt; sofort per `git stash pop` zurückgespielt, nichts ging verloren. Später bewusst ein Pfad-Stash, um Updater und Wechselkurse getrennt zu committen (Hooks laufen auf dem Working Tree).
+- `sed -E` auf macOS kennt kein `\s` → `[[:space:]]` nehmen.
+- Fixtures mit Währungen: die Whitelist ist EUR, USD, GBP, CHF, **KRW** (kein JPY!). Zero-Decimal ist nur KRW.
+- `axe-core` hängt unter Fake-Timers → im axe-Test `vi.useRealTimers()` (siehe Teil 1).
+
+### Offen / vom User zu erledigen
+
+- **Updater in Betrieb nehmen** (ohne das bricht der nächste Release-Job bewusst ab): privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern, GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen (Details RELEASE.md → Updater), dann v0.6.0 releasen und mit einem späteren v0.6.1 den echten Update-Pfad durchspielen. Version steht noch auf 0.5.1 (kein Bump gemacht — Release-Entscheidung).
+- **Echter CSV-Test** mit einem realen (anonymisierten) Bankauszug.
+- **Manuelle UI-Abnahme** der neuen Dialoge/Sektionen und des Datei-Dialogs.
+- **Code-Signing** (Konten/Zertifikate nötig) — Voraussetzungen im BACKLOG.
+- Nicht umgesetzt, bewusst: Termin *verschieben* (nur Entfall), Buchungstag auf der Abo-Card, Auto-Kurse, Bundesland-Feiertage.
+
+---
+
+## 2026-10-09 (Teil 1) — Claude: BACKLOG-Triage, 2 Review-Bugs, DB-Integritäts-Trigger, Datei-Token statt Renderer-Pfade, Was-wäre-wenn-Simulation
 
 > Session-Auftrag: „was hat sich getan" → BACKLOG durchgehen, alle vorgeschlagenen Punkte in einem Rutsch umsetzen, überholte Themen bewerten, Plan vorher festlegen und einhalten. Ein Commit pro Schritt (REGEL 3), Reihenfolge wie geplant.
 >

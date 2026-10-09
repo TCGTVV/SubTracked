@@ -30,6 +30,15 @@ Verbindliche Regeln stehen in `AGENTS.md` ("Konventionen (verbindlich)"). Hier n
 - Schema-Integrität: Migration `0015` setzt Trigger, die `validation.rs` spiegeln. Ändert sich eine Regel in `validation.rs`, braucht es eine neue Migration (`DROP TRIGGER` + `CREATE TRIGGER`), nicht nur eine Code-Änderung.
 - Dynamisches SQL in sqlx 0.9 (auch Tests): `sqlx::query(sqlx::AssertSqlSafe(String))`.
 
+## Termine, Skips, Verschiebung, Kurse (seit 2026-10-09)
+
+- **Nominaler Termin vs. Buchungstag:** `anchor + k·step` ist der *nominale* Termin und bleibt der Schlüssel für Erinnerungs-Idempotenz (`reminders.due_date`) und Skips (`subscription_skips.due_date`). Die Verschiebungsregel (`shift_rule`: `none`/`next`/`previous`) erzeugt daraus den *Buchungstag* — der gilt für Prognose, Demnächst, Jahresplan, Simulation und den Erinnerungs-Vorlauf. Skips werden **vor** der Verschiebung angewendet (auf den nominalen Termin).
+- **Skips** hängen im Frontend als `Subscription.skippedDates` an den Abos (Hook setzt sie aus `list_skips`); jede neue Terminberechnung muss über `subscriptionDatesWithin` laufen, sonst vergisst sie Skips und Verschiebung. Einmalige Ausgaben sind nicht skippbar.
+- **Bankarbeitstag** = Mo–Fr ohne bundeseinheitliche Feiertage; Rust und TS müssen identisch bleiben (`bankday-vectors.json` ergänzen statt nur eine Seite testen).
+- **Wechselkurse:** `exchange_rates` in Mikro-Einheiten (`rate_micros`, kein Float). Umgerechnet wird nur mit ausdrücklich hinterlegtem Kurs (direkt oder Kehrwert), nie über eine Dritt-Währung, und jeder umgerechnete Posten trägt `convertedFrom` und wird in der UI mit „≈" gekennzeichnet. Kosten-Überblick/Baseline bleiben pro Währung getrennt.
+- **Backup:** neue Tabelle ⇒ `BackupFile`-Feld mit `#[serde(default)]`, `validate_backup`, `collect_backup`, `restore_backup` (DELETE vor, INSERT nach den Eltern) und den Safety-Net-Test `restore_backup_deletes_every_application_table` ergänzen.
+- **Neue sqlx-Queries** ⇒ `cargo sqlx prepare -- --tests` gegen eine frisch migrierte DB (`cargo sqlx database create && cargo sqlx migrate run`) und `.sqlx/` mitcommitten.
+
 ## Sprache
 
 Alle nutzer-sichtbaren UI-Texte sind **deutsch**. Code-Identifier/Kommentare folgen dieser Linie nicht zwingend (Mischung im Repo vorhanden).
