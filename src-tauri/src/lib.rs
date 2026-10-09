@@ -6,6 +6,7 @@ mod csv_reconcile;
 mod currencies;
 mod db;
 mod db_backup;
+mod file_grants;
 mod recurrence;
 mod reminders;
 mod validation;
@@ -69,7 +70,10 @@ pub fn run() {
             csv_export::export_subscriptions_csv,
             csv_import::preview_csv_import,
             csv_reconcile::reconcile_csv,
+            file_grants::pick_save_file,
+            file_grants::pick_open_file,
         ])
+        .manage(file_grants::FileGrants::default())
         .setup(|app| {
             // Logging: stdout (sichtbar nur bei `pnpm tauri dev`) + rolling-Datei
             // im app_log_dir (~/.local/share/com.tcgtvv.subtracked/logs auf Linux),

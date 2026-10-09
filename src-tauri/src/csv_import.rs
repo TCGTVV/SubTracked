@@ -19,6 +19,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::db::AppState;
+use crate::file_grants::{FileGrants, GrantKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BankTransaction {
@@ -353,8 +354,10 @@ pub fn mark_probable_duplicates(candidates: &mut [RecurringCandidate], existing:
 #[tauri::command(rename_all = "camelCase")]
 pub async fn preview_csv_import(
     state: State<'_, AppState>,
-    path: String,
+    grants: State<'_, FileGrants>,
+    token: String,
 ) -> Result<Vec<RecurringCandidate>, String> {
+    let path = grants.take(&token, GrantKind::Read)?;
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
     let transactions = parse_bank_csv(&content)?;

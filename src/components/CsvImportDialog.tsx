@@ -1,7 +1,11 @@
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { Upload } from "lucide-react";
 import { useState } from "react";
-import { addSubscription, previewCsvImport, type RecurringCandidate } from "../lib/db";
+import {
+  addSubscription,
+  pickOpenFile,
+  previewCsvImport,
+  type RecurringCandidate,
+} from "../lib/db";
 import { toUserMessage } from "../lib/errors";
 import { CURRENCY_OPTIONS, formatAmount } from "../lib/format";
 import { INTERVAL_OPTIONS } from "../lib/recurrence";
@@ -44,12 +48,9 @@ export function CsvImportDialog({ open, accounts, onClose, onImported }: Props) 
     setLoadError(null);
     setImportedCount(null);
     try {
-      const selected = await openFileDialog({
-        multiple: false,
-        filters: [{ name: "CSV", extensions: ["csv"] }],
-      });
-      if (typeof selected !== "string") return; // Dialog abgebrochen
-      setFilePath(selected);
+      const selected = await pickOpenFile({ name: "CSV", extensions: ["csv"] });
+      if (!selected) return; // Dialog abgebrochen
+      setFilePath(selected.path);
       setCandidates(null);
       setLoading(true);
       const rows = await previewCsvImport(selected);

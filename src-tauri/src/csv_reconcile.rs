@@ -15,6 +15,7 @@ use tauri::State;
 
 use crate::csv_import::{names_similar, parse_bank_csv, BankTransaction};
 use crate::db::AppState;
+use crate::file_grants::{FileGrants, GrantKind};
 use crate::recurrence::{interval_step, IntervalStep};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -113,8 +114,10 @@ pub fn reconcile_transactions(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn reconcile_csv(
     state: State<'_, AppState>,
-    path: String,
+    grants: State<'_, FileGrants>,
+    token: String,
 ) -> Result<Vec<ReconcileFinding>, String> {
+    let path = grants.take(&token, GrantKind::Read)?;
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
     let transactions = parse_bank_csv(&content)?;

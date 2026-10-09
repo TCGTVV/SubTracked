@@ -1,5 +1,4 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { open, save } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -7,6 +6,8 @@ import {
   getAppInfo,
   getReminderStatus,
   importBackup,
+  pickOpenFile,
+  pickSaveFile,
   sendTestNotification,
 } from "../lib/db";
 import { expectNoAxeViolations } from "../test-utils/axe";
@@ -18,12 +19,9 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
   disable: vi.fn(),
 }));
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({
-  save: vi.fn(),
-  open: vi.fn(),
-}));
-
 vi.mock("../lib/db", () => ({
+  pickSaveFile: vi.fn(),
+  pickOpenFile: vi.fn(),
   getReminderStatus: vi.fn(),
   getAppInfo: vi.fn(),
   sendTestNotification: vi.fn(),
@@ -34,8 +32,11 @@ vi.mock("../lib/db", () => ({
 const mockIsEnabled = vi.mocked(isEnabled);
 const mockEnable = vi.mocked(enable);
 const mockDisable = vi.mocked(disable);
-const mockSave = vi.mocked(save);
-const mockOpen = vi.mocked(open);
+const mockSave = vi.mocked(pickSaveFile);
+const mockOpen = vi.mocked(pickOpenFile);
+
+/** Ergebnis des Rust-seitigen Datei-Dialogs: Token (für den Command) + Anzeigepfad. */
+const pickedBackup = { token: "tok-backup", path: "/home/user/subtracked-backup.json" };
 const mockGetReminderStatus = vi.mocked(getReminderStatus);
 const mockGetAppInfo = vi.mocked(getAppInfo);
 const mockSendTestNotification = vi.mocked(sendTestNotification);
@@ -275,14 +276,14 @@ describe("SettingsDialog", () => {
 
   it("exportiert ein Backup an den im Dialog gewählten Pfad", async () => {
     mockIsEnabled.mockResolvedValue(false);
-    mockSave.mockResolvedValue("/home/user/subtracked-backup.json");
+    mockSave.mockResolvedValue(pickedBackup);
     mockExportBackup.mockResolvedValue(undefined);
     renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: "Backup exportieren" }));
 
     await waitFor(() => {
-      expect(mockExportBackup).toHaveBeenCalledWith("/home/user/subtracked-backup.json");
+      expect(mockExportBackup).toHaveBeenCalledWith(pickedBackup);
     });
     expect(screen.getByRole("status")).toHaveTextContent(/Backup gespeichert/);
   });
@@ -310,7 +311,7 @@ describe("SettingsDialog", () => {
 
   it("importiert erst nach Bestätigung und lädt danach die Daten neu", async () => {
     mockIsEnabled.mockResolvedValue(false);
-    mockOpen.mockResolvedValue("/home/user/subtracked-backup.json");
+    mockOpen.mockResolvedValue(pickedBackup);
     mockImportBackup.mockResolvedValue(undefined);
     const onDataReplaced = vi.fn();
     renderDialog(onDataReplaced);
@@ -322,7 +323,7 @@ describe("SettingsDialog", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Ja, ersetzen" }));
     await waitFor(() => {
-      expect(mockImportBackup).toHaveBeenCalledWith("/home/user/subtracked-backup.json");
+      expect(mockImportBackup).toHaveBeenCalledWith(pickedBackup);
     });
     expect(onDataReplaced).toHaveBeenCalledOnce();
     expect(screen.getByRole("status")).toHaveTextContent(/importiert/);

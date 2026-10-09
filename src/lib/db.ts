@@ -189,21 +189,56 @@ export async function listPriceHistory(subscriptionId: number): Promise<PriceHis
 
 // --- Backup / Restore ------------------------------------------------------
 
-/** Schreibt ein vollständiges JSON-Backup an den (vom Datei-Dialog gewählten) Pfad. */
-export async function exportBackup(path: string): Promise<void> {
-  await invoke("export_backup", { path });
+// --- Datei-Auswahl -----------------------------------------------------------
+// Der Renderer übergibt Rust nie einen freien Pfad: Rust öffnet den nativen Dialog selbst
+// und liefert ein einmal gültiges Token zurück, das die Datei-Commands einlösen
+// (`src-tauri/src/file_grants.rs`). `path` dient nur der Anzeige.
+
+export interface PickedFile {
+  token: string;
+  path: string;
 }
 
-/** Stellt den Datenbestand aus der Backup-Datei wieder her (ersetzt alles). */
-export async function importBackup(path: string): Promise<void> {
-  await invoke("import_backup", { path });
+export interface FileFilter {
+  name: string;
+  extensions: string[];
+}
+
+/** Öffnet den „Speichern unter“-Dialog; `null`, wenn der Nutzer abbricht. */
+export async function pickSaveFile(
+  defaultName: string,
+  filter: FileFilter,
+): Promise<PickedFile | null> {
+  return await invoke<PickedFile | null>("pick_save_file", {
+    defaultName,
+    filterName: filter.name,
+    extensions: filter.extensions,
+  });
+}
+
+/** Öffnet den „Datei öffnen“-Dialog; `null`, wenn der Nutzer abbricht. */
+export async function pickOpenFile(filter: FileFilter): Promise<PickedFile | null> {
+  return await invoke<PickedFile | null>("pick_open_file", {
+    filterName: filter.name,
+    extensions: filter.extensions,
+  });
+}
+
+/** Schreibt ein vollständiges JSON-Backup in die per `pickSaveFile` gewählte Datei. */
+export async function exportBackup(file: PickedFile): Promise<void> {
+  await invoke("export_backup", { token: file.token });
+}
+
+/** Stellt den Datenbestand aus der per `pickOpenFile` gewählten Backup-Datei wieder her. */
+export async function importBackup(file: PickedFile): Promise<void> {
+  await invoke("import_backup", { token: file.token });
 }
 
 // --- CSV Export / Import ----------------------------------------------------
 
 /** Exportiert alle Abos (inkl. archivierte) als lesbare CSV an den gewählten Pfad. */
-export async function exportSubscriptionsCsv(path: string): Promise<void> {
-  await invoke("export_subscriptions_csv", { path });
+export async function exportSubscriptionsCsv(file: PickedFile): Promise<void> {
+  await invoke("export_subscriptions_csv", { token: file.token });
 }
 
 export interface RecurringCandidate {
@@ -225,8 +260,10 @@ type RecurringCandidateFromRust = Omit<RecurringCandidate, "interval"> & { inter
  * Import-Kandidaten vor (Erkennungs-Heuristik in src-tauri/src/csv_import.rs).
  * Reine Vorschau — legt noch keine Abos an.
  */
-export async function previewCsvImport(path: string): Promise<RecurringCandidate[]> {
-  const rows = await invoke<RecurringCandidateFromRust[]>("preview_csv_import", { path });
+export async function previewCsvImport(file: PickedFile): Promise<RecurringCandidate[]> {
+  const rows = await invoke<RecurringCandidateFromRust[]>("preview_csv_import", {
+    token: file.token,
+  });
   return rows.map((r) => ({ ...r, interval: parseInterval(r.interval) }));
 }
 
@@ -253,7 +290,7 @@ function parseReconcileKind(s: string): ReconcileFindingKind {
   return s;
 }
 
-export async function reconcileCsv(path: string): Promise<ReconcileFinding[]> {
-  const rows = await invoke<ReconcileFindingFromRust[]>("reconcile_csv", { path });
+export async function reconcileCsv(file: PickedFile): Promise<ReconcileFinding[]> {
+  const rows = await invoke<ReconcileFindingFromRust[]>("reconcile_csv", { token: file.token });
   return rows.map((r) => ({ ...r, kind: parseReconcileKind(r.kind) }));
 }

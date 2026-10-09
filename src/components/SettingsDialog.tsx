@@ -1,5 +1,4 @@
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { open as openFileDialog, save } from "@tauri-apps/plugin-dialog";
 import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { AlertTriangle, Settings } from "lucide-react";
@@ -11,6 +10,8 @@ import {
   getAppInfo,
   getReminderStatus,
   importBackup,
+  pickOpenFile,
+  pickSaveFile,
   type ReminderStatus,
   sendTestNotification,
 } from "../lib/db";
@@ -159,13 +160,13 @@ export function SettingsDialog({
     setBackupMessage(null);
     setBackupError(null);
     try {
-      const path = await save({
-        defaultPath: `subtracked-backup-${format(new Date(), "yyyy-MM-dd")}.json`,
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (!path) return; // Dialog abgebrochen
-      await exportBackup(path);
-      setBackupMessage(`✓ Backup gespeichert: ${path}`);
+      const file = await pickSaveFile(
+        `subtracked-backup-${format(new Date(), "yyyy-MM-dd")}.json`,
+        { name: "JSON", extensions: ["json"] },
+      );
+      if (!file) return; // Dialog abgebrochen
+      await exportBackup(file);
+      setBackupMessage(`✓ Backup gespeichert: ${file.path}`);
     } catch (e) {
       setBackupError(toUserMessage(e, "Backup speichern"));
     } finally {
@@ -178,11 +179,8 @@ export function SettingsDialog({
     setBackupMessage(null);
     setBackupError(null);
     try {
-      const selected = await openFileDialog({
-        multiple: false,
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
-      if (typeof selected !== "string") return; // Dialog abgebrochen
+      const selected = await pickOpenFile({ name: "JSON", extensions: ["json"] });
+      if (!selected) return; // Dialog abgebrochen
       await importBackup(selected);
       setConfirmingImport(false);
       setBackupMessage("✓ Backup importiert — Daten wurden wiederhergestellt.");
@@ -199,13 +197,13 @@ export function SettingsDialog({
     setCsvExportMessage(null);
     setCsvExportError(null);
     try {
-      const path = await save({
-        defaultPath: `subtracked-abos-${format(new Date(), "yyyy-MM-dd")}.csv`,
-        filters: [{ name: "CSV", extensions: ["csv"] }],
+      const file = await pickSaveFile(`subtracked-abos-${format(new Date(), "yyyy-MM-dd")}.csv`, {
+        name: "CSV",
+        extensions: ["csv"],
       });
-      if (!path) return; // Dialog abgebrochen
-      await exportSubscriptionsCsv(path);
-      setCsvExportMessage(`✓ CSV gespeichert: ${path}`);
+      if (!file) return; // Dialog abgebrochen
+      await exportSubscriptionsCsv(file);
+      setCsvExportMessage(`✓ CSV gespeichert: ${file.path}`);
     } catch (e) {
       setCsvExportError(toUserMessage(e, "CSV exportieren"));
     } finally {

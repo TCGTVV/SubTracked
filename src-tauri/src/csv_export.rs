@@ -9,6 +9,7 @@ use tauri::State;
 
 use crate::currencies;
 use crate::db::{Account, AppState, Subscription};
+use crate::file_grants::{FileGrants, GrantKind};
 
 const CSV_HEADER: &str =
     "name,amount,currency,interval,anchor_date,account,category,active,notify,one_time";
@@ -69,8 +70,10 @@ pub fn build_subscriptions_csv(subs: &[Subscription], accounts: &[Account]) -> S
 #[tauri::command(rename_all = "camelCase")]
 pub async fn export_subscriptions_csv(
     state: State<'_, AppState>,
-    path: String,
+    grants: State<'_, FileGrants>,
+    token: String,
 ) -> Result<(), String> {
+    let path = grants.take(&token, GrantKind::Write)?;
     let subs = crate::db::fetch_subscriptions(&state.db, false).await?;
     let accounts = sqlx::query_as!(
         Account,

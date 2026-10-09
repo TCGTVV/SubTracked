@@ -1,21 +1,25 @@
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addSubscription, previewCsvImport, type RecurringCandidate } from "../lib/db";
+import {
+  addSubscription,
+  pickOpenFile,
+  previewCsvImport,
+  type RecurringCandidate,
+} from "../lib/db";
 import { expectNoAxeViolations } from "../test-utils/axe";
 import type { Account } from "../types";
 import { CsvImportDialog } from "./CsvImportDialog";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({
-  open: vi.fn(),
-}));
-
 vi.mock("../lib/db", () => ({
+  pickOpenFile: vi.fn(),
   previewCsvImport: vi.fn(),
   addSubscription: vi.fn(),
 }));
 
-const mockOpenFileDialog = vi.mocked(openFileDialog);
+const mockOpenFileDialog = vi.mocked(pickOpenFile);
+
+/** Ergebnis des Rust-seitigen Datei-Dialogs: Token (für den Command) + Anzeigepfad. */
+const picked = (path: string) => ({ token: `tok:${path}`, path });
 const mockPreviewCsvImport = vi.mocked(previewCsvImport);
 const mockAddSubscription = vi.mocked(addSubscription);
 
@@ -58,11 +62,11 @@ function renderDialog() {
 
 /** Wählt eine Datei über den gemockten Datei-Dialog und lässt den Preview `rows` liefern. */
 async function pickFileWith(rows: RecurringCandidate[]) {
-  mockOpenFileDialog.mockResolvedValue("/tmp/umsaetze.csv");
+  mockOpenFileDialog.mockResolvedValue(picked("/tmp/umsaetze.csv"));
   mockPreviewCsvImport.mockResolvedValue(rows);
   fireEvent.click(screen.getByRole("button", { name: "CSV-Datei wählen" }));
   await waitFor(() => {
-    expect(mockPreviewCsvImport).toHaveBeenCalledWith("/tmp/umsaetze.csv");
+    expect(mockPreviewCsvImport).toHaveBeenCalledWith(picked("/tmp/umsaetze.csv"));
   });
 }
 
@@ -133,7 +137,7 @@ describe("CsvImportDialog", () => {
   });
 
   it("zeigt eine Fehler-Meldung, wenn der CSV-Preview fehlschlägt", async () => {
-    mockOpenFileDialog.mockResolvedValue("/tmp/kaputt.csv");
+    mockOpenFileDialog.mockResolvedValue(picked("/tmp/kaputt.csv"));
     mockPreviewCsvImport.mockRejectedValue(new Error("Keine Betrag-Spalte gefunden"));
     renderDialog();
 
