@@ -85,8 +85,11 @@ function PriceHistoryGraph({
   if (pending) amounts.push(pending.amountCents);
   const min = Math.min(...amounts);
   const max = Math.max(...amounts);
-  const isConstant = min === max;
   const range = max - min;
+  const isFlat = range === 0;
+  // Gleicher Betrag in unterschiedlichen Währungen ist keine konstante Preislage.
+  const hasMixedCurrencies = chronological.some((entry) => entry.currency !== currency);
+  const isConstant = isFlat && !hasMixedCurrencies;
   const width = 320;
   const height = 120;
   const paddingX = 18;
@@ -96,7 +99,7 @@ function PriceHistoryGraph({
   const totalPoints = chronological.length + (pending ? 1 : 0);
   const xStep = totalPoints > 1 ? innerWidth / (totalPoints - 1) : 0;
   const yFor = (cents: number) =>
-    isConstant
+    isFlat
       ? paddingY + innerHeight / 2
       : paddingY + innerHeight - ((cents - min) / range) * innerHeight;
 
@@ -152,6 +155,18 @@ function PriceHistoryGraph({
       <div className="flex justify-between text-xs text-muted-foreground tabular-nums">
         {isConstant ? (
           <span>Konstant: {formatAmount(min, currency)}</span>
+        ) : hasMixedCurrencies ? (
+          // Min/Max über Währungen hinweg wären bedeutungslos — stattdessen Anfang und Ende
+          // der Historie, je in der eigenen Währung.
+          <>
+            <span>{formatAmount(chronological[0].amountCents, chronological[0].currency)}</span>
+            <span>
+              {formatAmount(
+                chronological[chronological.length - 1].amountCents,
+                chronological[chronological.length - 1].currency,
+              )}
+            </span>
+          </>
         ) : (
           <>
             <span>{formatAmount(min, currency)}</span>
