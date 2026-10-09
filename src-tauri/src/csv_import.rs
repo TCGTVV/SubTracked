@@ -48,49 +48,81 @@ pub struct RecurringCandidate {
 /// Bekannte Spaltennamen deutscher/englischer Bank-CSV-Exports. Exakter Treffer
 /// hat Vorrang vor Teilstring-Treffer (vermeidet Fehlzuordnung durch zu grobe
 /// `contains`-Heuristik).
+///
+/// Alle Vergleiche laufen gegen `normalize_header` (klein, Umlaute → ae/oe/ue/ss,
+/// ohne `*`-Gender-Marker), die Kandidaten hier sind also ASCII.
 const DATE_COLUMNS: &[&str] = &[
     "buchungstag",
     "valutadatum",
     "buchungsdatum",
+    "buchung", // ING
     "datum",
     "date",
+    "wertstellung",
+    "valuta",
 ];
-const DESC_COLUMNS: &[&str] = &[
+/// Gegenpartei (Empfänger/Auftraggeber). Hat Vorrang vor dem Verwendungszweck, weil sie
+/// über die Monate stabil ist, während Zwecke oft wechselnde Rechnungsnummern tragen.
+/// Bei Abbuchungen steht der Zahlungsempfänger vor dem (bei DKB: eigenen) Zahlungspflichtigen.
+const PAYEE_COLUMNS: &[&str] = &[
+    "zahlungsempfaenger",                // DKB: "Zahlungsempfänger*in"
+    "beguenstigter/zahlungspflichtiger", // Sparkasse
+    "auftraggeber/empfaenger",           // ING
+    "name zahlungsbeteiligter",          // Volks-/Raiffeisenbanken
+    "empfaenger",                        // N26
+    "payee",
+    "zahlungspflichtige",
+];
+const PURPOSE_COLUMNS: &[&str] = &[
     "verwendungszweck",
     "buchungstext",
-    "beguenstigter/zahlungspflichtiger",
-    "empfaenger",
     "umsatztext",
+    "payment reference",
     "description",
     "text",
 ];
-const AMOUNT_COLUMNS: &[&str] = &["betrag", "amount", "umsatz", "betrag (eur)"];
+const AMOUNT_COLUMNS: &[&str] = &["betrag", "amount", "umsatz"];
+/// Eigene Spalten für Belastung/Gutschrift (statt einer vorzeichenbehafteten Betragsspalte).
+const DEBIT_COLUMNS: &[&str] = &["soll", "belastung", "debit"];
+const CREDIT_COLUMNS: &[&str] = &["haben", "gutschrift", "credit"];
+/// Vorzeichen-Kennung neben einer unsignierten Betragsspalte ("S"/"H").
+const SIGN_COLUMNS: &[&str] = &["soll/haben", "s/h"];
 
 pub fn parse_bank_csv(content: &str) -> Result<Vec<BankTransaction>, String> {
     let content = content.trim_start_matches('\u{feff}');
-    let mut lines = content.lines().filter(|l| !l.trim().is_empty());
-
-    let header_line = lines
-        .next()
-        .ok_or_else(|| "Die CSV-Datei ist leer.".to_string())?;
-    let delimiter = detect_delimiter(header_line);
-    let headers: Vec<String> = split_csv_line(header_line, delimiter)
+    let records: Vec<String> = split_records(content)
         .into_iter()
-        .map(|h| h.trim().to_lowercase())
+        .filter(|r| !r.trim().is_empty())
         .collect();
+    if records.is_empty() {
+        return Err("Die CSV-Datei ist leer.".to_string());
+    }
 
-    let date_idx = find_column(&headers, DATE_COLUMNS).ok_or_else(|| {
+    // Banken schreiben Kontodaten/Hinweise vor die Kopfzeile (ING, DKB, comdirect).
+    // Die Kopfzeile ist die erste Zeile mit Datums-, Text- und Betragsspalte; findet sich
+    // keine, gilt die erste Zeile als Kopf, damit die Fehlermeldung konkret bleibt.
+    let header_pos = records
+        .iter()
+        .position(|r| ColumnMap::detect(r).is_complete())
+        .unwrap_or(0);
+    let header_line = &records[header_pos];
+    let columns = ColumnMap::detect(header_line);
+
+    let date_idx = columns.date.ok_or_else(|| {
         "Keine Datums-Spalte gefunden (erwartet z.B. \"Buchungstag\" oder \"Datum\").".to_string()
     })?;
-    let desc_idx = find_column(&headers, DESC_COLUMNS)
+    let desc_idx = columns
+        .payee
+        .or(columns.purpose)
         .ok_or_else(|| "Keine Verwendungszweck-/Text-Spalte gefunden.".to_string())?;
-    let amount_idx = find_column(&headers, AMOUNT_COLUMNS)
-        .ok_or_else(|| "Keine Betrags-Spalte gefunden.".to_string())?;
+    if columns.amount.is_none() && columns.debit.is_none() && columns.credit.is_none() {
+        return Err("Keine Betrags-Spalte gefunden.".to_string());
+    }
 
     let mut transactions = Vec::new();
-    for (offset, line) in lines.enumerate() {
-        let line_no = offset + 2; // +1 fuer 1-basiert, +1 weil die Kopfzeile schon konsumiert ist
-        let fields = split_csv_line(line, delimiter);
+    for (offset, record) in records.iter().enumerate().skip(header_pos + 1) {
+        let line_no = offset + 1;
+        let fields = split_csv_line(record, columns.delimiter);
         let get = |idx: usize| {
             fields
                 .get(idx)
@@ -98,15 +130,48 @@ pub fn parse_bank_csv(content: &str) -> Result<Vec<BankTransaction>, String> {
                 .unwrap_or_default()
         };
         let raw_date = get(date_idx);
-        let raw_desc = get(desc_idx);
-        let raw_amount = get(amount_idx);
-        if raw_date.is_empty() && raw_amount.is_empty() {
+        let raw_desc = {
+            let primary = get(desc_idx);
+            match (primary.is_empty(), columns.purpose) {
+                (true, Some(p)) => get(p),
+                _ => primary,
+            }
+        };
+        let raw_amount = columns.amount.map(&get).unwrap_or_default();
+        let raw_debit = columns.debit.map(&get).unwrap_or_default();
+        let raw_credit = columns.credit.map(&get).unwrap_or_default();
+        if raw_date.is_empty()
+            && raw_amount.is_empty()
+            && raw_debit.is_empty()
+            && raw_credit.is_empty()
+        {
             continue;
         }
         let date = parse_flexible_date(&raw_date)
             .ok_or_else(|| format!("Zeile {line_no}: ungültiges Datum \"{raw_date}\"."))?;
-        let amount_cents = parse_localized_amount(&raw_amount)
-            .ok_or_else(|| format!("Zeile {line_no}: ungültiger Betrag \"{raw_amount}\"."))?;
+
+        let amount_cents = if !raw_amount.is_empty() || columns.amount.is_some() {
+            let mut cents = parse_localized_amount(&raw_amount)
+                .ok_or_else(|| format!("Zeile {line_no}: ungültiger Betrag \"{raw_amount}\"."))?;
+            // Unsignierter Betrag + "S"/"H"-Kennung (Soll = Abbuchung).
+            if let Some(sign_idx) = columns.sign {
+                let indicator = get(sign_idx).to_uppercase();
+                if matches!(indicator.as_str(), "S" | "D" | "SOLL" | "DEBIT") {
+                    cents = -cents.abs();
+                } else if matches!(indicator.as_str(), "H" | "C" | "HABEN" | "CREDIT") {
+                    cents = cents.abs();
+                }
+            }
+            cents
+        } else if !raw_debit.is_empty() {
+            -parse_localized_amount(&raw_debit)
+                .ok_or_else(|| format!("Zeile {line_no}: ungültiger Betrag \"{raw_debit}\"."))?
+                .abs()
+        } else {
+            parse_localized_amount(&raw_credit)
+                .ok_or_else(|| format!("Zeile {line_no}: ungültiger Betrag \"{raw_credit}\"."))?
+                .abs()
+        };
         transactions.push(BankTransaction {
             date,
             description: raw_desc,
@@ -118,6 +183,141 @@ pub fn parse_bank_csv(content: &str) -> Result<Vec<BankTransaction>, String> {
         return Err("Keine gültigen Buchungszeilen gefunden.".to_string());
     }
     Ok(transactions)
+}
+
+/// Spaltenzuordnung einer Kopfzeile.
+struct ColumnMap {
+    delimiter: char,
+    date: Option<usize>,
+    payee: Option<usize>,
+    purpose: Option<usize>,
+    amount: Option<usize>,
+    debit: Option<usize>,
+    credit: Option<usize>,
+    sign: Option<usize>,
+}
+
+impl ColumnMap {
+    fn detect(header_line: &str) -> Self {
+        let delimiter = detect_delimiter(header_line);
+        let headers: Vec<String> = split_csv_line(header_line, delimiter)
+            .iter()
+            .map(|h| normalize_header(h))
+            .collect();
+        // "soll/haben" darf nicht als Betrags- oder Soll-Spalte fehlgedeutet werden.
+        let sign = headers
+            .iter()
+            .position(|h| SIGN_COLUMNS.contains(&h.as_str()));
+        let masked: Vec<String> = headers
+            .iter()
+            .enumerate()
+            .map(|(i, h)| {
+                if Some(i) == sign {
+                    String::new()
+                } else {
+                    h.clone()
+                }
+            })
+            .collect();
+        Self {
+            delimiter,
+            date: find_column(&masked, DATE_COLUMNS),
+            payee: find_column(&masked, PAYEE_COLUMNS),
+            purpose: find_column(&masked, PURPOSE_COLUMNS),
+            amount: find_column(&masked, AMOUNT_COLUMNS),
+            debit: find_column(&masked, DEBIT_COLUMNS),
+            credit: find_column(&masked, CREDIT_COLUMNS),
+            sign,
+        }
+    }
+
+    /// Kopfzeile gefunden: Datum, ein Text und ein Betrag (oder Soll+Haben).
+    fn is_complete(&self) -> bool {
+        self.date.is_some()
+            && (self.payee.is_some() || self.purpose.is_some())
+            && (self.amount.is_some() || (self.debit.is_some() && self.credit.is_some()))
+    }
+}
+
+/// Vergleichsform eines Spaltennamens: klein, Umlaute ausgeschrieben, ohne `*`
+/// (DKB: "Zahlungsempfänger*in"), Whitespace vereinheitlicht.
+fn normalize_header(header: &str) -> String {
+    let mut out = String::new();
+    for c in header.trim().chars().flat_map(char::to_lowercase) {
+        match c {
+            'ä' => out.push_str("ae"),
+            'ö' => out.push_str("oe"),
+            'ü' => out.push_str("ue"),
+            'ß' => out.push_str("ss"),
+            '*' | '\u{feff}' => {}
+            c => out.push(c),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Teilt den Text in logische Datensätze: ein Anführungszeichen-offenes Feld darf über
+/// Zeilenumbrüche laufen (Verwendungszwecke mit Zeilenumbruch in Quotes).
+fn split_records(content: &str) -> Vec<String> {
+    let mut records = Vec::new();
+    let mut current = String::new();
+    for line in content.lines() {
+        if !current.is_empty() {
+            current.push('\n');
+        }
+        current.push_str(line);
+        if current.matches('"').count() % 2 == 0 {
+            records.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        records.push(current);
+    }
+    records
+}
+
+/// Dekodiert den Rohinhalt einer Bank-CSV: UTF-8 (mit/ohne BOM), UTF-16 (BOM) oder
+/// Windows-1252 als Rückfall (ING, Sparkasse und comdirect exportieren oft so).
+pub fn decode_csv_bytes(bytes: &[u8]) -> String {
+    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        return decode_utf16(rest, u16::from_le_bytes);
+    }
+    if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        return decode_utf16(rest, u16::from_be_bytes);
+    }
+    let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_string(),
+        Err(_) => bytes.iter().map(|&b| cp1252_char(b)).collect(),
+    }
+}
+
+fn decode_utf16(bytes: &[u8], from_bytes: fn([u8; 2]) -> u16) -> String {
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|pair| from_bytes([pair[0], pair[1]]))
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
+/// Windows-1252 → Unicode. 0x00–0x7F und 0xA0–0xFF stimmen mit Latin-1 überein; nur der
+/// Block 0x80–0x9F weicht ab (€, typografische Anführungszeichen, …).
+fn cp1252_char(byte: u8) -> char {
+    const HIGH: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž',
+        '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}',
+        'ž', 'Ÿ',
+    ];
+    match byte {
+        0x80..=0x9F => HIGH[(byte - 0x80) as usize],
+        b => b as char,
+    }
+}
+
+/// Liest eine Bank-CSV-Datei (siehe [`decode_csv_bytes`] für die Kodierungen).
+pub fn read_csv_file(path: &std::path::Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
+    Ok(decode_csv_bytes(&bytes))
 }
 
 fn detect_delimiter(header_line: &str) -> char {
@@ -180,8 +380,16 @@ fn find_column(headers: &[String], candidates: &[&str]) -> Option<usize> {
 }
 
 fn parse_flexible_date(s: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(s, "%Y-%m-%d")
+    let s = s.trim();
+    // Zeitstempel ("2024-01-15 10:22:00", "2024-01-15T10:22:00") → nur der Datumsteil zählt.
+    let date_part = s
+        .get(..10)
+        .filter(|p| p.as_bytes().get(4) == Some(&b'-'))
+        .unwrap_or(s);
+    NaiveDate::parse_from_str(date_part, "%Y-%m-%d")
         .or_else(|_| NaiveDate::parse_from_str(s, "%d.%m.%Y"))
+        .or_else(|_| NaiveDate::parse_from_str(s, "%d.%m.%y")) // DKB/Sparkasse-CAMT: "15.01.24"
+        .or_else(|_| NaiveDate::parse_from_str(s, "%d/%m/%Y"))
         .ok()
 }
 
@@ -193,20 +401,19 @@ fn parse_flexible_date(s: &str) -> Option<NaiveDate> {
 /// (Bank-Exports sind praktisch nie Zero-Decimal-Waehrungen wie KRW).
 fn parse_localized_amount(input: &str) -> Option<i64> {
     let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    let mut chars = trimmed.chars().peekable();
-    let mut negative = false;
-    if let Some(&c) = chars.peek() {
-        if c == '-' {
-            negative = true;
-            chars.next();
-        } else if c == '+' {
-            chars.next();
-        }
-    }
-    let cleaned: String = chars
+    let first_digit = trimmed.find(|c: char| c.is_ascii_digit())?;
+    let last_digit = trimmed.rfind(|c: char| c.is_ascii_digit())?;
+    // Vorzeichen steht vor der ersten oder hinter der letzten Ziffer: "-12,34", "−12,34"
+    // (Unicode-Minus), "EUR -12,34", "12,34-" (SAP-Stil) oder Klammern "(12,34)".
+    // Ein stillschweigend verlorenes Minus würde aus einer Abbuchung eine Gutschrift machen.
+    let prefix = &trimmed[..first_digit];
+    let suffix = &trimmed[last_digit + 1..];
+    let is_minus = |c: char| matches!(c, '-' | '\u{2212}' | '\u{2013}');
+    let negative = prefix.chars().any(is_minus)
+        || suffix.chars().any(is_minus)
+        || (prefix.contains('(') && suffix.contains(')'));
+    let cleaned: String = trimmed[first_digit..=last_digit]
+        .chars()
         .filter(|c| c.is_ascii_digit() || *c == ',' || *c == '.')
         .collect();
     if cleaned.is_empty() {
@@ -358,8 +565,7 @@ pub async fn preview_csv_import(
     token: String,
 ) -> Result<Vec<RecurringCandidate>, String> {
     let path = grants.take(&token, GrantKind::Read)?;
-    let content =
-        std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
+    let content = read_csv_file(&path)?;
     let transactions = parse_bank_csv(&content)?;
     let mut candidates = detect_recurring_candidates(&transactions);
     let existing: Vec<(String, i64)> = sqlx::query!("SELECT name, amount_cents FROM subscriptions")
@@ -588,5 +794,191 @@ mod tests {
     fn rejects_empty_amount() {
         assert_eq!(parse_localized_amount(""), None);
         assert_eq!(parse_localized_amount("EUR"), None);
+    }
+
+    // --- Bank-Formate ---------------------------------------------------------------
+    // Synthetische Auszüge im Aufbau der gängigen deutschen Exporte (Spaltennamen,
+    // Vorspann, Kodierung, Datums-/Betragsformate). Echte Dateien nicht im Repo
+    // (Finanzdaten) — Praxistest mit einem echten Auszug steht im BACKLOG.
+
+    /// Drei monatliche Netflix-Abbuchungen plus Gehaltseingang → genau ein Kandidat.
+    fn assert_monthly_netflix(txs: &[BankTransaction]) {
+        let debits: Vec<_> = txs.iter().filter(|t| t.amount_cents < 0).collect();
+        assert_eq!(debits.len(), 3, "drei Abbuchungen: {txs:?}");
+        assert!(
+            txs.iter().any(|t| t.amount_cents > 0),
+            "Gutschrift bleibt positiv"
+        );
+        let candidates = detect_recurring_candidates(txs);
+        assert_eq!(candidates.len(), 1, "{candidates:?}");
+        assert_eq!(candidates[0].amount_cents, 1299);
+        assert_eq!(candidates[0].interval, "monthly");
+        assert!(
+            candidates[0].name.to_lowercase().contains("netflix"),
+            "Name: {}",
+            candidates[0].name
+        );
+    }
+
+    #[test]
+    fn dkb_format_with_preamble_two_digit_year_and_gendered_headers() {
+        let csv = "\"Konto\";\"Girokonto DE12 3456\"\n\
+                   \"\";\"\"\n\
+                   \"Kontostand vom 02.04.2024:\";\"1.234,56 EUR\"\n\
+                   \n\
+                   \"Buchungsdatum\";\"Wertstellung\";\"Status\";\"Zahlungspflichtige*r\";\"Zahlungsempfänger*in\";\"Verwendungszweck\";\"Umsatztyp\";\"IBAN\";\"Betrag (€)\"\n\
+                   \"15.03.24\";\"15.03.24\";\"Gebucht\";\"Max Mustermann\";\"Netflix International B.V.\";\"Rechnung 9918\";\"Ausgang\";\"NL00\";\"-12,99\"\n\
+                   \"15.02.24\";\"15.02.24\";\"Gebucht\";\"Max Mustermann\";\"Netflix International B.V.\";\"Rechnung 8812\";\"Ausgang\";\"NL00\";\"-12,99\"\n\
+                   \"15.01.24\";\"15.01.24\";\"Gebucht\";\"Max Mustermann\";\"Netflix International B.V.\";\"Rechnung 7701\";\"Ausgang\";\"NL00\";\"-12,99\"\n\
+                   \"01.03.24\";\"01.03.24\";\"Gebucht\";\"Firma GmbH\";\"Max Mustermann\";\"Gehalt\";\"Eingang\";\"DE00\";\"2.500,00\"\n";
+        let txs = parse_bank_csv(csv).expect("DKB");
+        // Der Empfänger (nicht der wechselnde Verwendungszweck) ist der Gruppenschlüssel.
+        assert_monthly_netflix(&txs);
+    }
+
+    #[test]
+    fn ing_format_with_long_preamble_and_buchung_valuta_columns() {
+        let csv = "Umsatzanzeige;Datei erstellt am: 02.04.2024 10:00\n\
+                   ;Letztes Update: aktuell\n\
+                   \n\
+                   IBAN;DE12 3456\n\
+                   Kontoname;Girokonto\n\
+                   Bank;ING\n\
+                   Zeitraum;01.01.2024 - 31.03.2024\n\
+                   Saldo;1.234,56;EUR\n\
+                   \n\
+                   Sortierung;Datum absteigend\n\
+                   \n\
+                   Buchung;Valuta;Auftraggeber/Empfänger;Buchungstext;Verwendungszweck;Saldo;Währung;Betrag;Währung\n\
+                   15.03.2024;15.03.2024;Netflix International B.V.;Lastschrift;NETFLIX.COM;1.000,00;EUR;-12,99;EUR\n\
+                   15.02.2024;15.02.2024;Netflix International B.V.;Lastschrift;NETFLIX.COM;1.100,00;EUR;-12,99;EUR\n\
+                   15.01.2024;15.01.2024;Netflix International B.V.;Lastschrift;NETFLIX.COM;1.200,00;EUR;-12,99;EUR\n\
+                   01.03.2024;01.03.2024;Firma GmbH;Gehalt/Rente;Gehalt;3.500,00;EUR;2.500,00;EUR\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("ING"));
+    }
+
+    #[test]
+    fn sparkasse_camt_format_with_two_digit_year() {
+        let csv = "\"Auftragskonto\";\"Buchungstag\";\"Valutadatum\";\"Buchungstext\";\"Verwendungszweck\";\"Glaeubiger ID\";\"Mandatsreferenz\";\"Beguenstigter/Zahlungspflichtiger\";\"Kontonummer/IBAN\";\"Betrag\";\"Waehrung\";\"Info\"\n\
+                   \"DE00\";\"15.03.24\";\"15.03.24\";\"FOLGELASTSCHRIFT\";\"Rechnung 99 vom 01.03.\";\"NL1\";\"M1\";\"Netflix International B.V.\";\"NL00\";\"-12,99\";\"EUR\";\"Umsatz gebucht\"\n\
+                   \"DE00\";\"15.02.24\";\"15.02.24\";\"FOLGELASTSCHRIFT\";\"Rechnung 88 vom 01.02.\";\"NL1\";\"M1\";\"Netflix International B.V.\";\"NL00\";\"-12,99\";\"EUR\";\"Umsatz gebucht\"\n\
+                   \"DE00\";\"15.01.24\";\"15.01.24\";\"FOLGELASTSCHRIFT\";\"Rechnung 77 vom 01.01.\";\"NL1\";\"M1\";\"Netflix International B.V.\";\"NL00\";\"-12,99\";\"EUR\";\"Umsatz gebucht\"\n\
+                   \"DE00\";\"01.03.24\";\"01.03.24\";\"GEHALT/RENTE\";\"Gehalt\";\"\";\"\";\"Firma GmbH\";\"DE00\";\"2.500,00\";\"EUR\";\"Umsatz gebucht\"\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("Sparkasse"));
+    }
+
+    #[test]
+    fn n26_format_with_payee_and_iso_dates() {
+        let csv = "\"Datum\",\"Empfänger\",\"Kontonummer\",\"Transaktionstyp\",\"Verwendungszweck\",\"Betrag (EUR)\"\n\
+                   \"2024-03-15\",\"Netflix\",\"NL00\",\"Lastschrift\",\"\",\"-12.99\"\n\
+                   \"2024-02-15\",\"Netflix\",\"NL00\",\"Lastschrift\",\"\",\"-12.99\"\n\
+                   \"2024-01-15\",\"Netflix\",\"NL00\",\"Lastschrift\",\"\",\"-12.99\"\n\
+                   \"2024-03-01\",\"Firma GmbH\",\"DE00\",\"Gutschrift\",\"Gehalt\",\"2500.00\"\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("N26"));
+    }
+
+    #[test]
+    fn comdirect_format_with_umsatz_column() {
+        let csv = "\"Umsätze Girokonto\";\"Zeitraum: 01.01.2024 - 31.03.2024\"\n\
+                   \"Neuer Kontostand\";\"1.234,56 EUR\"\n\
+                   \n\
+                   \"Buchungstag\";\"Wertstellung (Valuta)\";\"Vorgang\";\"Buchungstext\";\"Umsatz in EUR\"\n\
+                   \"15.03.2024\";\"15.03.2024\";\"Lastschrift / Belastung\";\"Auftraggeber: Netflix International B.V. Buchungstext: NETFLIX.COM\";\"-12,99\"\n\
+                   \"15.02.2024\";\"15.02.2024\";\"Lastschrift / Belastung\";\"Auftraggeber: Netflix International B.V. Buchungstext: NETFLIX.COM\";\"-12,99\"\n\
+                   \"15.01.2024\";\"15.01.2024\";\"Lastschrift / Belastung\";\"Auftraggeber: Netflix International B.V. Buchungstext: NETFLIX.COM\";\"-12,99\"\n\
+                   \"01.03.2024\";\"01.03.2024\";\"Übertrag / Überweisung\";\"Auftraggeber: Firma GmbH Buchungstext: Gehalt\";\"2.500,00\"\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("comdirect"));
+    }
+
+    #[test]
+    fn separate_debit_and_credit_columns() {
+        let csv = "Buchungstag;Text;Soll;Haben\n\
+                   15.03.2024;Netflix;12,99;\n\
+                   15.02.2024;Netflix;12,99;\n\
+                   15.01.2024;Netflix;12,99;\n\
+                   01.03.2024;Gehalt;;2.500,00\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("Soll/Haben"));
+    }
+
+    #[test]
+    fn unsigned_amount_with_soll_haben_indicator_column() {
+        let csv = "Buchungstag;Text;Betrag;Soll/Haben\n\
+                   15.03.2024;Netflix;12,99;S\n\
+                   15.02.2024;Netflix;12,99;S\n\
+                   15.01.2024;Netflix;12,99;S\n\
+                   01.03.2024;Gehalt;2.500,00;H\n";
+        assert_monthly_netflix(&parse_bank_csv(csv).expect("S/H"));
+    }
+
+    #[test]
+    fn quoted_field_with_embedded_newline_stays_one_record() {
+        let csv = "Buchungstag;Verwendungszweck;Betrag\n\
+                   15.03.2024;\"NETFLIX\nRechnung 99\";-12,99\n\
+                   15.02.2024;\"NETFLIX\nRechnung 88\";-12,99\n";
+        let txs = parse_bank_csv(csv).expect("Mehrzeiler");
+        assert_eq!(txs.len(), 2);
+        assert!(txs[0].description.contains("NETFLIX"));
+    }
+
+    #[test]
+    fn amount_sign_variants_never_turn_debits_into_credits() {
+        for (input, expected) in [
+            ("-12,99", -1299),
+            ("\u{2212}12,99", -1299), // Unicode-Minus
+            ("\u{2013}12,99", -1299), // Halbgeviertstrich
+            ("12,99-", -1299),        // nachgestelltes Minus
+            ("EUR -12,99", -1299),
+            ("-12,99 €", -1299),
+            ("(12,99)", -1299),
+            ("-1.234,56", -123456),
+            ("+12,99", 1299),
+            ("12,99", 1299),
+            ("1 234,56", 123456),
+        ] {
+            assert_eq!(
+                parse_localized_amount(input),
+                Some(expected),
+                "Eingabe: {input:?}"
+            );
+        }
+        assert_eq!(parse_localized_amount("abc"), None);
+        assert_eq!(parse_localized_amount("-"), None);
+    }
+
+    #[test]
+    fn decodes_windows_1252_and_utf16_exports() {
+        // "Zahlungsempfänger" + "€" in Windows-1252: ä = 0xE4, € = 0x80
+        let cp1252 =
+            b"Buchungstag;Zahlungsempf\xE4nger;Betrag\n15.01.2024;M\xFCller K\xE4se;-5,00 \x80\n";
+        let text = decode_csv_bytes(cp1252);
+        let txs = parse_bank_csv(&text).expect("cp1252");
+        assert_eq!(txs[0].description, "Müller Käse");
+        assert_eq!(txs[0].amount_cents, -500);
+
+        // UTF-16LE mit BOM (Excel "Unicode-Text")
+        let mut utf16 = vec![0xFF, 0xFE];
+        for unit in "Buchungstag;Text;Betrag\n15.01.2024;Käse;-5,00\n".encode_utf16() {
+            utf16.extend_from_slice(&unit.to_le_bytes());
+        }
+        let txs = parse_bank_csv(&decode_csv_bytes(&utf16)).expect("utf16");
+        assert_eq!(txs[0].description, "Käse");
+
+        // Gültiges UTF-8 (mit BOM) bleibt unverändert.
+        let mut utf8 = vec![0xEF, 0xBB, 0xBF];
+        utf8.extend_from_slice("Buchungstag;Text;Betrag\n15.01.2024;Käse;-5,00\n".as_bytes());
+        assert!(decode_csv_bytes(&utf8).starts_with("Buchungstag"));
+    }
+
+    #[test]
+    fn timestamps_are_reduced_to_their_date() {
+        let csv = "Date,Description,Amount\n2024-01-15 10:22:00,Netflix,-12.99\n";
+        let txs = parse_bank_csv(csv).expect("Revolut-artig");
+        assert_eq!(txs[0].date, NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+    }
+
+    #[test]
+    fn missing_columns_still_report_a_specific_error() {
+        let err = parse_bank_csv("Foo;Bar\n1;2\n").unwrap_err();
+        assert!(err.contains("Datums-Spalte"), "{err}");
     }
 }
