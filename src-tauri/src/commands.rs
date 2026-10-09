@@ -951,4 +951,125 @@ mod tests {
             .expect_err("unbekanntes Konto muss abgelehnt werden");
         assert!(err.contains("existiert nicht"), "Fehlertext: {err}");
     }
+
+    // --- Schema-Trigger (Migration 0015): zweite Verteidigungslinie neben validation.rs ---
+    // Dynamisches `sqlx::query` statt `query!`, damit der .sqlx-Cache unberuehrt bleibt.
+
+    async fn exec(db: &SqlitePool, sql: &str) -> Result<(), String> {
+        // Nur Test-Literale, kein Nutzereingabe-SQL.
+        sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()))
+            .execute(db)
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn insert_sub_sql(amount: i64, lead_days: i64, pending: &str) -> String {
+        format!(
+            "INSERT INTO subscriptions (name, amount_cents, currency, interval, anchor_date, \
+             lead_days, pending_amount_cents) \
+             VALUES ('X', {amount}, 'EUR', 'monthly', '2026-01-15', {lead_days}, {pending})"
+        )
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_invalid_subscription_rows() {
+        let db = test_pool().await;
+        for (label, sql) in [
+            ("negativer Betrag", insert_sub_sql(-1, 7, "NULL")),
+            ("Betrag 0 ohne Preisaenderung", insert_sub_sql(0, 7, "NULL")),
+            ("Vorlauf zu gross", insert_sub_sql(100, 366, "NULL")),
+            ("negativer Vorlauf", insert_sub_sql(100, -1, "NULL")),
+            ("pending <= 0", insert_sub_sql(100, 7, "0")),
+            (
+                "active kein Boolean",
+                "INSERT INTO subscriptions (name, amount_cents, currency, interval, anchor_date, \
+                 active) VALUES ('X', 100, 'EUR', 'monthly', '2026-01-15', 2)"
+                    .to_string(),
+            ),
+        ] {
+            let err = exec(&db, &sql).await.expect_err(label);
+            assert!(err.contains("Integritaetsregel"), "{label}: {err}");
+        }
+    }
+
+    #[tokio::test]
+    async fn schema_accepts_valid_subscription_edge_cases() {
+        let db = test_pool().await;
+        // Trial-Abo: Betrag 0 mit geplanter Preisaenderung, Vorlauf-Grenzen 0 und 365.
+        exec(&db, &insert_sub_sql(0, 0, "999"))
+            .await
+            .expect("Trial-Abo");
+        exec(&db, &insert_sub_sql(1, 365, "NULL"))
+            .await
+            .expect("Vorlauf 365");
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_invalid_updates() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await;
+        let err = exec(
+            &db,
+            &format!(
+                "UPDATE subscriptions SET lead_days = 500 WHERE id = {}",
+                sub.id
+            ),
+        )
+        .await
+        .expect_err("Vorlauf 500");
+        assert!(err.contains("Integritaetsregel"), "{err}");
+        let err = exec(
+            &db,
+            &format!(
+                "UPDATE subscriptions SET amount_cents = 0 WHERE id = {}",
+                sub.id
+            ),
+        )
+        .await
+        .expect_err("Betrag 0 ohne pending");
+        assert!(err.contains("Integritaetsregel"), "{err}");
+        // Legitimer Update bleibt moeglich.
+        exec(
+            &db,
+            &format!("UPDATE subscriptions SET active = 0 WHERE id = {}", sub.id),
+        )
+        .await
+        .expect("archivieren");
+    }
+
+    #[tokio::test]
+    async fn schema_rejects_invalid_income_and_account_rows() {
+        let db = test_pool().await;
+        for (label, sql) in [
+            (
+                "Einnahme Betrag 0",
+                "INSERT INTO incomes (name, amount_cents, currency, interval, anchor_date) \
+                 VALUES ('Gehalt', 0, 'EUR', 'monthly', '2026-01-01')",
+            ),
+            (
+                "Einnahme one_time=2",
+                "INSERT INTO incomes (name, amount_cents, currency, interval, anchor_date, one_time) \
+                 VALUES ('Gehalt', 100, 'EUR', 'monthly', '2026-01-01', 2)",
+            ),
+            (
+                "Konto Puffer negativ",
+                "INSERT INTO accounts (name, min_buffer_cents) VALUES ('K', -1)",
+            ),
+            (
+                "Konto Saldo ausserhalb",
+                "INSERT INTO accounts (name, balance_cents) VALUES ('K', 9000000000000001)",
+            ),
+        ] {
+            let err = exec(&db, sql).await.expect_err(label);
+            assert!(err.contains("Integritaetsregel"), "{label}: {err}");
+        }
+        exec(
+            &db,
+            "INSERT INTO accounts (name, balance_cents, min_buffer_cents) \
+             VALUES ('K', -9000000000000000, 0)",
+        )
+        .await
+        .expect("Saldo-Grenze ist erlaubt");
+    }
 }
