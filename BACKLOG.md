@@ -49,6 +49,13 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist committet, aber **noch nicht gepusht**; die Commits davor (Simulation, Datei-Token, Trigger) sind auf `origin`. Nichts davon wurde bisher im laufenden Fenster abgenommen. Reihenfolge = sinnvolle Abarbeitung.
 
+**Stand am Ende der Session 2026-10-09:** `main` ist komplett auf GitHub (bis `e4f2ca3`). Der Tag `v0.6.0` liegt **nur lokal** auf `e4f2ca3`, das Secret `TAURI_SIGNING_PRIVATE_KEY` ist **nicht angelegt**, die CI zum letzten Push wurde **nicht ausgewertet**. Nächste Session beginnt mit **A0**.
+
+**A0. CI auswerten (nächste Session zuerst)**
+- [ ] **Läufe zu `e4f2ca3` prüfen** (`gh run list --commit e4f2ca3`): Checks, Security, E2E (E2E ist bekannt rot/pausiert). Zuvor war bei `c6a0477` nur `pnpm audit` rot — Dev-Tooling-Drift seit Juli (42 Funde), in `e4f2ca3` auf **3** reduziert (Overrides in `pnpm-workspace.yaml`, vitest 4.1.11).
+- [ ] **3 verbleibende `pnpm audit`-Funde ohne Patch auf der Registry:** `braces` (GHSA-vfj7-8cjw-p6xm, gefixt erst ab 3.0.4, neueste ist 3.0.3) und `extract-zip` (GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3, gefixt ab 2.0.2, neueste 2.0.1) — beide nur über `e2e`/`@wdio` (kein Runtime-Pfad). Entscheiden: abwarten und beobachten, oder per `auditConfig.ignoreGhsas` mit Begründung ausnehmen. Solange sie offen sind, bleibt der Pflicht-Check „pnpm audit" rot.
+- [ ] **Erst wenn CI und Entscheidung geklärt sind:** Secret anlegen (`gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/subtracked-updater.key`), dann `git push origin v0.6.0`.
+
 **A. Vor dem nächsten Release (v0.6.0) — nur du kannst das**
 - [ ] **Updater in Betrieb nehmen.** (1) Privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern (er hat **kein** Passwort; wird er verloren, nimmt keine installierte Version mehr Updates an). (2) GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen — ohne das bricht der Release-Job bewusst im Schritt „Check updater signing key" ab. (3) Danach v0.6.0 releasen und mit einem späteren v0.6.1 den **echten** Update-Pfad durchspielen (alte Version installieren → neue veröffentlichen → in der App aktualisieren); erst dann ist der Updater verifiziert. Details: RELEASE.md → Updater.
 - [x] **Version auf 0.6.0 gebumpt** (2026-10-09; `package.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock`). Der Tag `v0.6.0` existiert **nur lokal** und ist **nicht gepusht**: ein Tag-Push startet `release.yml`, und das bricht ohne Secret (nächster Punkt) im ersten Schritt ab. Erst Secret anlegen, dann `git push origin v0.6.0`.

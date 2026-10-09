@@ -52,7 +52,8 @@ Die vollständige, nach Priorität geordnete Liste steht in **BACKLOG.md → „
 
 - **Updater in Betrieb nehmen** (Schlüssel sichern, Secret `TAURI_SIGNING_PRIVATE_KEY`, v0.6.0 → v0.6.1 durchspielen); sonst bricht der nächste Release-Job bewusst ab. Version steht noch auf **0.5.1**.
 - **Nichts aus Teil 2 ist im laufenden Fenster gesehen** worden; echter CSV-Test und echter Update-Lauf fehlen.
-- Teil 1 (bis `5bdb3f9`) ist gepusht, **Teil 2 (ab `7e7dce2`) liegt nur lokal**.
+- **Push-Stand (Ende der Session):** `main` ist komplett auf GitHub (bis `e4f2ca3`, davor `c6a0477` = „Version 0.6.0"). Der Tag **`v0.6.0` ist nur lokal** (auf `e4f2ca3`), das **GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` fehlt** — ein Tag-Push würde den Release-Job im Schritt „Check updater signing key" absichtlich abbrechen lassen. Auf Wunsch des Users wurde bewusst *nur* `main` gepusht; die CI-Auswertung ist Aufgabe der nächsten Session (BACKLOG → A0).
+- **`pnpm audit` war bei `c6a0477` rot** (42 Funde, reines Dev-Tooling-Drift seit Juli: undici, vitest, jsdom-/wdio-Unterbau …). `e4f2ca3` hebt sie per Overrides auf **3** Funde (`braces`, `extract-zip` ×2), für die es auf der Registry **keinen gepatchten Release** gibt; sie hängen nur an `e2e/@wdio`. `cargo audit` und `cargo deny` waren in der CI grün. Ergebnis der Checks/E2E-Läufe zu `e4f2ca3` wurde nicht mehr abgewartet.
 
 ---
 
