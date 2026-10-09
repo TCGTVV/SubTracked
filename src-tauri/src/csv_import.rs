@@ -137,9 +137,9 @@ pub fn parse_bank_csv(content: &str) -> Result<Vec<BankTransaction>, String> {
                 _ => primary,
             }
         };
-        let raw_amount = columns.amount.map(&get).unwrap_or_default();
-        let raw_debit = columns.debit.map(&get).unwrap_or_default();
-        let raw_credit = columns.credit.map(&get).unwrap_or_default();
+        let raw_amount = columns.amount.map(get).unwrap_or_default();
+        let raw_debit = columns.debit.map(get).unwrap_or_default();
+        let raw_credit = columns.credit.map(get).unwrap_or_default();
         if raw_date.is_empty()
             && raw_amount.is_empty()
             && raw_debit.is_empty()
