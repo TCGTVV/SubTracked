@@ -13,7 +13,7 @@
 use serde::Serialize;
 use tauri::State;
 
-use crate::csv_import::{names_similar, parse_bank_csv, BankTransaction};
+use crate::csv_import::{names_similar, parse_bank_csv, read_csv_file, BankTransaction};
 use crate::db::AppState;
 use crate::file_grants::{FileGrants, GrantKind};
 use crate::recurrence::{interval_step, IntervalStep};
@@ -118,8 +118,7 @@ pub async fn reconcile_csv(
     token: String,
 ) -> Result<Vec<ReconcileFinding>, String> {
     let path = grants.take(&token, GrantKind::Read)?;
-    let content =
-        std::fs::read_to_string(&path).map_err(|e| format!("Konnte CSV nicht lesen: {e}"))?;
+    let content = read_csv_file(&path)?;
     let transactions = parse_bank_csv(&content)?;
     // Nur aktive, wiederkehrende Abos mit echtem Preis: Einmalausgaben haben
     // keinen Zyklus, 0-€-Trials keine Abbuchung, Archivierte keinen Soll-Wert.
