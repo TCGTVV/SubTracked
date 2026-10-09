@@ -126,6 +126,37 @@ describe("SubscriptionDialog", () => {
     expect(points.map((point) => point.getAttribute("cy"))).toEqual(["60", "60"]);
   });
 
+  it("kennzeichnet gleiche Beträge in verschiedenen Währungen nicht als konstant", async () => {
+    mockListPriceHistory.mockResolvedValue([
+      {
+        id: 2,
+        subscriptionId: existingSub.id,
+        amountCents: 1000,
+        currency: "USD",
+        changedAt: "2026-02-01T00:00:00Z",
+      },
+      {
+        id: 1,
+        subscriptionId: existingSub.id,
+        amountCents: 1000,
+        currency: "EUR",
+        changedAt: "2026-01-01T00:00:00Z",
+      },
+    ]);
+
+    renderDialog(existingSub);
+
+    await waitFor(() => {
+      expect(screen.getByText("Preis-Historie (2 Einträge)")).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Konstant:/)).not.toBeInTheDocument();
+    const labels = document.querySelector("div.justify-between.text-xs");
+    expect(labels?.textContent).toMatch(/10,00\s*€.*10,00\s*\$/);
+    // Kein NaN im Graphen, auch wenn alle Beträge numerisch gleich sind.
+    const points = Array.from(document.querySelectorAll('svg[role="img"] circle'));
+    expect(points.map((point) => point.getAttribute("cy"))).toEqual(["60", "60"]);
+  });
+
   it("ruft addSubscription mit gerundetem Cent-Betrag und onSaved im Neu-Modus", async () => {
     mockAddSubscription.mockResolvedValue(99);
     const { onSaved } = renderDialog(null);
