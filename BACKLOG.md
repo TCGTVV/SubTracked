@@ -45,6 +45,15 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 - [x] **Legacy lead_days bei Read nicht re-validiert** (2026-06-08, Review; gefixt 2026-06-08, Codex) — `compute_due_reminders` prueft `lead_days` jetzt pro Abo mit `validate_lead_days`; negative oder >365 werden mit `tracing::warn!` geskippt, statt das Vorlauffenster kaputtzurechnen. Test deckt gemischten Batch mit ungueltigen und gueltigen Werten ab.
 - [x] **Anchor-Date strict-on-write, lenient-on-read** (2026-06-08, Review; gefixt 2026-06-08, Codex) — Neuer gemeinsamer `parse_iso_date_strict`-Helper in `recurrence.rs`; `validate_anchor_date` und `compute_due_reminders` nutzen denselben strikten `YYYY-MM-DD`-Parser. Tests decken unpadded Legacy-Datum im Read-Pfad ab.
 
+### Offene Punkte aus Session 2026-10-09
+
+- [ ] **Manueller Test: nativer Datei-Dialog** — Rust öffnet den Dialog jetzt selbst (`file_grants.rs`); getestet sind nur Token-Logik (Rust) und UI gegen gemocktes `db.ts`. Einmal im laufenden Tauri-Fenster durchspielen: Backup exportieren, Backup importieren, Abos als CSV exportieren, Bankauszug importieren, Bankauszug abgleichen — jeweils auch mit „Abbrechen" im Dialog. Auf Linux (WebKitGTK) und Windows gegenprüfen, falls verfügbar.
+- [ ] **Manueller Test: Simulations-Optik** — `SimulationSection` + Flask-Toggle in der Abo-Card im echten Fenster ansehen (Hell/Dunkel, schmale Breite).
+- [ ] **Echte DB gegen Migration-0015-Trigger prüfen** — vor dem ersten Start mit der echten DB (oder auf einer Kopie) per `sqlite3` suchen, ob Bestandszeilen die neuen Regeln verletzen (`amount_cents <= 0` ohne Trial-Ausnahme, `lead_days` außerhalb 0..365, Booleans ≠ 0/1, Puffer < 0). Solche Zeilen ließen sich sonst nicht mehr per UPDATE ändern. Die Migration läuft mit Auto-Snapshot (`db_backup.rs`), ein Rollback ist also möglich.
+- [ ] **`CLAUDE.md` auf macOS-Pfade aktualisieren** — Regel 1 nennt noch `/home/legr/.claude/projects/...` für die Auto-Memory; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
+- [ ] **Lokale Rust-Tools nachziehen** — `cargo-deny` und `cargo-machete` fehlen auf dieser Maschine (nur CI prüft sie); `cargo-nextest` ist installiert.
+- [ ] **Weiterhin offen aus früheren Sessions:** CSV-Praxistest mit echtem Bank-Auszug, App-Icon ≠ neues In-App-Branding, `DialogDescription`-Aufräumer, optional passwortverschlüsseltes Backup, E2E-CI-Job (rot/pausiert, siehe HANDOVER 2026-07-14).
+
 ## 🔨 Jetzt (Oberfläche)
 
 - [x] **Header-Button-Reihenfolge: Neues Abo → Neue Einnahme → Neues Konto → Einstellungen** (User-Test 2026-06-11; gefixt 2026-06-11, Claude) — Primäre Aktion (Abo) gehört ganz links, Einstellungen ganz rechts. **Erledigt:** `header-actions` in `App.tsx` umsortiert auf Neues Abo → Neue Einnahme → Konten → Einstellungen (war vorher genau umgekehrt). Button-Label „Konten" beibehalten (Dialog verwaltet Konten, ist kein reines „Neu"). CSS geprüft: `.header-actions` ist nur `flex` + `gap` ohne reihenfolge-abhängige Selektoren → keine Anpassung nötig.
