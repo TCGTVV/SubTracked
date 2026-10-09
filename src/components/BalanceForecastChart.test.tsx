@@ -32,6 +32,7 @@ function makeAccount(overrides: Partial<AccountCoverage> = {}): AccountCoverage 
     firstBelowBufferDate: null,
     firstBelowZeroDate: null,
     foreignCurrencySubsCount: 0,
+    convertedItemsCount: 0,
     items: [makeItem()],
     ...overrides,
   };

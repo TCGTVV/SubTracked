@@ -3,8 +3,8 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
 use crate::db::{
-    Account, AppInfo, AppState, Income, NewIncome, NewSubscription, PriceHistoryEntry,
-    ReminderState, Subscription, SubscriptionSkip,
+    Account, AppInfo, AppState, ExchangeRate, Income, NewIncome, NewSubscription,
+    PriceHistoryEntry, ReminderState, Subscription, SubscriptionSkip,
 };
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_cancellation,
@@ -509,6 +509,62 @@ pub async fn unskip_occurrence(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn list_skips(state: State<'_, AppState>) -> Result<Vec<SubscriptionSkip>, String> {
     crate::db::fetch_skips(&state.db).await
+}
+
+// --- Wechselkurse (Migration 0018) ---
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_rates(state: State<'_, AppState>) -> Result<Vec<ExchangeRate>, String> {
+    crate::db::fetch_rates(&state.db).await
+}
+
+/// Legt einen Kurs an oder überschreibt den bestehenden für dasselbe Währungspaar.
+pub(crate) async fn set_rate_in_db(
+    db: &sqlx::SqlitePool,
+    from_currency: &str,
+    to_currency: &str,
+    rate_micros: i64,
+) -> Result<(), String> {
+    crate::validation::validate_exchange_rate(from_currency, to_currency, rate_micros)?;
+    sqlx::query!(
+        "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros) VALUES (?, ?, ?) \
+         ON CONFLICT (from_currency, to_currency) \
+         DO UPDATE SET rate_micros = excluded.rate_micros, updated_at = datetime('now')",
+        from_currency,
+        to_currency,
+        rate_micros
+    )
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn set_rate(
+    state: State<'_, AppState>,
+    from_currency: String,
+    to_currency: String,
+    rate_micros: i64,
+) -> Result<(), String> {
+    set_rate_in_db(&state.db, &from_currency, &to_currency, rate_micros).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn delete_rate(
+    state: State<'_, AppState>,
+    from_currency: String,
+    to_currency: String,
+) -> Result<(), String> {
+    sqlx::query!(
+        "DELETE FROM exchange_rates WHERE from_currency = ? AND to_currency = ?",
+        from_currency,
+        to_currency
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1160,6 +1216,56 @@ mod tests {
         .await
         .expect_err("CHECK greift");
         assert!(err.to_lowercase().contains("check"), "{err}");
+    }
+
+    // --- Wechselkurse (Migration 0018) ---
+
+    #[tokio::test]
+    async fn set_rate_inserts_then_updates_the_same_pair() {
+        let db = test_pool().await;
+        set_rate_in_db(&db, "USD", "EUR", 920_000)
+            .await
+            .expect("anlegen");
+        set_rate_in_db(&db, "USD", "EUR", 930_000)
+            .await
+            .expect("überschreiben");
+        set_rate_in_db(&db, "EUR", "USD", 1_080_000)
+            .await
+            .expect("Gegenrichtung ist ein eigener Kurs");
+        let rates = crate::db::fetch_rates(&db).await.unwrap();
+        assert_eq!(rates.len(), 2);
+        let usd_eur = rates.iter().find(|r| r.from_currency == "USD").unwrap();
+        assert_eq!(usd_eur.rate_micros, 930_000);
+    }
+
+    #[tokio::test]
+    async fn set_rate_rejects_invalid_input() {
+        let db = test_pool().await;
+        for (from, to, micros) in [
+            ("EUR", "EUR", 1_000_000),
+            ("USD", "EUR", 0),
+            ("USD", "EUR", -5),
+            ("USD", "EUR", crate::validation::MAX_RATE_MICROS + 1),
+            ("BTC", "EUR", 1_000_000),
+            ("USD", "XYZ", 1_000_000),
+        ] {
+            assert!(
+                set_rate_in_db(&db, from, to, micros).await.is_err(),
+                "{from}→{to} {micros}"
+            );
+        }
+        assert!(crate::db::fetch_rates(&db).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn schema_enforces_rate_constraints_even_without_the_command() {
+        let db = test_pool().await;
+        for sql in [
+            "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros) VALUES ('USD', 'USD', 1000000)",
+            "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros) VALUES ('USD', 'EUR', 0)",
+        ] {
+            assert!(exec(&db, sql).await.is_err(), "{sql}");
+        }
     }
 
     // --- Schema-Trigger (Migration 0015): zweite Verteidigungslinie neben validation.rs ---

@@ -43,6 +43,22 @@ pub fn validate_interval(interval: &str) -> Result<(), String> {
     interval_step(interval).map(|_| ())
 }
 
+/// Obergrenze eines Kurses in Mikro-Einheiten (1 Mio.× — weit jenseits jeder echten Parität).
+pub const MAX_RATE_MICROS: i64 = 1_000_000_000_000;
+
+/// Manueller Wechselkurs: bekannte, verschiedene Währungen und ein Kurs in (0, MAX].
+pub fn validate_exchange_rate(from: &str, to: &str, rate_micros: i64) -> Result<(), String> {
+    validate_currency(from)?;
+    validate_currency(to)?;
+    if from == to {
+        return Err("Ein Kurs braucht zwei verschiedene Währungen.".to_string());
+    }
+    if !(1..=MAX_RATE_MICROS).contains(&rate_micros) {
+        return Err("Der Kurs muss größer als 0 sein.".to_string());
+    }
+    Ok(())
+}
+
 /// Verschiebungsregel bei Wochenende/Feiertag: `none`, `next` oder `previous`.
 pub fn validate_shift_rule(rule: &str) -> Result<(), String> {
     if !crate::bankdays::SHIFT_RULES.contains(&rule) {

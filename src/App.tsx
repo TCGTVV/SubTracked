@@ -254,7 +254,7 @@ function CashflowCard({
 }
 
 function App() {
-  const { subs, accounts, incomes, loading, error, setError, reloadAll, reloadAccounts } =
+  const { subs, accounts, incomes, rates, loading, error, setError, reloadAll, reloadAccounts } =
     useSubscriptions();
   const { status: notifStatus, activate: activateNotifications } = useNotificationPermission();
   const { scheme, setScheme } = useColorScheme();
@@ -300,6 +300,7 @@ function App() {
       incomes={activeIncomes}
       excludedIds={simulatedOut}
       onReset={() => setSimulatedOut(new Set())}
+      rates={rates}
     />
   );
   const preFilteredSubs = showArchived ? subs : activeSubs;
@@ -564,6 +565,7 @@ function App() {
                   subscriptions={activeSubs}
                   accounts={accounts}
                   incomes={activeIncomes}
+                  rates={rates}
                 />
               )}
               <BalanceFreshnessWarning
@@ -588,6 +590,7 @@ function App() {
                   subscriptions={activeSubs}
                   accounts={accounts}
                   incomes={activeIncomes}
+                  rates={rates}
                 />
               )}
               <ArchivedSavingsSection subscriptions={subs} />

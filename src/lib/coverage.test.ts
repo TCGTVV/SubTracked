@@ -510,6 +510,77 @@ describe("Verschiebung auf Bankarbeitstage (shiftRule)", () => {
   });
 });
 
+describe("Fremdwährung mit manuellem Kurs", () => {
+  const usdSub = (overrides: Partial<Subscription> = {}) =>
+    sub({ currency: "USD", amountCents: 1000, ...overrides });
+  const usdToEur = [{ fromCurrency: "USD", toCurrency: "EUR", rateMicros: 920_000 }];
+
+  it("schließt Fremdwährung ohne Kurs aus und zählt sie (bisheriges Verhalten)", () => {
+    const [bucket] = computeCoverage([usdSub()], [acc(1, "Giro")], 3, NOW);
+    expect(bucket?.items).toHaveLength(0);
+    expect(bucket?.foreignCurrencySubsCount).toBe(1);
+    expect(bucket?.convertedItemsCount).toBe(0);
+  });
+
+  it("rechnet mit hinterlegtem Kurs um und kennzeichnet jeden Posten", () => {
+    const [bucket] = computeCoverage([usdSub()], [acc(1, "Giro")], 3, NOW, [], usdToEur);
+    expect(bucket?.foreignCurrencySubsCount).toBe(0);
+    expect(bucket?.convertedItemsCount).toBe(1);
+    expect(bucket?.items).toHaveLength(3);
+    // 10,00 USD × 0,92 = 9,20 EUR
+    expect(bucket?.items[0]).toMatchObject({
+      cents: 920,
+      convertedFrom: { currency: "USD", cents: 1000, inverted: false },
+    });
+    expect(bucket?.totalOutflowCents).toBe(3 * 920);
+  });
+
+  it("nutzt den Kehrwert, wenn nur der Gegenkurs hinterlegt ist, und sagt das", () => {
+    const eurToUsd = [{ fromCurrency: "EUR", toCurrency: "USD", rateMicros: 1_250_000 }];
+    const [bucket] = computeCoverage([usdSub()], [acc(1, "Giro")], 1, NOW, [], eurToUsd);
+    // 10,00 USD / 1,25 = 8,00 EUR
+    expect(bucket?.items[0]).toMatchObject({ cents: 800, convertedFrom: { inverted: true } });
+  });
+
+  it("lässt Posten in Kontowährung unverändert und ungekennzeichnet", () => {
+    const [bucket] = computeCoverage([sub()], [acc(1, "Giro")], 1, NOW, [], usdToEur);
+    expect(bucket?.items[0]?.convertedFrom).toBeUndefined();
+    expect(bucket?.convertedItemsCount).toBe(0);
+  });
+
+  it("rechnet nie über einen Dritt-Kurs", () => {
+    const viaChf = [
+      { fromCurrency: "USD", toCurrency: "CHF", rateMicros: 900_000 },
+      { fromCurrency: "CHF", toCurrency: "EUR", rateMicros: 1_050_000 },
+    ];
+    const [bucket] = computeCoverage([usdSub()], [acc(1, "Giro")], 1, NOW, [], viaChf);
+    expect(bucket?.items).toHaveLength(0);
+    expect(bucket?.foreignCurrencySubsCount).toBe(1);
+  });
+
+  it("rechnet Einnahmen in Fremdwährung um und die Kontoprognose nutzt den umgerechneten Betrag", () => {
+    const account = acc(1, "Giro", { balanceCents: 0 });
+    const salary = income({
+      currency: "USD",
+      amountCents: 100000,
+      anchorDate: "2026-01-02",
+    });
+    const [bucket] = computeCoverage([], [account], 1, NOW, [salary], usdToEur);
+    expect(bucket?.totalInflowCents).toBe(92000);
+    expect(bucket?.items[0]).toMatchObject({ type: "income", convertedFrom: { cents: 100000 } });
+  });
+
+  it("schreibt den Kontostand mit dem umgerechneten Betrag fort", () => {
+    // Saldo 9,50 EUR; 10 USD × 0,92 = 9,20 EUR → 0,30 EUR bleiben, kein Minus.
+    const account = acc(1, "Giro", { balanceCents: 950 });
+    const [without] = computeCoverage([usdSub()], [account], 1, NOW);
+    const [withRate] = computeCoverage([usdSub()], [account], 1, NOW, [], usdToEur);
+    expect(without?.firstBelowZeroDate).toBeNull(); // ausgeschlossen
+    expect(withRate?.firstBelowZeroDate).toBeNull();
+    expect(withRate?.finalBalanceCents).toBe(30);
+  });
+});
+
 describe("hasLiveCashflow", () => {
   const today = "2026-10-09";
 

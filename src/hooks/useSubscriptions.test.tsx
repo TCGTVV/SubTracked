@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listAccounts, listIncomes, listSkips, listSubscriptions } from "../lib/db";
+import { listAccounts, listIncomes, listRates, listSkips, listSubscriptions } from "../lib/db";
 import type { Account, Subscription } from "../types";
 import { useSubscriptions } from "./useSubscriptions";
 
@@ -9,12 +9,14 @@ vi.mock("../lib/db", () => ({
   listAccounts: vi.fn(),
   listIncomes: vi.fn(),
   listSkips: vi.fn(),
+  listRates: vi.fn(),
 }));
 
 const mockListSubscriptions = vi.mocked(listSubscriptions);
 const mockListAccounts = vi.mocked(listAccounts);
 const mockListIncomes = vi.mocked(listIncomes);
 const mockListSkips = vi.mocked(listSkips);
+const mockListRates = vi.mocked(listRates);
 
 const sampleSubs: Subscription[] = [
   {
@@ -58,6 +60,22 @@ describe("useSubscriptions", () => {
     mockListAccounts.mockReset();
     mockListIncomes.mockResolvedValue([]);
     mockListSkips.mockResolvedValue([]);
+    mockListRates.mockResolvedValue([]);
+  });
+
+  it("lädt die Wechselkurse mit", async () => {
+    mockListSubscriptions.mockResolvedValue([]);
+    mockListAccounts.mockResolvedValue([]);
+    const rate = {
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rateMicros: 920_000,
+      updatedAt: "2026-10-01 08:00:00",
+    };
+    mockListRates.mockResolvedValue([rate]);
+    const { result } = renderHook(() => useSubscriptions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.rates).toEqual([rate]);
   });
 
   it("hängt übersprungene Termine an das jeweilige Abo", async () => {

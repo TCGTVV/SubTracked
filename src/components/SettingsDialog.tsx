@@ -16,6 +16,7 @@ import {
   sendTestNotification,
 } from "../lib/db";
 import { toUserMessage } from "../lib/errors";
+import { RatesSection } from "./RatesSection";
 import { UpdateSection } from "./UpdateSection";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
@@ -323,6 +324,8 @@ export function SettingsDialog({
               </Button>
             </div>
           </section>
+
+          <RatesSection onChanged={onDataReplaced} />
 
           <UpdateSection />
 
