@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros, updated_at) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "42577c6efecb0754762cf1b9a77c4227700f46790af178d61d3a03b8b0bcec44"
+}

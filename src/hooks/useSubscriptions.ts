@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { listAccounts, listIncomes, listSkips, listSubscriptions } from "../lib/db";
+import { listAccounts, listIncomes, listRates, listSkips, listSubscriptions } from "../lib/db";
 import { toUserMessage } from "../lib/errors";
-import type { Account, Income, Subscription } from "../types";
+import type { Account, ExchangeRate, Income, Subscription } from "../types";
 
 export interface UseSubscriptionsResult {
   subs: Subscription[];
   accounts: Account[];
   incomes: Income[];
+  /** Manuelle Wechselkurse (für Fremdwährungs-Posten in der Prognose). */
+  rates: ExchangeRate[];
   loading: boolean;
   error: string | null;
   setError: (message: string | null) => void;
@@ -18,6 +20,7 @@ export function useSubscriptions(): UseSubscriptionsResult {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
+  const [rates, setRates] = useState<ExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,12 +29,14 @@ export function useSubscriptions(): UseSubscriptionsResult {
       // Bewusst alle Subs (inkl. archiviert) — App.tsx filtert per Toggle.
       // OverviewSection bekommt nur die aktiven, damit Coverage keine archivierten
       // Abos in den Forecast einrechnet.
-      const [subRows, accountRows, incomeRows, skipRows] = await Promise.all([
+      const [subRows, accountRows, incomeRows, skipRows, rateRows] = await Promise.all([
         listSubscriptions(false),
         listAccounts(),
         listIncomes(false),
         listSkips(),
+        listRates(),
       ]);
+      setRates(rateRows);
       // Übersprungene Termine direkt an die Abos hängen, damit jede Prognose-Berechnung
       // sie ohne zusätzliche Parameter berücksichtigt (siehe `Subscription.skippedDates`).
       const skipsBySub = new Map<number, string[]>();
@@ -68,5 +73,5 @@ export function useSubscriptions(): UseSubscriptionsResult {
     void reloadAll();
   }, [reloadAll]);
 
-  return { subs, accounts, incomes, loading, error, setError, reloadAll, reloadAccounts };
+  return { subs, accounts, incomes, rates, loading, error, setError, reloadAll, reloadAccounts };
 }

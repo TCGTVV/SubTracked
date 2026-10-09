@@ -1,5 +1,6 @@
 import type { Account, Income, Subscription } from "../types";
 import { computeCostSummary, computeCoverage } from "./coverage";
+import type { RateLike } from "./rates";
 
 /** Prognose-Ausblick eines Kontos über den Coverage-Horizont. */
 export interface AccountOutlook {
@@ -65,6 +66,7 @@ export function computeSimulation(
   excludedIds: ReadonlySet<number>,
   months = 6,
   now: Date = new Date(),
+  rates: readonly RateLike[] = [],
 ): SimulationResult {
   const excluded = subscriptions.filter((s) => excludedIds.has(s.id));
   const remaining = subscriptions.filter((s) => !excludedIds.has(s.id));
@@ -84,8 +86,8 @@ export function computeSimulation(
     };
   });
 
-  const coverageBefore = computeCoverage(subscriptions, accounts, months, now, incomes);
-  const coverageAfter = computeCoverage(remaining, accounts, months, now, incomes);
+  const coverageBefore = computeCoverage(subscriptions, accounts, months, now, incomes, rates);
+  const coverageAfter = computeCoverage(remaining, accounts, months, now, incomes, rates);
   const afterById = new Map(coverageAfter.map((c) => [c.accountId, c]));
 
   const simulatedAccounts: SimulatedAccount[] = [];

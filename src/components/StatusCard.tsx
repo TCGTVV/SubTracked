@@ -3,6 +3,7 @@ import { de } from "date-fns/locale";
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { computeCoverage } from "../lib/coverage";
 import { formatAmount } from "../lib/format";
+import type { RateLike } from "../lib/rates";
 import { cn } from "../lib/utils";
 import type { Account, Income, Subscription } from "../types";
 
@@ -10,6 +11,7 @@ interface Props {
   subscriptions: Subscription[];
   accounts: Account[];
   incomes: Income[];
+  rates?: readonly RateLike[];
   months?: number;
 }
 
@@ -22,11 +24,12 @@ function deriveStatus(
   subscriptions: Subscription[],
   accounts: Account[],
   incomes: Income[],
+  rates: readonly RateLike[],
   months: number,
 ): Status | null {
   if (accounts.length === 0) return null;
 
-  const coverage = computeCoverage(subscriptions, accounts, months, new Date(), incomes);
+  const coverage = computeCoverage(subscriptions, accounts, months, new Date(), incomes, rates);
   const accountCoverages = coverage.filter((c) => c.accountId != null);
   if (accountCoverages.length === 0) return null;
 
@@ -98,8 +101,8 @@ const STYLES = {
   },
 } as const;
 
-export function StatusCard({ subscriptions, accounts, incomes, months = 6 }: Props) {
-  const status = deriveStatus(subscriptions, accounts, incomes, months);
+export function StatusCard({ subscriptions, accounts, incomes, rates = [], months = 6 }: Props) {
+  const status = deriveStatus(subscriptions, accounts, incomes, rates, months);
   if (!status) return null;
 
   const s = STYLES[status.kind];

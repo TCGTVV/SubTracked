@@ -278,6 +278,34 @@ pub struct SubscriptionSkip {
     pub created_at: String,
 }
 
+/// Manueller Wechselkurs (siehe Migration 0018): 1 `from_currency` = `rate_micros` / 1.000.000
+/// `to_currency`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[cfg_attr(feature = "ts-rs-export", derive(TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-rs-export",
+    ts(export, export_to = "../../src/generated/ExchangeRate.ts")
+)]
+pub struct ExchangeRate {
+    pub from_currency: String,
+    pub to_currency: String,
+    #[cfg_attr(feature = "ts-rs-export", ts(type = "number"))]
+    pub rate_micros: i64,
+    pub updated_at: String,
+}
+
+pub(crate) async fn fetch_rates(pool: &SqlitePool) -> Result<Vec<ExchangeRate>, String> {
+    sqlx::query_as!(
+        ExchangeRate,
+        r#"SELECT from_currency, to_currency, rate_micros, updated_at
+           FROM exchange_rates ORDER BY from_currency, to_currency"#
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Alle übersprungenen Einzeltermine, nach Datum sortiert. Geteilt von `list_skips`
 /// (Frontend) und dem Reminder-Check (überspringt diese Termine).
 pub(crate) async fn fetch_skips(pool: &SqlitePool) -> Result<Vec<SubscriptionSkip>, String> {

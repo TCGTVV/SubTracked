@@ -3,6 +3,7 @@ import { de } from "date-fns/locale";
 import { ChevronRight } from "lucide-react";
 import { type AccountCoverage, computeCoverage, computeMonthlyBaseline } from "../lib/coverage";
 import { daysSince, formatAmount } from "../lib/format";
+import type { RateLike } from "../lib/rates";
 import { cn } from "../lib/utils";
 import type { Account, Income, Subscription } from "../types";
 import { BalanceForecastChart } from "./BalanceForecastChart";
@@ -11,6 +12,8 @@ interface Props {
   subscriptions: Subscription[];
   accounts: Account[];
   incomes?: Income[];
+  /** Manuelle Wechselkurse für Fremdwährungs-Posten (siehe `computeCoverage`). */
+  rates?: readonly RateLike[];
   months?: number;
 }
 
@@ -31,12 +34,18 @@ function statusBadge(c: AccountCoverage): { label: string; tone: "ok" | "warn" |
   return null;
 }
 
-export function OverviewSection({ subscriptions, accounts, incomes = [], months = 6 }: Props) {
+export function OverviewSection({
+  subscriptions,
+  accounts,
+  incomes = [],
+  rates = [],
+  months = 6,
+}: Props) {
   if (subscriptions.length === 0 && accounts.length === 0 && incomes.length === 0) return null;
 
   const baseline = computeMonthlyBaseline(subscriptions, accounts);
   const today = new Date();
-  const coverage = computeCoverage(subscriptions, accounts, months, today, incomes);
+  const coverage = computeCoverage(subscriptions, accounts, months, today, incomes, rates);
 
   return (
     <section className="flex flex-col gap-6">
@@ -143,8 +152,19 @@ export function OverviewSection({ subscriptions, accounts, incomes = [], months 
                   {account.foreignCurrencySubsCount > 0 && (
                     <p className="text-xs text-muted-foreground">
                       {account.foreignCurrencySubsCount === 1
-                        ? "1 Abo in anderer Währung wird hier nicht berücksichtigt."
-                        : `${account.foreignCurrencySubsCount} Abos in anderer Währung werden hier nicht berücksichtigt.`}
+                        ? "1 Abo in anderer Währung wird hier nicht berücksichtigt"
+                        : `${account.foreignCurrencySubsCount} Abos in anderer Währung werden hier nicht berücksichtigt`}{" "}
+                      — es fehlt ein Wechselkurs (Einstellungen → Wechselkurse).
+                    </p>
+                  )}
+                  {account.convertedItemsCount > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      ≈{" "}
+                      {account.convertedItemsCount === 1
+                        ? "1 Posten ist"
+                        : `${account.convertedItemsCount} Posten sind`}{" "}
+                      mit deinem manuellen Wechselkurs umgerechnet; die Prognose ist so genau wie
+                      dieser Kurs.
                     </p>
                   )}
 
@@ -176,9 +196,22 @@ export function OverviewSection({ subscriptions, accounts, incomes = [], months 
                               it.type === "income" ? "text-success" : "",
                             )}
                           >
+                            {it.convertedFrom ? "≈ " : ""}
                             {it.type === "income"
                               ? `+${formatAmount(it.cents, account.currency)}`
                               : `−${formatAmount(it.cents, account.currency)}`}
+                            {it.convertedFrom && (
+                              <span
+                                className="ml-1 text-xs text-muted-foreground"
+                                title={
+                                  it.convertedFrom.inverted
+                                    ? "umgerechnet mit dem Kehrwert des hinterlegten Gegenkurses"
+                                    : "umgerechnet mit deinem manuellen Wechselkurs"
+                                }
+                              >
+                                ({formatAmount(it.convertedFrom.cents, it.convertedFrom.currency)})
+                              </span>
+                            )}
                             {account.accountId != null && (
                               <span className="ml-2 text-muted-foreground">
                                 → {formatAmount(it.balanceAfterCents, account.currency)}

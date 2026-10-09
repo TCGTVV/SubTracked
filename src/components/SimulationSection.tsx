@@ -2,6 +2,7 @@ import { format, parseISO } from "date-fns";
 import { de } from "date-fns/locale";
 import { FlaskConical } from "lucide-react";
 import { formatAmount } from "../lib/format";
+import type { RateLike } from "../lib/rates";
 import { type AccountOutlook, computeSimulation, type SimulatedAccount } from "../lib/simulation";
 import type { Account, Income, Subscription } from "../types";
 import { Button } from "./ui/button";
@@ -13,6 +14,7 @@ interface Props {
   /** IDs der Abos, die testweise wegfallen. */
   excludedIds: ReadonlySet<number>;
   onReset: () => void;
+  rates?: readonly RateLike[];
   months?: number;
 }
 
@@ -56,9 +58,18 @@ export function SimulationSection({
   incomes,
   excludedIds,
   onReset,
+  rates = [],
   months = 6,
 }: Props) {
-  const result = computeSimulation(subscriptions, accounts, incomes, excludedIds, months);
+  const result = computeSimulation(
+    subscriptions,
+    accounts,
+    incomes,
+    excludedIds,
+    months,
+    new Date(),
+    rates,
+  );
   if (result.excluded.length === 0) return null;
 
   const multiCurrency = result.costs.length > 1;

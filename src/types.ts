@@ -1,4 +1,5 @@
 import type { Account as GeneratedAccount } from "./generated/Account";
+import type { ExchangeRate as GeneratedExchangeRate } from "./generated/ExchangeRate";
 import type { Income as GeneratedIncome } from "./generated/Income";
 import type { PriceHistoryEntry as GeneratedPriceHistoryEntry } from "./generated/PriceHistoryEntry";
 import type { Subscription as GeneratedSubscription } from "./generated/Subscription";
@@ -63,3 +64,5 @@ export type Subscription = Omit<
 
 export type PriceHistoryEntry = GeneratedPriceHistoryEntry;
 export type SubscriptionSkip = GeneratedSubscriptionSkip;
+/** Manueller Wechselkurs: 1 `fromCurrency` = `rateMicros / 1.000.000` `toCurrency`. */
+export type ExchangeRate = GeneratedExchangeRate;

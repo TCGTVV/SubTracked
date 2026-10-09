@@ -2,6 +2,7 @@ import { addDays, addMonths, differenceInMonths, startOfDay, startOfMonth } from
 import type { Account, Income, Interval, ShiftRule, Subscription } from "../types";
 import { shiftToBankDay } from "./bankdays";
 import { parseStrictISODate, toISODateLocal } from "./format";
+import { convertCents, findRate, type RateLike } from "./rates";
 import { dueDatesWithin, monthsPer } from "./recurrence";
 
 export interface CoverageItem {
@@ -14,6 +15,12 @@ export interface CoverageItem {
   balanceAfterCents: number;
   belowBuffer: boolean;
   belowZero: boolean;
+  /**
+   * Gesetzt, wenn dieser Posten aus einer anderen Währung per manuellem Kurs umgerechnet wurde
+   * (`cents` ist dann der umgerechnete Betrag in der Kontowährung). `inverted`: nur der
+   * Gegenkurs war hinterlegt, der Kehrwert wurde benutzt.
+   */
+  convertedFrom?: { currency: string; cents: number; inverted: boolean };
 }
 
 export interface AccountCoverage {
@@ -31,6 +38,8 @@ export interface AccountCoverage {
   firstBelowZeroDate: string | null;
   /** Subs in einer anderen Währung als das Konto — werden ignoriert, aber gezählt. */
   foreignCurrencySubsCount: number;
+  /** Anzahl Abos/Einnahmen in Fremdwährung, die per manuellem Kurs eingerechnet wurden. */
+  convertedItemsCount: number;
   items: CoverageItem[];
 }
 
@@ -146,6 +155,8 @@ export function computeCoverage(
   months = 6,
   now: Date = new Date(),
   incomes: Income[] = [],
+  /** Manuelle Wechselkurse; ohne passenden Kurs bleibt eine Fremdwährung ausgeschlossen. */
+  rates: readonly RateLike[] = [],
 ): AccountCoverage[] {
   const from = startOfDay(now);
   const until = addMonths(from, months);
@@ -167,6 +178,7 @@ export function computeCoverage(
       firstBelowBufferDate: null,
       firstBelowZeroDate: null,
       foreignCurrencySubsCount: 0,
+      convertedItemsCount: 0,
       items: [],
     });
   }
@@ -195,31 +207,50 @@ export function computeCoverage(
         firstBelowBufferDate: null,
         firstBelowZeroDate: null,
         foreignCurrencySubsCount: 0,
+        convertedItemsCount: 0,
         items: [],
       };
       buckets.set(key, bucket);
     }
 
-    // Fremdwaehrung: nur zaehlen, nicht einrechnen. Saldo/Forecast bleiben ehrlich.
-    if (account && sub.currency !== account.currency) {
+    // Fremdwaehrung: nur mit ausdruecklich hinterlegtem Kurs umrechnen (und dann als
+    // umgerechnet kennzeichnen), sonst nur zaehlen, nicht einrechnen. Saldo/Forecast
+    // bleiben ehrlich — es wird nie still umgerechnet oder ueber Dritte geraten.
+    const foreign = account !== undefined && sub.currency !== account.currency;
+    const rate = foreign && account ? findRate(rates, sub.currency, account.currency) : null;
+    if (foreign && !rate) {
       bucket.foreignCurrencySubsCount += 1;
       continue;
     }
 
     const list = itemsByBucket.get(key) ?? [];
+    let convertedAny = false;
     for (const d of subscriptionDatesWithin(sub, from, until)) {
       const date = toISODateLocal(d);
       const cents = effectiveAmountCents(sub, date);
       // Effektiv 0 = Trial-Phase, es wird nichts abgebucht.
       if (cents === 0) continue;
-      list.push({
-        type: "outflow",
-        subscriptionId: sub.id,
-        subscription: sub.name,
-        date,
-        cents,
-      });
+      if (rate && account) {
+        convertedAny = true;
+        list.push({
+          type: "outflow",
+          subscriptionId: sub.id,
+          subscription: sub.name,
+          date,
+          cents: convertCents(cents, sub.currency, account.currency, rate),
+          convertedFrom: { currency: sub.currency, cents, inverted: rate.inverted },
+        });
+      } else {
+        list.push({
+          type: "outflow",
+          subscriptionId: sub.id,
+          subscription: sub.name,
+          date,
+          cents,
+        });
+      }
     }
+    if (convertedAny) bucket.convertedItemsCount += 1;
     itemsByBucket.set(key, list);
   }
 
@@ -242,26 +273,47 @@ export function computeCoverage(
         firstBelowBufferDate: null,
         firstBelowZeroDate: null,
         foreignCurrencySubsCount: 0,
+        convertedItemsCount: 0,
         items: [],
       };
       buckets.set(key, bucket);
     }
 
-    if (account && inc.currency !== account.currency) {
+    const foreign = account !== undefined && inc.currency !== account.currency;
+    const rate = foreign && account ? findRate(rates, inc.currency, account.currency) : null;
+    if (foreign && !rate) {
       bucket.foreignCurrencySubsCount += 1;
       continue;
     }
 
     const list = itemsByBucket.get(key) ?? [];
+    let convertedAny = false;
     for (const d of incomeDatesWithin(inc, from, until)) {
-      list.push({
-        type: "income",
-        subscriptionId: inc.id,
-        subscription: inc.name,
-        date: toISODateLocal(d),
-        cents: inc.amountCents,
-      });
+      if (rate && account) {
+        convertedAny = true;
+        list.push({
+          type: "income",
+          subscriptionId: inc.id,
+          subscription: inc.name,
+          date: toISODateLocal(d),
+          cents: convertCents(inc.amountCents, inc.currency, account.currency, rate),
+          convertedFrom: {
+            currency: inc.currency,
+            cents: inc.amountCents,
+            inverted: rate.inverted,
+          },
+        });
+      } else {
+        list.push({
+          type: "income",
+          subscriptionId: inc.id,
+          subscription: inc.name,
+          date: toISODateLocal(d),
+          cents: inc.amountCents,
+        });
+      }
     }
+    if (convertedAny) bucket.convertedItemsCount += 1;
     itemsByBucket.set(key, list);
   }
 

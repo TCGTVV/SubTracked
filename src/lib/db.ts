@@ -3,6 +3,7 @@ import type {
   Account,
   CancelMode,
   CancelUnit,
+  ExchangeRate,
   Income,
   Interval,
   PriceHistoryEntry,
@@ -186,6 +187,25 @@ export async function setIncomeActive(id: number, active: boolean): Promise<void
 
 export async function listPriceHistory(subscriptionId: number): Promise<PriceHistoryEntry[]> {
   return invoke<PriceHistoryEntry[]>("list_price_history", { subscriptionId });
+}
+
+// --- Wechselkurse -----------------------------------------------------------
+
+export async function listRates(): Promise<ExchangeRate[]> {
+  return invoke<ExchangeRate[]>("list_rates");
+}
+
+/** Legt einen Kurs an oder überschreibt den für dasselbe Währungspaar. */
+export async function setRate(
+  fromCurrency: string,
+  toCurrency: string,
+  rateMicros: number,
+): Promise<void> {
+  await invoke("set_rate", { fromCurrency, toCurrency, rateMicros });
+}
+
+export async function deleteRate(fromCurrency: string, toCurrency: string): Promise<void> {
+  await invoke("delete_rate", { fromCurrency, toCurrency });
 }
 
 // --- App-Updates -------------------------------------------------------------

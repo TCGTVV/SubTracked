@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT from_currency, to_currency, rate_micros, updated_at\n           FROM exchange_rates ORDER BY from_currency, to_currency",
+  "describe": {
+    "columns": [
+      {
+        "name": "from_currency",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "exchange_rates",
+            "name": "from_currency"
+          }
+        }
+      },
+      {
+        "name": "to_currency",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "exchange_rates",
+            "name": "to_currency"
+          }
+        }
+      },
+      {
+        "name": "rate_micros",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "exchange_rates",
+            "name": "rate_micros"
+          }
+        }
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "exchange_rates",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0099c6ede20aaab3ae6e4965dcc304ec7aee2c5eb385bb54924343c305b913b3"
+}

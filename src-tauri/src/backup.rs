@@ -18,12 +18,14 @@ use std::{
 };
 use tauri::State;
 
-use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription, SubscriptionSkip};
+use crate::db::{
+    Account, AppState, ExchangeRate, Income, PriceHistoryEntry, Subscription, SubscriptionSkip,
+};
 use crate::file_grants::{FileGrants, GrantKind};
 use crate::validation::{
     validate_account_fields, validate_amount_cents, validate_anchor_date, validate_cancellation,
-    validate_currency, validate_interval, validate_name, validate_shift_rule,
-    validate_subscription_fields,
+    validate_currency, validate_exchange_rate, validate_interval, validate_name,
+    validate_shift_rule, validate_subscription_fields,
 };
 
 /// Aktuelle Backup-Format-Version. Bei Schema-Änderungen nach Release hochzählen
@@ -58,6 +60,9 @@ pub struct BackupFile {
     /// Backup-Dateien ohne dieses Feld weiter importierbar bleiben.
     #[serde(default)]
     pub skips: Vec<SubscriptionSkip>,
+    /// Manuelle Wechselkurse (seit Migration 0018); `default` für ältere Backup-Dateien.
+    #[serde(default)]
+    pub rates: Vec<ExchangeRate>,
 }
 
 pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
@@ -119,6 +124,15 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     .await
     .map_err(|e| e.to_string())?;
 
+    let rates = sqlx::query_as!(
+        ExchangeRate,
+        r#"SELECT from_currency, to_currency, rate_micros, updated_at
+           FROM exchange_rates ORDER BY from_currency, to_currency"#
+    )
+    .fetch_all(db)
+    .await
+    .map_err(|e| e.to_string())?;
+
     Ok(BackupFile {
         schema_version: BACKUP_SCHEMA_VERSION,
         app: BACKUP_APP.to_string(),
@@ -129,6 +143,7 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
         price_history,
         reminders,
         skips,
+        rates,
     })
 }
 
@@ -210,6 +225,7 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
     let mut reminder_keys = HashSet::new();
     let mut skip_ids = HashSet::new();
     let mut skip_keys = HashSet::new();
+    let mut rate_keys = HashSet::new();
 
     for a in &backup.accounts {
         let label = format!("Konto \"{}\"", a.name);
@@ -292,6 +308,15 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             ));
         }
     }
+    for r in &backup.rates {
+        let label = format!("Kurs {} → {}", r.from_currency, r.to_currency);
+        validate_exchange_rate(&r.from_currency, &r.to_currency, r.rate_micros)
+            .map_err(|e| format!("{label}: {e}"))?;
+        validate_sqlite_datetime(&label, &r.updated_at)?;
+        if !rate_keys.insert((r.from_currency.clone(), r.to_currency.clone())) {
+            return Err(format!("{label}: Kurs kommt mehrfach vor."));
+        }
+    }
     Ok(())
 }
 
@@ -308,6 +333,10 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
         .await
         .map_err(|e| e.to_string())?;
     sqlx::query!("DELETE FROM subscription_skips")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM exchange_rates")
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -435,6 +464,19 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             k.subscription_id,
             k.due_date,
             k.created_at,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    for r in &backup.rates {
+        sqlx::query!(
+            "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros, updated_at) \
+             VALUES (?, ?, ?, ?)",
+            r.from_currency,
+            r.to_currency,
+            r.rate_micros,
+            r.updated_at,
         )
         .execute(&mut *tx)
         .await
@@ -693,6 +735,67 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn roundtrip_preserves_exchange_rates_and_old_backups_import_without_them() {
+        let source = test_pool().await;
+        seed(&source).await;
+        sqlx::query(
+            "INSERT INTO exchange_rates (from_currency, to_currency, rate_micros, updated_at) \
+             VALUES ('USD', 'EUR', 920000, '2026-10-01 08:00:00')",
+        )
+        .execute(&source)
+        .await
+        .unwrap();
+        let backup = collect_backup(&source).await.unwrap();
+        assert_eq!(backup.rates.len(), 1);
+
+        let target = test_pool().await;
+        restore_backup(&target, &backup).await.unwrap();
+        assert_eq!(collect_backup(&target).await.unwrap().rates, backup.rates);
+
+        // Backup aus der Zeit vor Migration 0018: kein `rates`-Feld.
+        let mut json = serde_json::to_value(&backup).unwrap();
+        json.as_object_mut().unwrap().remove("rates");
+        let old: BackupFile = serde_json::from_value(json).expect("ohne rates lesbar");
+        assert!(old.rates.is_empty());
+        restore_backup(&target, &old)
+            .await
+            .expect("Import ohne rates");
+        assert!(collect_backup(&target).await.unwrap().rates.is_empty());
+    }
+
+    #[tokio::test]
+    async fn invalid_or_duplicate_rates_are_rejected() {
+        let source = test_pool().await;
+        seed(&source).await;
+        let base = collect_backup(&source).await.unwrap();
+        let rate = |from: &str, to: &str, micros: i64| ExchangeRate {
+            from_currency: from.into(),
+            to_currency: to.into(),
+            rate_micros: micros,
+            updated_at: "2026-10-01 08:00:00".into(),
+        };
+
+        for (label, rates) in [
+            ("gleiche Währung", vec![rate("EUR", "EUR", 1_000_000)]),
+            ("Kurs 0", vec![rate("USD", "EUR", 0)]),
+            ("unbekannte Währung", vec![rate("BTC", "EUR", 1_000_000)]),
+            (
+                "doppelt",
+                vec![rate("USD", "EUR", 920_000), rate("USD", "EUR", 930_000)],
+            ),
+        ] {
+            let mut backup = collect_backup(&source).await.unwrap();
+            backup.rates = rates;
+            assert!(restore_backup(&source, &backup).await.is_err(), "{label}");
+        }
+        // Der Bestand blieb durch die abgelehnten Imports unangetastet.
+        assert_eq!(
+            collect_backup(&source).await.unwrap().accounts,
+            base.accounts
+        );
+    }
+
+    #[tokio::test]
     async fn skip_for_unknown_subscription_is_rejected() {
         let source = test_pool().await;
         seed(&source).await;
@@ -816,6 +919,7 @@ mod tests {
 
         let mut expected = vec![
             "accounts",
+            "exchange_rates",
             "incomes",
             "reminders",
             "subscription_price_history",
