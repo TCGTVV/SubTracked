@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM subscription_skips WHERE subscription_id = ? AND due_date = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "446bcc6ec034c2e74fdcd644d823cbe6bb527b0f791e3997019fe8756c872f26"
+}

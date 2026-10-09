@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscription_skips (subscription_id, due_date) VALUES (?, ?) ON CONFLICT (subscription_id, due_date) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "35e4559c735f846cbeee8f58005f6c6dcdbcd460b296c47042ab17708f39f61c"
+}

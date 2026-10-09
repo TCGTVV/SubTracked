@@ -1,4 +1,4 @@
-import { addDays, addMonths, isBefore, startOfDay } from "date-fns";
+import { addDays, addMonths, format, isBefore, startOfDay } from "date-fns";
 import type { Interval } from "../types";
 
 // Re-Export, damit bestehende Importe aus "./recurrence" weiter funktionieren.
@@ -51,6 +51,29 @@ export function nextDueDate(anchor: Date, interval: Interval, from: Date = new D
   while (isBefore(due, f)) {
     k += 1;
     due = startOfDay(addInterval(anchor, interval, k));
+  }
+  return due;
+}
+
+/** Höchstzahl aufeinanderfolgender übersprungener Termine, die übersprungen werden
+ *  (Schutz vor Endlosschleife; spiegelt `MAX_CONSECUTIVE_SKIPS` in reminders.rs). */
+const MAX_CONSECUTIVE_SKIPS = 60;
+
+/**
+ * Wie {@link nextDueDate}, überspringt aber Termine in `skipped` (ISO `YYYY-MM-DD`,
+ * nominale Wiederholungstermine). Sind mehr als {@link MAX_CONSECUTIVE_SKIPS} Termine in
+ * Folge übersprungen, wird der letzte betrachtete Termin zurückgegeben statt endlos zu suchen.
+ */
+export function nextDueDateSkipping(
+  anchor: Date,
+  interval: Interval,
+  from: Date,
+  skipped: readonly string[] | undefined,
+): Date {
+  let due = nextDueDate(anchor, interval, from);
+  if (!skipped || skipped.length === 0) return due;
+  for (let i = 0; i < MAX_CONSECUTIVE_SKIPS && skipped.includes(format(due, "yyyy-MM-dd")); i++) {
+    due = nextDueDate(anchor, interval, addDays(due, 1));
   }
   return due;
 }

@@ -4,7 +4,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::db::{
     Account, AppInfo, AppState, Income, NewIncome, NewSubscription, PriceHistoryEntry,
-    ReminderState, Subscription,
+    ReminderState, Subscription, SubscriptionSkip,
 };
 use crate::validation::{
     validate_account_exists, validate_account_fields, validate_cancellation,
@@ -118,6 +118,13 @@ pub async fn delete_subscription(state: State<'_, AppState>, id: i64) -> Result<
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
+    sqlx::query!(
+        "DELETE FROM subscription_skips WHERE subscription_id = ?",
+        id
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
     sqlx::query!(
         "DELETE FROM subscription_price_history WHERE subscription_id = ?",
         id
@@ -420,6 +427,80 @@ pub async fn set_subscription_active(
     active: bool,
 ) -> Result<(), String> {
     set_subscription_active_in_db(&state.db, id, active).await
+}
+
+/// Lässt einen einzelnen Wiederholungstermin eines Abos entfallen ("Dienst pausiert").
+/// `due_date` muss ein echter Termin der Anker-additiven Folge sein (sonst würde ein
+/// Tippfehler stillschweigend nichts bewirken) und das Abo darf nicht einmalig sein.
+/// Idempotent: ein bereits übersprungener Termin ist kein Fehler.
+pub(crate) async fn skip_occurrence_in_db(
+    db: &sqlx::SqlitePool,
+    subscription_id: i64,
+    due_date: &str,
+) -> Result<(), String> {
+    use crate::recurrence::{next_due_date, parse_iso_date_strict};
+
+    let date = parse_iso_date_strict(due_date)?;
+    let sub = sqlx::query!(
+        r#"SELECT anchor_date, interval, one_time as "one_time: bool"
+           FROM subscriptions WHERE id = ?"#,
+        subscription_id
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or_else(|| format!("Abo mit ID {subscription_id} existiert nicht."))?;
+    if sub.one_time {
+        return Err(
+            "Einmalige Ausgaben lassen sich nicht überspringen — archiviere oder lösche sie."
+                .to_string(),
+        );
+    }
+    let anchor = parse_iso_date_strict(&sub.anchor_date)?;
+    if next_due_date(anchor, &sub.interval, date)? != date {
+        return Err(format!("{due_date} ist kein Termin dieses Abos."));
+    }
+    sqlx::query!(
+        "INSERT INTO subscription_skips (subscription_id, due_date) VALUES (?, ?) \
+         ON CONFLICT (subscription_id, due_date) DO NOTHING",
+        subscription_id,
+        due_date
+    )
+    .execute(db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn skip_occurrence(
+    state: State<'_, AppState>,
+    subscription_id: i64,
+    due_date: String,
+) -> Result<(), String> {
+    skip_occurrence_in_db(&state.db, subscription_id, &due_date).await
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn unskip_occurrence(
+    state: State<'_, AppState>,
+    subscription_id: i64,
+    due_date: String,
+) -> Result<(), String> {
+    sqlx::query!(
+        "DELETE FROM subscription_skips WHERE subscription_id = ? AND due_date = ?",
+        subscription_id,
+        due_date
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn list_skips(state: State<'_, AppState>) -> Result<Vec<SubscriptionSkip>, String> {
+    crate::db::fetch_skips(&state.db).await
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -950,6 +1031,84 @@ mod tests {
             .await
             .expect_err("unbekanntes Konto muss abgelehnt werden");
         assert!(err.contains("existiert nicht"), "Fehlertext: {err}");
+    }
+
+    // --- Übersprungene Termine (Migration 0016) ---
+
+    async fn skip_dates(db: &SqlitePool, sub_id: i64) -> Vec<String> {
+        crate::db::fetch_skips(db)
+            .await
+            .expect("skips laden")
+            .into_iter()
+            .filter(|s| s.subscription_id == sub_id)
+            .map(|s| s.due_date)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn skip_occurrence_stores_real_occurrence_and_is_idempotent() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await; // monatlich ab 2026-01-15
+        skip_occurrence_in_db(&db, sub.id, "2026-03-15")
+            .await
+            .expect("echter Termin");
+        skip_occurrence_in_db(&db, sub.id, "2026-03-15")
+            .await
+            .expect("zweites Mal ist kein Fehler");
+        assert_eq!(skip_dates(&db, sub.id).await, vec!["2026-03-15"]);
+    }
+
+    #[tokio::test]
+    async fn skip_occurrence_rejects_non_occurrences_unknown_subs_and_bad_dates() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await;
+        let err = skip_occurrence_in_db(&db, sub.id, "2026-03-16")
+            .await
+            .expect_err("kein Termin");
+        assert!(err.contains("kein Termin"), "{err}");
+        assert!(skip_occurrence_in_db(&db, 999, "2026-03-15").await.is_err());
+        assert!(skip_occurrence_in_db(&db, sub.id, "2026-3-15")
+            .await
+            .is_err());
+        assert!(skip_dates(&db, sub.id).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn skip_occurrence_rejects_one_time_subscriptions() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await;
+        sqlx::query("UPDATE subscriptions SET one_time = 1 WHERE id = ?")
+            .bind(sub.id)
+            .execute(&db)
+            .await
+            .expect("auf einmalig stellen");
+        let err = skip_occurrence_in_db(&db, sub.id, "2026-01-15")
+            .await
+            .expect_err("einmalig");
+        assert!(err.contains("Einmalige"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn deleting_a_subscription_removes_its_skips() {
+        let db = test_pool().await;
+        let sub = insert_sub(&db, None).await;
+        skip_occurrence_in_db(&db, sub.id, "2026-03-15")
+            .await
+            .unwrap();
+        // Dieselbe Reihenfolge wie `delete_subscription` (FK-Constraints sind aktiv).
+        let mut tx = db.begin().await.unwrap();
+        sqlx::query("DELETE FROM subscription_skips WHERE subscription_id = ?")
+            .bind(sub.id)
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM subscriptions WHERE id = ?")
+            .bind(sub.id)
+            .execute(&mut *tx)
+            .await
+            .expect("Abo löschbar, sobald die Skips weg sind");
+        tx.commit().await.unwrap();
+        assert!(skip_dates(&db, sub.id).await.is_empty());
     }
 
     // --- Schema-Trigger (Migration 0015): zweite Verteidigungslinie neben validation.rs ---

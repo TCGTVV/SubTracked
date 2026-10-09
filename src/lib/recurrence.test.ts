@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueDatesWithin, monthsPer, nextDueDate } from "./recurrence";
+import { dueDatesWithin, monthsPer, nextDueDate, nextDueDateSkipping } from "./recurrence";
 
 // Lokale Mitternacht, damit Tests timezone-unabhängig sind.
 // `new Date("YYYY-MM-DD")` würde UTC-Mitternacht erzeugen und mit startOfDay() kollidieren.
@@ -14,6 +14,52 @@ describe("monthsPer", () => {
     expect(monthsPer.yearly).toBe(12);
     expect("biweekly" in monthsPer).toBe(false);
     expect("weekly" in monthsPer).toBe(false);
+  });
+});
+
+describe("nextDueDateSkipping", () => {
+  const anchor = d(2026, 1, 15);
+
+  it("verhält sich ohne Skips wie nextDueDate", () => {
+    expect(nextDueDateSkipping(anchor, "monthly", d(2026, 3, 20), undefined)).toEqual(
+      nextDueDate(anchor, "monthly", d(2026, 3, 20)),
+    );
+    expect(nextDueDateSkipping(anchor, "monthly", d(2026, 3, 20), [])).toEqual(d(2026, 4, 15));
+  });
+
+  it("überspringt einen einzelnen Termin", () => {
+    expect(nextDueDateSkipping(anchor, "monthly", d(2026, 3, 20), ["2026-04-15"])).toEqual(
+      d(2026, 5, 15),
+    );
+  });
+
+  it("überspringt mehrere aufeinanderfolgende Termine", () => {
+    expect(
+      nextDueDateSkipping(anchor, "monthly", d(2026, 3, 20), ["2026-04-15", "2026-05-15"]),
+    ).toEqual(d(2026, 6, 15));
+  });
+
+  it("ignoriert Skips, die nicht der nächste Termin sind", () => {
+    expect(nextDueDateSkipping(anchor, "monthly", d(2026, 3, 20), ["2026-06-15"])).toEqual(
+      d(2026, 4, 15),
+    );
+  });
+
+  it("bleibt monatsend-treu (anker-additiv) über übersprungene Termine hinweg", () => {
+    expect(nextDueDateSkipping(d(2025, 1, 31), "monthly", d(2025, 2, 1), ["2025-02-28"])).toEqual(
+      d(2025, 3, 31),
+    );
+  });
+
+  it("bricht bei absurd vielen aufeinanderfolgenden Skips ab statt endlos zu suchen", () => {
+    const skipped: string[] = [];
+    for (let i = 0; i < 200; i++) {
+      const date = nextDueDate(anchor, "weekly", new Date(2026, 0, 15 + 7 * i));
+      skipped.push(
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+      );
+    }
+    expect(() => nextDueDateSkipping(anchor, "weekly", anchor, skipped)).not.toThrow();
   });
 });
 

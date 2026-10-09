@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Account, Subscription } from "../types";
 import { UpcomingSection } from "./UpcomingSection";
@@ -76,6 +76,30 @@ describe("UpcomingSection", () => {
   it("zeigt '(kein Konto)' wenn das Abo keinem Konto zugeordnet ist", () => {
     render(<UpcomingSection subscriptions={[makeSub({ accountId: null })]} accounts={accounts} />);
     expect(screen.getByText("(kein Konto)")).toBeInTheDocument();
+  });
+
+  it("zeigt ohne onSkip keinen Überspringen-Button", () => {
+    render(<UpcomingSection subscriptions={[makeSub()]} accounts={accounts} />);
+    expect(screen.queryByRole("button", { name: /überspringen/ })).not.toBeInTheDocument();
+  });
+
+  it("ruft onSkip mit Abo-ID und Datum auf, nur für wiederkehrende Abbuchungen", () => {
+    const onSkip = vi.fn();
+    render(
+      <UpcomingSection
+        subscriptions={[
+          makeSub({ id: 1, name: "Netflix", anchorDate: "2026-06-20" }),
+          makeSub({ id: 2, name: "Einmalig", anchorDate: "2026-06-21", oneTime: true }),
+        ]}
+        accounts={accounts}
+        onSkip={onSkip}
+      />,
+    );
+    const buttons = screen.getAllByRole("button", { name: /überspringen/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName("Netflix am 20.06. überspringen");
+    fireEvent.click(buttons[0] as HTMLElement);
+    expect(onSkip).toHaveBeenCalledWith(1, "2026-06-20");
   });
 
   it("respektiert den days-Parameter", () => {

@@ -7,6 +7,7 @@ import type {
   Interval,
   PriceHistoryEntry,
   Subscription,
+  SubscriptionSkip,
 } from "../types";
 
 export interface AppInfo {
@@ -187,7 +188,20 @@ export async function listPriceHistory(subscriptionId: number): Promise<PriceHis
   return invoke<PriceHistoryEntry[]>("list_price_history", { subscriptionId });
 }
 
-// --- Backup / Restore ------------------------------------------------------
+// --- Übersprungene Termine --------------------------------------------------
+
+export async function listSkips(): Promise<SubscriptionSkip[]> {
+  return invoke<SubscriptionSkip[]>("list_skips");
+}
+
+/** Lässt einen Wiederholungstermin (`YYYY-MM-DD`) des Abos entfallen. */
+export async function skipOccurrence(subscriptionId: number, dueDate: string): Promise<void> {
+  await invoke("skip_occurrence", { subscriptionId, dueDate });
+}
+
+export async function unskipOccurrence(subscriptionId: number, dueDate: string): Promise<void> {
+  await invoke("unskip_occurrence", { subscriptionId, dueDate });
+}
 
 // --- Datei-Auswahl -----------------------------------------------------------
 // Der Renderer übergibt Rust nie einen freien Pfad: Rust öffnet den nativen Dialog selbst

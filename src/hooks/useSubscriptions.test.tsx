@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listAccounts, listIncomes, listSubscriptions } from "../lib/db";
+import { listAccounts, listIncomes, listSkips, listSubscriptions } from "../lib/db";
 import type { Account, Subscription } from "../types";
 import { useSubscriptions } from "./useSubscriptions";
 
@@ -8,11 +8,13 @@ vi.mock("../lib/db", () => ({
   listSubscriptions: vi.fn(),
   listAccounts: vi.fn(),
   listIncomes: vi.fn(),
+  listSkips: vi.fn(),
 }));
 
 const mockListSubscriptions = vi.mocked(listSubscriptions);
 const mockListAccounts = vi.mocked(listAccounts);
 const mockListIncomes = vi.mocked(listIncomes);
+const mockListSkips = vi.mocked(listSkips);
 
 const sampleSubs: Subscription[] = [
   {
@@ -55,6 +57,29 @@ describe("useSubscriptions", () => {
     mockListSubscriptions.mockReset();
     mockListAccounts.mockReset();
     mockListIncomes.mockResolvedValue([]);
+    mockListSkips.mockResolvedValue([]);
+  });
+
+  it("hängt übersprungene Termine an das jeweilige Abo", async () => {
+    mockListSubscriptions.mockResolvedValue(sampleSubs);
+    mockListAccounts.mockResolvedValue(sampleAccounts);
+    mockListSkips.mockResolvedValue([
+      { id: 1, subscriptionId: 1, dueDate: "2026-08-01", createdAt: "2026-07-20 10:00:00" },
+      { id: 2, subscriptionId: 1, dueDate: "2026-09-01", createdAt: "2026-07-20 10:00:00" },
+      { id: 3, subscriptionId: 99, dueDate: "2026-08-01", createdAt: "2026-07-20 10:00:00" },
+    ]);
+    const { result } = renderHook(() => useSubscriptions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.subs[0]?.skippedDates).toEqual(["2026-08-01", "2026-09-01"]);
+  });
+
+  it("lässt Abos ohne Skips unverändert (kein skippedDates-Feld)", async () => {
+    mockListSubscriptions.mockResolvedValue(sampleSubs);
+    mockListAccounts.mockResolvedValue(sampleAccounts);
+    const { result } = renderHook(() => useSubscriptions());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.subs[0]).toEqual(sampleSubs[0]);
+    expect(result.current.subs[0]).not.toHaveProperty("skippedDates");
   });
 
   it("startet im loading-State mit leeren Listen", () => {
