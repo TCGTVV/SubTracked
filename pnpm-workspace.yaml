@@ -4,7 +4,9 @@ packages:
 
 overrides:
   esbuild: '>=0.28.1'
-  undici: 7.28.0
+  # undici bewusst bei 7.x (jsdom@29 importiert interne undici-7-Pfade), aber >= 7.29.1
+  # (mehrere GHSA, u.a. GHSA-2gqq-gqf2-x968, GHSA-8436-99hf-9mmv). Dev-/Test-Tooling.
+  undici: '>=7.29.1 <8'
   # mocha (ueber e2e > @wdio/mocha-framework) deklariert weiterhin `^6.0.2`,
   # aber jede 6.x-Version ist verwundbar (GHSA-5c6j-r48x-rmvq RCE,
   # GHSA-qj8w-gfj5-8c6v DoS) -- gefixt erst ab 7.0.5. Ungenutzt in unserem
@@ -22,7 +24,19 @@ overrides:
   # brace-expansion (ueber e2e > @wdio/cli > ... > minimatch/glob) < 5.0.8:
   # GHSA-mh99-v99m-4gvg, ReDoS ueber unbegrenzte Expansion-Laenge. Nur
   # E2E-Tooling, kein Runtime-Pfad.
-  brace-expansion: '>=5.0.8'
+  brace-expansion: '>=5.0.12'
+  # Weitere Funde aus dem pnpm-audit-Lauf vom 2026-10-09 (alle transitiv ueber Dev-/Test-/
+  # Build-Tooling: vitest, jsdom, @wdio/*, vite; nichts davon steckt in der ausgelieferten App).
+  # Auf die jeweils gepatchte Mindestversion gehoben.
+  basic-ftp: '>=6.2.1'
+  browserslist: '>=4.28.7'
+  baseline-browser-mapping: '>=2.11.0'
+  deepmerge-ts: '>=8.0.0'
+  ip-address: '>=10.7.1'
+  js-yaml: '>=4.3.2'
+  nanoid: '>=3.3.18'
+  smol-toml: '>=1.8.1'
+  source-map-js: '>=1.2.2'
 
 allowBuilds:
   # edgedriver/geckodriver sind transitive @wdio/cli-Deps fuer Browser-Treiber-
