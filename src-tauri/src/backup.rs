@@ -19,6 +19,7 @@ use std::{
 use tauri::State;
 
 use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription};
+use crate::file_grants::{FileGrants, GrantKind};
 use crate::validation::{
     validate_account_fields, validate_amount_cents, validate_anchor_date, validate_cancellation,
     validate_currency, validate_interval, validate_name, validate_subscription_fields,
@@ -448,15 +449,25 @@ fn write_backup_json_atomic(path: &str, contents: &str) -> Result<(), String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn export_backup(state: State<'_, AppState>, path: String) -> Result<(), String> {
+pub async fn export_backup(
+    state: State<'_, AppState>,
+    grants: State<'_, FileGrants>,
+    token: String,
+) -> Result<(), String> {
+    let path = grants.take(&token, GrantKind::Write)?;
     let backup = collect_backup(&state.db).await?;
     let json = serde_json::to_string_pretty(&backup).map_err(|e| e.to_string())?;
-    write_backup_json_atomic(&path, &json)?;
+    write_backup_json_atomic(&path.to_string_lossy(), &json)?;
     Ok(())
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn import_backup(state: State<'_, AppState>, path: String) -> Result<(), String> {
+pub async fn import_backup(
+    state: State<'_, AppState>,
+    grants: State<'_, FileGrants>,
+    token: String,
+) -> Result<(), String> {
+    let path = grants.take(&token, GrantKind::Read)?;
     let content =
         std::fs::read_to_string(&path).map_err(|e| format!("Konnte Backup nicht lesen: {e}"))?;
     let backup: BackupFile =

@@ -1,7 +1,7 @@
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  pickOpenFile,
   type ReconcileFinding,
   reconcileCsv,
   setSubscriptionActive,
@@ -11,17 +11,17 @@ import { expectNoAxeViolations } from "../test-utils/axe";
 import type { Subscription } from "../types";
 import { CsvReconcileDialog } from "./CsvReconcileDialog";
 
-vi.mock("@tauri-apps/plugin-dialog", () => ({
-  open: vi.fn(),
-}));
-
 vi.mock("../lib/db", () => ({
+  pickOpenFile: vi.fn(),
   reconcileCsv: vi.fn(),
   updateSubscription: vi.fn(),
   setSubscriptionActive: vi.fn(),
 }));
 
-const mockOpenFileDialog = vi.mocked(openFileDialog);
+const mockOpenFileDialog = vi.mocked(pickOpenFile);
+
+/** Ergebnis des Rust-seitigen Datei-Dialogs: Token (für den Command) + Anzeigepfad. */
+const picked = (path: string) => ({ token: `tok:${path}`, path });
 const mockReconcileCsv = vi.mocked(reconcileCsv);
 const mockUpdateSubscription = vi.mocked(updateSubscription);
 const mockSetSubscriptionActive = vi.mocked(setSubscriptionActive);
@@ -77,7 +77,7 @@ function renderDialog(subs: Subscription[] = [netflix]) {
 
 /** Wählt eine Datei über den gemockten Datei-Dialog und lässt den Abgleich `rows` liefern. */
 async function pickFileWith(rows: ReconcileFinding[]) {
-  mockOpenFileDialog.mockResolvedValue("/tmp/umsaetze.csv");
+  mockOpenFileDialog.mockResolvedValue(picked("/tmp/umsaetze.csv"));
   mockReconcileCsv.mockResolvedValue(rows);
   fireEvent.click(screen.getByRole("button", { name: "CSV-Datei wählen" }));
   await waitFor(() => expect(mockReconcileCsv).toHaveBeenCalled());
@@ -123,7 +123,7 @@ describe("CsvReconcileDialog", () => {
 
   it("zeigt eine Fehler-Meldung, wenn der Abgleich fehlschlägt", async () => {
     renderDialog();
-    mockOpenFileDialog.mockResolvedValue("/tmp/kaputt.csv");
+    mockOpenFileDialog.mockResolvedValue(picked("/tmp/kaputt.csv"));
     mockReconcileCsv.mockRejectedValue(new Error("Keine Datums-Spalte gefunden."));
     fireEvent.click(screen.getByRole("button", { name: "CSV-Datei wählen" }));
     expect(await screen.findByText(/Keine Datums-Spalte gefunden/)).toBeInTheDocument();

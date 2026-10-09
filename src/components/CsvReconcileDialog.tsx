@@ -1,7 +1,7 @@
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { FileSearch } from "lucide-react";
 import { useState } from "react";
 import {
+  pickOpenFile,
   type ReconcileFinding,
   reconcileCsv,
   setSubscriptionActive,
@@ -36,12 +36,9 @@ export function CsvReconcileDialog({ open, subs, onClose, onChanged }: Props) {
     setLoadError(null);
     setActionError(null);
     try {
-      const selected = await openFileDialog({
-        multiple: false,
-        filters: [{ name: "CSV", extensions: ["csv"] }],
-      });
-      if (typeof selected !== "string") return; // Dialog abgebrochen
-      setFilePath(selected);
+      const selected = await pickOpenFile({ name: "CSV", extensions: ["csv"] });
+      if (!selected) return; // Dialog abgebrochen
+      setFilePath(selected.path);
       setFindings(null);
       setDone({});
       setLoading(true);
