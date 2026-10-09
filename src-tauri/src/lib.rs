@@ -10,6 +10,7 @@ mod db_backup;
 mod file_grants;
 mod recurrence;
 mod reminders;
+mod updater;
 mod validation;
 
 use std::str::FromStr;
@@ -45,6 +46,7 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::list_subscriptions,
@@ -76,6 +78,8 @@ pub fn run() {
             csv_reconcile::reconcile_csv,
             file_grants::pick_save_file,
             file_grants::pick_open_file,
+            updater::check_for_update,
+            updater::install_update,
         ])
         .manage(file_grants::FileGrants::default())
         .setup(|app| {

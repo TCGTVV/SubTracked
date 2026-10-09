@@ -188,6 +188,24 @@ export async function listPriceHistory(subscriptionId: number): Promise<PriceHis
   return invoke<PriceHistoryEntry[]>("list_price_history", { subscriptionId });
 }
 
+// --- App-Updates -------------------------------------------------------------
+
+export interface UpdateInfo {
+  version: string;
+  currentVersion: string;
+  notes: string | null;
+}
+
+/** Fragt den Update-Server; `null` = die installierte Version ist aktuell. */
+export async function checkForUpdate(): Promise<UpdateInfo | null> {
+  return await invoke<UpdateInfo | null>("check_for_update");
+}
+
+/** Lädt das Update, prüft die Signatur, installiert und startet die App neu. */
+export async function installUpdate(): Promise<void> {
+  await invoke("install_update");
+}
+
 // --- Übersprungene Termine --------------------------------------------------
 
 export async function listSkips(): Promise<SubscriptionSkip[]> {

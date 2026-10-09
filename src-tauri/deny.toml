@@ -34,6 +34,10 @@ allow = [
     "Unlicense",
     "BSL-1.0",
     "MPL-2.0",
+    # webpki-root-certs (Mozilla-CA-Bundle) kommt seit dem Updater (tauri-plugin-updater →
+    # reqwest → rustls) in den Baum. CDLA-Permissive-2.0 ist die permissive Daten-Lizenz des
+    # CA-Bundles (2026-10-09 ergänzt).
+    "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.8
 

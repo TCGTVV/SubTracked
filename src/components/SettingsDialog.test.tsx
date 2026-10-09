@@ -20,6 +20,8 @@ vi.mock("@tauri-apps/plugin-autostart", () => ({
 }));
 
 vi.mock("../lib/db", () => ({
+  checkForUpdate: vi.fn(),
+  installUpdate: vi.fn(),
   pickSaveFile: vi.fn(),
   pickOpenFile: vi.fn(),
   getReminderStatus: vi.fn(),
