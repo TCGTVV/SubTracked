@@ -411,6 +411,43 @@ describe("Einmalige Ausgaben (oneTime)", () => {
   });
 });
 
+describe("übersprungene Termine (skippedDates)", () => {
+  const skipped = sub({ skippedDates: ["2026-02-15", "2026-03-15"] });
+
+  it("computeCoverage lässt übersprungene Termine aus", () => {
+    const [bucket] = computeCoverage([skipped], [acc(1, "Giro")], 6, NOW);
+    const dates = bucket?.items.map((i) => i.date);
+    expect(dates).toEqual(["2026-01-15", "2026-04-15", "2026-05-15", "2026-06-15"]);
+    expect(bucket?.totalOutflowCents).toBe(4000);
+  });
+
+  it("computeUpcoming lässt übersprungene Termine aus", () => {
+    const items = computeUpcoming([skipped], [acc(1, "Giro")], 120, NOW);
+    expect(items.map((i) => i.date)).toEqual(["2026-01-15", "2026-04-15"]);
+  });
+
+  it("ändert das Monatsäquivalent nicht (das Abo läuft weiter)", () => {
+    const [plain] = computeCostSummary([sub()]);
+    const [withSkips] = computeCostSummary([skipped]);
+    expect(withSkips?.monthlyCents).toBe(plain?.monthlyCents);
+  });
+
+  it("verschiebt in der Kontoprognose die erste Unterschreitung", () => {
+    // Saldo 15 €, 10 €/Monat: Jan → 5 €, Feb → −5 €. Ohne den Februar-Termin kippt es erst im März.
+    const account = acc(1, "Giro", { balanceCents: 1500 });
+    const [without] = computeCoverage([sub()], [account], 3, NOW);
+    const [with_] = computeCoverage([sub({ skippedDates: ["2026-02-15"] })], [account], 3, NOW);
+    expect(without?.firstBelowZeroDate).toBe("2026-02-15");
+    expect(with_?.firstBelowZeroDate).toBe("2026-03-15");
+  });
+
+  it("ignoriert skippedDates bei einmaligen Ausgaben", () => {
+    const once = sub({ oneTime: true, anchorDate: "2026-02-15", skippedDates: ["2026-02-15"] });
+    const [bucket] = computeCoverage([once], [acc(1, "Giro")], 6, NOW);
+    expect(bucket?.items).toHaveLength(1);
+  });
+});
+
 describe("hasLiveCashflow", () => {
   const today = "2026-10-09";
 

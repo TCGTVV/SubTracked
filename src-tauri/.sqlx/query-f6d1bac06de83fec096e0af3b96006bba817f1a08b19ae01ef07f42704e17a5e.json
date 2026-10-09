@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT anchor_date, interval, one_time as \"one_time: bool\"\n           FROM subscriptions WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "anchor_date",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "anchor_date"
+          }
+        }
+      },
+      {
+        "name": "interval",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "interval"
+          }
+        }
+      },
+      {
+        "name": "one_time: bool",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "one_time"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f6d1bac06de83fec096e0af3b96006bba817f1a08b19ae01ef07f42704e17a5e"
+}

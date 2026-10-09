@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Pencil,
   Plus,
+  SkipForward,
   Trash2,
   Wallet,
 } from "lucide-react";
@@ -33,10 +34,18 @@ import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
 import { cancelDeadlineDisplay } from "./lib/cancellation";
 import { hasLiveCashflow } from "./lib/coverage";
-import { deleteIncome, deleteSubscription, setIncomeActive, setSubscriptionActive } from "./lib/db";
+import {
+  deleteIncome,
+  deleteSubscription,
+  setIncomeActive,
+  setSubscriptionActive,
+  skipOccurrence,
+  unskipOccurrence,
+} from "./lib/db";
 import { hasDemoData, loadDemoData, removeDemoData } from "./lib/demo";
 import { toUserMessage } from "./lib/errors";
-import { formatAmount, formatNextDue, toISODateLocal } from "./lib/format";
+import { formatAmount, formatNextDue, parseStrictISODate, toISODateLocal } from "./lib/format";
+import { nextDueDateSkipping } from "./lib/recurrence";
 import {
   applyFilterAndSort,
   DEFAULT_SUB_LIST_OPTIONS,
@@ -62,6 +71,8 @@ interface CardActionsProps {
   /** Nur für Abos: Simulations-Toggle („was wäre, wenn ich das kündige?"). */
   simulatedOut?: boolean;
   onSimulateToggle?: () => void;
+  /** Nur für wiederkehrende, aktive Abos: nächsten Termin entfallen lassen. */
+  onSkipNext?: () => void;
 }
 
 function CardActions({
@@ -72,9 +83,21 @@ function CardActions({
   name,
   simulatedOut,
   onSimulateToggle,
+  onSkipNext,
 }: CardActionsProps) {
   return (
     <div className="mt-auto flex gap-1 pt-1">
+      {onSkipNext && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onSkipNext}
+          aria-label={`${name}: nächsten Termin überspringen`}
+          title="Nächste Abbuchung überspringen (z.B. Dienst pausiert)"
+        >
+          <SkipForward />
+        </Button>
+      )}
       {onSimulateToggle && (
         <Button
           variant="ghost"
@@ -135,6 +158,38 @@ function CancelNotice({ sub }: { sub: Subscription }) {
       <CalendarX className="size-3.5 shrink-0" />
       Kündigen bis {cd.formatted} · {suffix}
     </p>
+  );
+}
+
+/** Kommende übersprungene Termine mit „Rückgängig". Vergangene sind irrelevant. */
+function SkippedNotice({
+  sub,
+  onUnskip,
+}: {
+  sub: Subscription;
+  onUnskip: (dueDate: string) => void;
+}) {
+  if (!sub.active || !sub.skippedDates?.length) return null;
+  const today = toISODateLocal(new Date());
+  const upcoming = [...sub.skippedDates].filter((d) => d >= today).sort();
+  if (upcoming.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {upcoming.map((d) => (
+        <p key={d} className="flex items-center gap-1.5">
+          <SkipForward className="size-3.5 shrink-0" aria-hidden="true" />
+          Übersprungen: {d.split("-").reverse().join(".")}
+          <button
+            type="button"
+            className="underline underline-offset-2 hover:text-foreground"
+            onClick={() => onUnskip(d)}
+            aria-label={`Überspringen am ${d.split("-").reverse().join(".")} für ${sub.name} rückgängig machen`}
+          >
+            Rückgängig
+          </button>
+        </p>
+      ))}
+    </div>
   );
 }
 
@@ -333,6 +388,33 @@ function App() {
     }
   }
 
+  /** Lässt den nächsten noch nicht übersprungenen Termin des Abos entfallen
+   *  (mehrfach klicken = mehrere Termine nacheinander pausieren). */
+  async function handleSkipNext(sub: Subscription) {
+    const anchor = parseStrictISODate(sub.anchorDate);
+    if (!anchor) return;
+    const next = nextDueDateSkipping(anchor, sub.interval, new Date(), sub.skippedDates);
+    await handleSkip(sub.id, toISODateLocal(next));
+  }
+
+  async function handleSkip(subscriptionId: number, dueDate: string) {
+    try {
+      await skipOccurrence(subscriptionId, dueDate);
+      await reloadAll();
+    } catch (e) {
+      setError(toUserMessage(e, "Termin überspringen"));
+    }
+  }
+
+  async function handleUnskip(subscriptionId: number, dueDate: string) {
+    try {
+      await unskipOccurrence(subscriptionId, dueDate);
+      await reloadAll();
+    } catch (e) {
+      setError(toUserMessage(e, "Überspringen rückgängig machen"));
+    }
+  }
+
   const accountName = (id: number | null): string | null =>
     id === null ? null : (accounts.find((a) => a.id === id)?.name ?? "(unbekanntes Konto)");
 
@@ -498,6 +580,7 @@ function App() {
                   subscriptions={activeSubs}
                   accounts={accounts}
                   incomes={activeIncomes}
+                  onSkip={(subscriptionId, dueDate) => void handleSkip(subscriptionId, dueDate)}
                 />
               )}
               {hasActiveCashflow && (
@@ -581,6 +664,7 @@ function App() {
                         }
                       >
                         <PendingPriceNotice sub={sub} />
+                        <SkippedNotice sub={sub} onUnskip={(d) => void handleUnskip(sub.id, d)} />
                         <CancelNotice sub={sub} />
                         <CardActions
                           name={sub.name}
@@ -588,6 +672,9 @@ function App() {
                           onEdit={() => startEdit(sub)}
                           onToggle={() => void handleToggleActive(sub)}
                           onDelete={() => void handleDelete(sub)}
+                          onSkipNext={
+                            sub.active && !sub.oneTime ? () => void handleSkipNext(sub) : undefined
+                          }
                           simulatedOut={simulatedOut.has(sub.id)}
                           onSimulateToggle={sub.active ? () => toggleSimulated(sub.id) : undefined}
                         />

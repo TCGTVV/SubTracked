@@ -243,6 +243,37 @@ pub struct PriceHistoryEntry {
     pub changed_at: String,
 }
 
+/// Übersprungener Einzeltermin eines Abos (siehe Migration 0016).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
+#[cfg_attr(feature = "ts-rs-export", derive(TS))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    feature = "ts-rs-export",
+    ts(export, export_to = "../../src/generated/SubscriptionSkip.ts")
+)]
+pub struct SubscriptionSkip {
+    #[cfg_attr(feature = "ts-rs-export", ts(type = "number"))]
+    pub id: i64,
+    #[cfg_attr(feature = "ts-rs-export", ts(type = "number"))]
+    pub subscription_id: i64,
+    /// Nominaler Wiederholungstermin (`YYYY-MM-DD`), der entfällt.
+    pub due_date: String,
+    pub created_at: String,
+}
+
+/// Alle übersprungenen Einzeltermine, nach Datum sortiert. Geteilt von `list_skips`
+/// (Frontend) und dem Reminder-Check (überspringt diese Termine).
+pub(crate) async fn fetch_skips(pool: &SqlitePool) -> Result<Vec<SubscriptionSkip>, String> {
+    sqlx::query_as!(
+        SubscriptionSkip,
+        r#"SELECT id, subscription_id, due_date, created_at
+           FROM subscription_skips ORDER BY due_date, subscription_id"#
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfo {

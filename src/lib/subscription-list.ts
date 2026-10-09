@@ -1,6 +1,6 @@
 import type { Subscription } from "../types";
 import { parseStrictISODate } from "./format";
-import { nextDueDate } from "./recurrence";
+import { nextDueDateSkipping } from "./recurrence";
 
 /** null = alle Konten, "none" = nur Subs ohne Konto, number = bestimmtes Konto. */
 export type AccountFilter = null | "none" | number;
@@ -58,7 +58,9 @@ export function applyFilterAndSort(
     let cached = dueCache.get(sub.id);
     if (cached === undefined) {
       const anchor = parseStrictISODate(sub.anchorDate);
-      cached = anchor ? nextDueDate(anchor, sub.interval, now).getTime() : null;
+      cached = anchor
+        ? nextDueDateSkipping(anchor, sub.interval, now, sub.skippedDates).getTime()
+        : null;
       dueCache.set(sub.id, cached);
     }
     return cached;

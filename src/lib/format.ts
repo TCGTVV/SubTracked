@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import currenciesJson from "../../tests/fixtures/currencies.json";
 import type { Interval } from "../types";
-import { nextDueDate } from "./recurrence";
+import { nextDueDateSkipping } from "./recurrence";
 
 // Single Source of Truth fuer die Waehrungs-Whitelist: tests/fixtures/currencies.json.
 // Das Rust-Backend (src-tauri/src/currencies.rs) liest dieselbe Datei via
@@ -124,13 +124,18 @@ export function formatAmount(cents: number, currency: string): string {
 }
 
 export function formatNextDue(
-  sub: { anchorDate: string; interval: Interval; oneTime?: boolean },
+  sub: {
+    anchorDate: string;
+    interval: Interval;
+    oneTime?: boolean;
+    skippedDates?: readonly string[];
+  },
   now: Date = new Date(),
 ): string {
   const anchor = parseStrictISODate(sub.anchorDate);
   if (!anchor) return "Ungültiges Datum";
   if (sub.oneTime) return format(anchor, "dd.MM.yyyy");
-  const due = nextDueDate(anchor, sub.interval, now);
+  const due = nextDueDateSkipping(anchor, sub.interval, now, sub.skippedDates);
   return format(due, "dd.MM.yyyy");
 }
 

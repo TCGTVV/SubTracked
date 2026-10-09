@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { listAccounts, listIncomes, listSubscriptions } from "../lib/db";
+import { listAccounts, listIncomes, listSkips, listSubscriptions } from "../lib/db";
 import { toUserMessage } from "../lib/errors";
 import type { Account, Income, Subscription } from "../types";
 
@@ -26,12 +26,26 @@ export function useSubscriptions(): UseSubscriptionsResult {
       // Bewusst alle Subs (inkl. archiviert) — App.tsx filtert per Toggle.
       // OverviewSection bekommt nur die aktiven, damit Coverage keine archivierten
       // Abos in den Forecast einrechnet.
-      const [subRows, accountRows, incomeRows] = await Promise.all([
+      const [subRows, accountRows, incomeRows, skipRows] = await Promise.all([
         listSubscriptions(false),
         listAccounts(),
         listIncomes(false),
+        listSkips(),
       ]);
-      setSubs(subRows);
+      // Übersprungene Termine direkt an die Abos hängen, damit jede Prognose-Berechnung
+      // sie ohne zusätzliche Parameter berücksichtigt (siehe `Subscription.skippedDates`).
+      const skipsBySub = new Map<number, string[]>();
+      for (const skip of skipRows) {
+        const dates = skipsBySub.get(skip.subscriptionId) ?? [];
+        dates.push(skip.dueDate);
+        skipsBySub.set(skip.subscriptionId, dates);
+      }
+      setSubs(
+        subRows.map((sub) => {
+          const skipped = skipsBySub.get(sub.id);
+          return skipped ? { ...sub, skippedDates: skipped } : sub;
+        }),
+      );
       setAccounts(accountRows);
       setIncomes(incomeRows);
       setError(null);

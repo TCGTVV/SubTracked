@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use chrono::{Duration, Local, NaiveDate};
 use sqlx::SqlitePool;
 use tauri::AppHandle;
@@ -64,9 +66,42 @@ struct DueReminder {
     kind: ReminderKind,
 }
 
+/// Wie viele aufeinanderfolgende übersprungene Termine maximal übersprungen werden, bevor
+/// der Reminder-Check aufgibt (Schutz vor Endlosschleife bei absurd vielen Skips).
+const MAX_CONSECUTIVE_SKIPS: usize = 60;
+
+/// Nächster nicht übersprungener Termin ab `from` (inklusive). `None`, wenn mehr als
+/// [`MAX_CONSECUTIVE_SKIPS`] Termine in Folge übersprungen sind.
+fn next_unskipped_due(
+    sub_id: i64,
+    anchor: NaiveDate,
+    interval: &str,
+    from: NaiveDate,
+    skips: &HashSet<(i64, NaiveDate)>,
+) -> Result<Option<NaiveDate>, String> {
+    let mut due = next_due_date(anchor, interval, from)?;
+    for _ in 0..=MAX_CONSECUTIVE_SKIPS {
+        if !skips.contains(&(sub_id, due)) {
+            return Ok(Some(due));
+        }
+        due = next_due_date(anchor, interval, due + Duration::days(1))?;
+    }
+    Ok(None)
+}
+
+/// Kurzform ohne Skips für die bestehenden Tests.
+#[cfg(test)]
 fn compute_due_reminders(
     subs: &[Subscription],
     today: NaiveDate,
+) -> Result<Vec<DueReminder>, String> {
+    compute_due_reminders_with_skips(subs, today, &HashSet::new())
+}
+
+fn compute_due_reminders_with_skips(
+    subs: &[Subscription],
+    today: NaiveDate,
+    skips: &HashSet<(i64, NaiveDate)>,
 ) -> Result<Vec<DueReminder>, String> {
     let mut out = Vec::new();
     for sub in subs {
@@ -125,8 +160,10 @@ fn compute_due_reminders(
                 "Zahlungs-Erinnerung wegen ungueltigem Vorlauf uebersprungen"
             );
         } else {
-            match next_due_date(anchor, &sub.interval, today) {
-                Ok(due) => {
+            match next_unskipped_due(sub.id, anchor, &sub.interval, today, skips) {
+                // Alle in Frage kommenden Termine übersprungen → keine Zahlungs-Erinnerung.
+                Ok(None) => {}
+                Ok(Some(due)) => {
                     let remind_from = due - Duration::days(sub.lead_days);
                     if today >= remind_from {
                         let amount_cents = effective_amount_cents(sub, due);
@@ -361,7 +398,17 @@ pub async fn run_reminder_check(pool: &SqlitePool, app: &AppHandle) -> Result<u3
 
     let subs = crate::db::fetch_subscriptions(pool, true).await?;
 
-    let due = compute_due_reminders(&subs, today)?;
+    let skips: HashSet<(i64, NaiveDate)> = crate::db::fetch_skips(pool)
+        .await?
+        .into_iter()
+        .filter_map(|s| {
+            parse_iso_date_strict(&s.due_date)
+                .ok()
+                .map(|d| (s.subscription_id, d))
+        })
+        .collect();
+
+    let due = compute_due_reminders_with_skips(&subs, today, &skips)?;
     let notifier = AppNotifier(app);
     dispatch_due_reminders(pool, &notifier, granted, &due).await
 }
@@ -495,6 +542,65 @@ mod tests {
         let subs = vec![sub(1, "2025-01-15", 7, false)];
         let due = compute_due_reminders(&subs, d(2025, 1, 10)).unwrap();
         assert!(due.is_empty(), "stumme Abos werden ignoriert");
+    }
+
+    // --- Übersprungene Termine ---
+
+    fn skip_set(entries: &[(i64, NaiveDate)]) -> HashSet<(i64, NaiveDate)> {
+        entries.iter().copied().collect()
+    }
+
+    #[test]
+    fn skipped_occurrence_produces_no_reminder() {
+        // Fällig 2025-02-15 (Vorlauf 7 Tage), aber übersprungen; der Folgetermin
+        // 2025-03-15 liegt noch außerhalb seines Vorlaufs.
+        let subs = vec![sub(1, "2025-01-15", 7, true)];
+        let skips = skip_set(&[(1, d(2025, 2, 15))]);
+        let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
+        assert!(due.is_empty(), "übersprungener Termin: {due:?}");
+    }
+
+    #[test]
+    fn skipping_does_not_affect_other_subscriptions_or_dates() {
+        let subs = vec![sub(1, "2025-01-15", 7, true), sub(2, "2025-01-15", 7, true)];
+        let skips = skip_set(&[(1, d(2025, 2, 15))]);
+        let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].subscription_id, 2);
+        // Ein Skip auf ein anderes Datum desselben Abos ändert nichts.
+        let skips = skip_set(&[(1, d(2025, 3, 15))]);
+        let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
+        assert_eq!(due.len(), 2);
+    }
+
+    #[test]
+    fn reminder_moves_to_next_unskipped_occurrence_inside_its_lead_window() {
+        // Lead 40 Tage: am 2025-02-10 liegt auch der März-Termin im Vorlauf.
+        let subs = vec![sub(1, "2025-01-15", 40, true)];
+        let skips = skip_set(&[(1, d(2025, 2, 15))]);
+        let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
+        assert_eq!(due.len(), 1);
+        assert_eq!(due[0].due_date, d(2025, 3, 15));
+    }
+
+    #[test]
+    fn many_consecutive_skips_do_not_loop_forever() {
+        let subs = vec![sub(1, "2025-01-15", 7, true)];
+        let skips: HashSet<_> = (0..200)
+            .map(|i| {
+                (
+                    1,
+                    next_due_date(
+                        d(2025, 1, 15),
+                        "monthly",
+                        d(2025, 1, 15) + Duration::days(31 * i),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+        let due = compute_due_reminders_with_skips(&subs, d(2025, 2, 10), &skips).unwrap();
+        assert!(due.is_empty());
     }
 
     #[test]

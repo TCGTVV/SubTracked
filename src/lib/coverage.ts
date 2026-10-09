@@ -49,7 +49,14 @@ function incomeDatesWithin(income: Income, from: Date, until: Date): Date[] {
 function subscriptionDatesWithin(sub: Subscription, from: Date, until: Date): Date[] {
   const anchor = parseStrictISODate(sub.anchorDate);
   if (!anchor) return [];
-  if (!sub.oneTime) return dueDatesWithin(anchor, sub.interval, from, until);
+  if (!sub.oneTime) {
+    const dates = dueDatesWithin(anchor, sub.interval, from, until);
+    // Übersprungene Termine ("Dienst pausiert") finden nicht statt.
+    const skipped = sub.skippedDates;
+    return skipped && skipped.length > 0
+      ? dates.filter((d) => !skipped.includes(toISODateLocal(d)))
+      : dates;
+  }
   return anchor >= from && anchor <= until ? [anchor] : [];
 }
 

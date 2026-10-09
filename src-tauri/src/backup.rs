@@ -18,7 +18,7 @@ use std::{
 };
 use tauri::State;
 
-use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription};
+use crate::db::{Account, AppState, Income, PriceHistoryEntry, Subscription, SubscriptionSkip};
 use crate::file_grants::{FileGrants, GrantKind};
 use crate::validation::{
     validate_account_fields, validate_amount_cents, validate_anchor_date, validate_cancellation,
@@ -53,6 +53,10 @@ pub struct BackupFile {
     pub incomes: Vec<Income>,
     pub price_history: Vec<PriceHistoryEntry>,
     pub reminders: Vec<ReminderRow>,
+    /// Übersprungene Einzeltermine (seit Migration 0016). `default`, damit ältere
+    /// Backup-Dateien ohne dieses Feld weiter importierbar bleiben.
+    #[serde(default)]
+    pub skips: Vec<SubscriptionSkip>,
 }
 
 pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
@@ -105,6 +109,15 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
     .await
     .map_err(|e| e.to_string())?;
 
+    let skips = sqlx::query_as!(
+        SubscriptionSkip,
+        r#"SELECT id, subscription_id, due_date, created_at
+           FROM subscription_skips ORDER BY id"#
+    )
+    .fetch_all(db)
+    .await
+    .map_err(|e| e.to_string())?;
+
     Ok(BackupFile {
         schema_version: BACKUP_SCHEMA_VERSION,
         app: BACKUP_APP.to_string(),
@@ -114,6 +127,7 @@ pub async fn collect_backup(db: &SqlitePool) -> Result<BackupFile, String> {
         incomes,
         price_history,
         reminders,
+        skips,
     })
 }
 
@@ -193,6 +207,8 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
     let mut price_history_ids = HashSet::new();
     let mut reminder_ids = HashSet::new();
     let mut reminder_keys = HashSet::new();
+    let mut skip_ids = HashSet::new();
+    let mut skip_keys = HashSet::new();
 
     for a in &backup.accounts {
         let label = format!("Konto \"{}\"", a.name);
@@ -260,6 +276,19 @@ fn validate_backup(backup: &BackupFile) -> Result<(), String> {
             ));
         }
     }
+    for k in &backup.skips {
+        let label = format!("Übersprungener Termin #{}", k.id);
+        validate_row_id(&mut skip_ids, k.id, &label)?;
+        validate_existing_id(&subscription_ids, k.subscription_id, &label, "Abo")?;
+        validate_anchor_date(&k.due_date).map_err(|e| format!("{label}: {e}"))?;
+        validate_sqlite_datetime(&label, &k.created_at)?;
+        if !skip_keys.insert((k.subscription_id, k.due_date.clone())) {
+            return Err(format!(
+                "{label}: Termin {} für Abo {} kommt mehrfach vor.",
+                k.due_date, k.subscription_id
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -272,6 +301,10 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
     // geprüft). Einzeln statt in einer Schleife ueber ein Array, damit jede
     // Anweisung als Literal fuer sqlx::query! compile-time-verifiziert wird.
     sqlx::query!("DELETE FROM reminders")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query!("DELETE FROM subscription_skips")
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;
@@ -384,6 +417,19 @@ pub async fn restore_backup(db: &SqlitePool, backup: &BackupFile) -> Result<(), 
             r.subscription_id,
             r.due_date,
             r.sent_at,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    }
+    for k in &backup.skips {
+        sqlx::query!(
+            "INSERT INTO subscription_skips (id, subscription_id, due_date, created_at) \
+             VALUES (?, ?, ?, ?)",
+            k.id,
+            k.subscription_id,
+            k.due_date,
+            k.created_at,
         )
         .execute(&mut *tx)
         .await
@@ -561,6 +607,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn roundtrip_preserves_skipped_occurrences() {
+        let source = test_pool().await;
+        seed(&source).await;
+        sqlx::query(
+            "INSERT INTO subscription_skips (id, subscription_id, due_date, created_at) \
+             VALUES (1, 1, '2026-03-15', '2026-03-01 08:00:00')",
+        )
+        .execute(&source)
+        .await
+        .unwrap();
+        let backup = collect_backup(&source).await.unwrap();
+        assert_eq!(backup.skips.len(), 1);
+
+        let target = test_pool().await;
+        restore_backup(&target, &backup).await.unwrap();
+        let restored = collect_backup(&target).await.unwrap();
+        assert_eq!(backup.skips, restored.skips);
+    }
+
+    /// Backups aus der Zeit vor Migration 0016 kennen kein `skips`-Feld.
+    #[tokio::test]
+    async fn old_backup_without_skips_field_still_imports() {
+        let source = test_pool().await;
+        seed(&source).await;
+        let mut json = serde_json::to_value(collect_backup(&source).await.unwrap()).unwrap();
+        json.as_object_mut().unwrap().remove("skips");
+        let backup: BackupFile = serde_json::from_value(json).expect("ohne skips lesbar");
+        assert!(backup.skips.is_empty());
+
+        let target = test_pool().await;
+        restore_backup(&target, &backup)
+            .await
+            .expect("Import ohne skips");
+    }
+
+    #[tokio::test]
+    async fn skip_for_unknown_subscription_is_rejected() {
+        let source = test_pool().await;
+        seed(&source).await;
+        let mut backup = collect_backup(&source).await.unwrap();
+        backup.skips.push(SubscriptionSkip {
+            id: 1,
+            subscription_id: 999,
+            due_date: "2026-03-15".into(),
+            created_at: "2026-03-01 08:00:00".into(),
+        });
+        assert!(restore_backup(&source, &backup).await.is_err());
+    }
+
+    #[tokio::test]
     async fn restore_replaces_existing_data() {
         let source = test_pool().await;
         seed(&source).await;
@@ -673,6 +769,7 @@ mod tests {
             "incomes",
             "reminders",
             "subscription_price_history",
+            "subscription_skips",
             "subscriptions",
         ];
         expected.sort_unstable();

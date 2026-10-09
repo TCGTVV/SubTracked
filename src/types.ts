@@ -2,6 +2,7 @@ import type { Account as GeneratedAccount } from "./generated/Account";
 import type { Income as GeneratedIncome } from "./generated/Income";
 import type { PriceHistoryEntry as GeneratedPriceHistoryEntry } from "./generated/PriceHistoryEntry";
 import type { Subscription as GeneratedSubscription } from "./generated/Subscription";
+import type { SubscriptionSkip as GeneratedSubscriptionSkip } from "./generated/SubscriptionSkip";
 
 // Account/Income/Subscription/PriceHistoryEntry sind aus den Rust-Structs in
 // `src-tauri/src/db.rs` generiert (ts-rs, `cargo test export` in src-tauri regeneriert
@@ -41,6 +42,14 @@ export type Subscription = Omit<
   cancelMode: CancelMode | null;
   /** Einheit bei cancelMode === "period", sonst null. */
   cancelPeriodUnit: CancelUnit | null;
+  /**
+   * Übersprungene Wiederholungstermine (`YYYY-MM-DD`, nominal). Kein DB-Feld des Abos:
+   * `useSubscriptions` setzt es aus der Tabelle `subscription_skips`. Fehlt es, entfällt kein
+   * Termin. Alle Prognose-Berechnungen (Coverage, Demnächst, Jahresplan, Simulation)
+   * berücksichtigen es über `subscriptionDatesWithin`.
+   */
+  skippedDates?: readonly string[];
 };
 
 export type PriceHistoryEntry = GeneratedPriceHistoryEntry;
+export type SubscriptionSkip = GeneratedSubscriptionSkip;

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { useNotificationPermission } from "./hooks/useNotificationPermission";
 import { useSubscriptions } from "./hooks/useSubscriptions";
+import { skipOccurrence, unskipOccurrence } from "./lib/db";
 import { hasDemoData, loadDemoData, removeDemoData } from "./lib/demo";
 import { expectNoAxeViolations } from "./test-utils/axe";
 import type { Account, Subscription } from "./types";
@@ -56,6 +57,8 @@ vi.mock("./lib/db", () => ({
   deleteSubscription: vi.fn(),
   setIncomeActive: vi.fn(),
   setSubscriptionActive: vi.fn(),
+  skipOccurrence: vi.fn(),
+  unskipOccurrence: vi.fn(),
 }));
 
 vi.mock("./lib/demo", () => ({
@@ -265,6 +268,66 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Simulation zurücksetzen" }));
     expect(screen.queryByRole("heading", { name: /Was wäre, wenn/ })).not.toBeInTheDocument();
+  });
+
+  it("überspringt den nächsten Termin und macht ein Überspringen rückgängig", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 15));
+    try {
+      const reloadAll = vi.fn();
+      const spotify: Subscription = {
+        id: 20,
+        name: "Spotify",
+        amountCents: 999,
+        currency: "EUR",
+        accountId: account.id,
+        interval: "monthly",
+        anchorDate: "2026-01-20",
+        leadDays: 7,
+        active: true,
+        notify: true,
+        cancelMode: null,
+        cancelPeriodValue: null,
+        cancelPeriodUnit: null,
+        cancelDate: null,
+        category: null,
+        oneTime: false,
+        archivedAt: null,
+        pendingAmountCents: null,
+        pendingFrom: null,
+        skippedDates: ["2026-07-20"],
+      };
+      mockUseSubscriptions.mockReturnValue({
+        subs: [spotify],
+        accounts: [account],
+        incomes: [],
+        loading: false,
+        error: null,
+        setError: vi.fn(),
+        reloadAll,
+        reloadAccounts: vi.fn(),
+      });
+      vi.mocked(skipOccurrence).mockResolvedValue();
+      vi.mocked(unskipOccurrence).mockResolvedValue();
+
+      render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: "Abos" }));
+
+      // Nächster Termin ist der 20.06.; der 20.07. ist bereits übersprungen.
+      fireEvent.click(
+        screen.getByRole("button", { name: "Spotify: nächsten Termin überspringen" }),
+      );
+      await waitFor(() => expect(skipOccurrence).toHaveBeenCalledWith(20, "2026-06-20"));
+      expect(reloadAll).toHaveBeenCalled();
+
+      expect(screen.getByText(/Übersprungen: 20\.07\.2026/)).toBeInTheDocument();
+      fireEvent.click(
+        screen.getByRole("button", { name: /Überspringen am 20\.07\.2026 für Spotify rückgängig/ }),
+      );
+      await waitFor(() => expect(unskipOccurrence).toHaveBeenCalledWith(20, "2026-07-20"));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hat keine axe-Verstöße (App-Shell mit Empty-State)", async () => {
