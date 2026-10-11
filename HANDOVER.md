@@ -9,6 +9,33 @@
 
 ---
 
+## 2026-10-11 — Claude: CI grün (Security + E2E repariert), Release v0.6.0 gebaut, Backlog-Hygiene
+
+> Auftrag: „CI als erstes, push eine neue Version, beobachte die CI, höre erst auf, wenn es keine Fehler mehr gibt." Danach: 5 Backlog-Items auswählen und der Reihe nach abarbeiten (siehe unten). **Fehler dieser Session:** Bis zur Rüge des Users wurde `CLAUDE.md` REGEL 1 (Serena) ignoriert — `Read`/`grep`/`Edit` statt Serena. Ab da konsequent Serena; Pre-Flight vor Datei-Zugriffen nicht überspringen.
+
+### Was passierte (Commit-Reihenfolge)
+
+1. **`346c82d` — Security + E2E-Absturz:** Security-Job rot wegen 3 `pnpm audit`-Funden ohne gepatchtes Release (`braces`, `extract-zip` ×2, nur über `e2e/@wdio`) → per `auditConfig.ignoreGhsas` in `pnpm-workspace.yaml` mit Begründung ausgenommen. E2E stürzte beim Start von `wdio` ab (`SyntaxError: brace-expansion does not provide an export named 'default'`): mein eigener globaler Override `brace-expansion >=5.0.12` aus `e4f2ca3` war inkompatibel mit `minimatch@9` → jetzt je Major (`brace-expansion@1` ≥1.1.21, `@2` ≥2.1.7); damit gilt `brace-expansion` auch nicht mehr als verwundbar.
+2. **`e3596eb` — E2E-Root-Cause:** Der seit Juli ungeklärte Titel-Timeout kam davon, dass `cargo build` ohne `tauri/custom-protocol` die `devUrl` (`localhost:1420`) lädt statt `dist/`. Fix in `e2e/wdio.conf.js`. E2E: `1 passing`. Die Juli-Hypothese „Inkompatibilität tauri-driver/wry" war falsch (Memory `frontend_test_setup` korrigiert).
+3. **Release `v0.6.0`:** Secret `TAURI_SIGNING_PRIVATE_KEY` per `gh secret set` aus `~/.tauri/subtracked-updater.key` angelegt (Schlüssel hat kein Passwort; User hat die Konsequenzen vorher bestätigt). Der lokale Tag war auf dem alten `e4f2ca3` und nie auf dem Remote → gelöscht, auf den damaligen `main` neu gesetzt, gepusht. Release-Lauf grün: macOS arm64/x64, Windows, Linux, Checksummen; Assets inkl. `latest.json` und `.sig`. **Release ist ein Draft und nicht veröffentlicht.**
+
+### Verifikation
+
+- CI auf `main` (`e3596eb`): Checks, Security, E2E grün. Release-Workflow `v0.6.0`: alle 5 Jobs grün.
+- **Nicht verifiziert:** echter Update-Pfad (braucht v0.6.1), alle Punkte aus BACKLOG Block B (manuelle Abnahme im Fenster).
+
+### Gotchas
+
+- `pnpm`-Overrides bei Paketen mit mehreren Major-Linien **nie global** auf die neueste Major heben, sondern je Major (`'pkg@1': …`), sonst brechen Konsumenten mit CJS/ESM-Erwartung.
+- `gh run watch` ohne ID wartet nicht zuverlässig direkt nach dem Push; Lauf-ID über `gh run list --workflow …` holen.
+- Der Push auf `main` zeigt „Bypassed rule violations … Changes must be made through a pull request" — der Owner umgeht das Ruleset; kein Fehler, aber bewusst im Hinterkopf behalten.
+
+### Geplante Reihenfolge der restlichen Items dieser Session
+
+(1) Backlog/HANDOVER-Hygiene (dieser Eintrag) → (2) `rustup update stable` + Clippy/nextest → (3) `cargo-machete` → (4) `CLAUDE.md` auf macOS-Pfade → (5) Smoke-Checkliste in `RELEASE.md`. Der tatsächliche Stand steht in BACKLOG → A0/A/C (abgehakt, was erledigt ist).
+
+---
+
 ## 2026-10-09 (Teil 2) — Claude: CSV-Parser gehärtet, Skip/Pause, Wochenend-Verschiebung, Updater, Wechselkurse
 
 > Auftrag: „mach alle in einem Rutsch, meter machen" nach der Backlog-Empfehlung. Plan vorab festgelegt und eingehalten: A CSV → B Skip → C Verschiebung → D Updater → E Wechselkurse; Code-Signing nur dokumentiert (braucht Konten). **Gepusht ist nichts** aus diesem Teil — alle Commits liegen lokal auf `main`.
