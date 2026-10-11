@@ -20,7 +20,7 @@
 
 **Klare Ausnahmen (Serena nicht möglich):**
 
-- Auto-Memory-Files unter `/home/legr/.claude/projects/.../memory/` (außerhalb Project-Root, Serena hat dort keinen Zugriff). `Edit`/`Write` sind hier richtig.
+- Auto-Memory-Files unter `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/` (außerhalb Project-Root, Serena hat dort keinen Zugriff). `Edit`/`Write` sind hier richtig.
 - Brand-new Dateien, die noch nicht existieren → `Write`.
 - Bash-Kommandos, die kein Datei-Inhalt-Lookup sind (`git`, `gh`, `pnpm`, `cargo`).
 - Diese `CLAUDE.md` selbst, wenn sie noch nicht existiert.

@@ -71,7 +71,7 @@ Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist seit 2026-10-11 au
 - [ ] **Echte DB gegen die neuen Migrationen prüfen** (auf einer Kopie): 0015 (Integritäts-Trigger) lässt Bestandszeilen unangetastet, würde aber UPDATEs auf Zeilen ablehnen, die die Regeln verletzen (`amount_cents <= 0` ohne Trial-Ausnahme, `lead_days` außerhalb 0..365, Booleans ≠ 0/1, Puffer < 0). 0016–0018 sind reine `CREATE TABLE`/`ADD COLUMN`. Vor jeder Migration legt `db_backup.rs` einen Snapshot an.
 
 **C. Hygiene**
-- [ ] **`CLAUDE.md` auf macOS-Pfade umstellen** — Regel 1 nennt noch `/home/legr/.claude/projects/...`; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
+- [x] **`CLAUDE.md` auf macOS-Pfade umgestellt (2026-10-11):** Regel 1 nennt jetzt `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`. Nur der Pfad geändert, keine Regel.
 - [x] **`cargo-machete` lokal installiert (2026-10-11)**, v0.9.2 wie in der CI gepinnt; `cargo machete` meldet keine ungenutzten Abhängigkeiten. Damit laufen alle CI-Rust-Checks lokal.
 - [x] **E2E-CI-Job** läuft grün seit 2026-10-11 (Ursache: `devUrl` statt `dist/`, siehe A0). Der Test prüft bisher nur den Fenstertitel — echte Flows (Abo anlegen etc.) wären der nächste Ausbau.
 
