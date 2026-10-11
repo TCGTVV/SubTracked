@@ -30,9 +30,23 @@
 - `gh run watch` ohne ID wartet nicht zuverlässig direkt nach dem Push; Lauf-ID über `gh run list --workflow …` holen.
 - Der Push auf `main` zeigt „Bypassed rule violations … Changes must be made through a pull request" — der Owner umgeht das Ruleset; kein Fehler, aber bewusst im Hinterkopf behalten.
 
-### Geplante Reihenfolge der restlichen Items dieser Session
+### Danach erledigt (je ein Commit, alle gepusht, CI auf `5572a34` grün)
 
-(1) Backlog/HANDOVER-Hygiene (dieser Eintrag) → (2) `rustup update stable` + Clippy/nextest → (3) `cargo-machete` → (4) `CLAUDE.md` auf macOS-Pfade → (5) Smoke-Checkliste in `RELEASE.md`. Der tatsächliche Stand steht in BACKLOG → A0/A/C (abgehakt, was erledigt ist).
+- `36b36df`: lokale Rust-Toolchain 1.96 → **1.99** (wie CI); `fmt`/`clippy -D warnings`/`nextest` (169 Tests) sauber.
+- `b7a89bb`: `cargo-machete` 0.9.2 lokal installiert, keine ungenutzten Abhängigkeiten.
+- `b8cc070`: `CLAUDE.md` Memory-Pfad auf macOS umgestellt (nur Pfad, keine Regel).
+- `5572a34`: `RELEASE.md` Smoke-Checkliste um **Abschnitt 10** (v0.6.0-Flows) erweitert.
+
+### Offen (Stand Ende 2026-10-11)
+
+Alles Weitere steht in BACKLOG → A/B/D. Kurzfassung in Reihenfolge:
+
+1. **Draft-Release `v0.6.0` ist nicht veröffentlicht.** Vorher `RELEASE.md` Abschnitt 10 im laufenden Fenster durchgehen (nichts von Skip/Verschiebung/Wechselkurse/Updater/Datei-Dialog/Simulation wurde je gesehen). Veröffentlichen: `gh release edit v0.6.0 --draft=false`.
+2. **Updater-Praxistest** (BACKLOG A, Ablaufbeschreibung dort): v0.6.0 veröffentlichen und installieren → v0.6.1 taggen, bauen, veröffentlichen → in der App „Nach Updates suchen". Beide Releases sind danach öffentlich; ein Draft ist für den Endpoint `releases/latest/download/latest.json` unsichtbar. Offline-Fall mitprüfen. macOS/Gatekeeper kann die ersetzte App ohne Code-Signing beim Start blockieren (Rechtsklick → Öffnen).
+3. **Block B (manuelle Abnahme)** unverändert offen: nativer Datei-Dialog, neue UI (Hell/Dunkel, schmal), CSV mit echtem anonymisiertem Bankauszug, echte DB (Kopie) gegen Migrationen 0015–0018.
+4. **Audit-Ausnahmen beobachten:** die 3 ignorierten GHSA (`braces`, `extract-zip` ×2) entfernen, sobald wdio gepatchte Versionen zieht (`pnpm audit` ohne Ausnahme prüfen).
+5. **E2E ausbauen:** der Test prüft nur den Fenstertitel; echte Flows (Abo anlegen etc.) sind der nächste Schritt.
+6. Block D (Ideen) und Code-Signing macOS/Windows unverändert zurückgestellt.
 
 ---
 
