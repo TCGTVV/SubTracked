@@ -170,6 +170,39 @@ Nach dem ersten Start muss die DB an einem dieser Pfade liegen (Tauri nutzt `app
 - [ ] Rechner / Sitzung neu starten
 - [ ] App startet automatisch, landet **im Tray** (sichtbar, aber ohne Hauptfenster)
 
+### 10. Neu seit v0.6.0 (Skip, Verschiebung, Wechselkurse, Updater, Datei-Dialoge, Simulation)
+
+**Termin überspringen**
+- [ ] Auf einer Abo-Card den nächsten Termin überspringen → er verschwindet aus „Demnächst", Prognose/Jahresplan und Saldoverlauf rechnen ohne ihn
+- [ ] In „Demnächst" dasselbe per Skip-Button; danach „Rückgängig" → Termin ist wieder da
+- [ ] Reminder-Status: die nächste Erinnerung rückt auf den nächsten nicht übersprungenen Termin
+
+**Wochenend-/Feiertags-Verschiebung**
+- [ ] Im Abo- und im Einnahme-Dialog die Regel „Wochenende / Feiertag" auf `next` oder `previous` setzen, bei einem Abo, dessen Termin auf ein Wochenende fällt → angezeigtes Buchungsdatum ändert sich
+- [ ] Regel zurück auf `none` → ursprüngliches Datum kommt zurück
+
+**Wechselkurse**
+- [ ] Einstellungen → Wechselkurse: Kurs für ein Währungspaar anlegen (z. B. USD→EUR)
+- [ ] Ein Abo in der Fremdwährung wird umgerechnet dargestellt, mit „≈" und dem Originalbetrag
+- [ ] Ohne hinterlegten Kurs wird **nicht** umgerechnet (kein stilles Raten)
+
+**Updater**
+- [ ] Einstellungen → Updates → „Nach Updates suchen" mit Netzwerk: sinnvolle Meldung (aktuell oder Update verfügbar)
+- [ ] Dasselbe **offline**: sauberer Fehlertext, kein Absturz
+- [ ] Echter Update-Pfad (nur mit zwei Releases): alte Version installieren → neue veröffentlichen → in der App aktualisieren → App startet in der neuen Version, Daten unverändert
+
+**Datei-Dialoge (nativer Dialog in Rust, Renderer bekommt nur ein Token)**
+- [ ] Backup exportieren und importieren — jeweils auch **„Abbrechen"** im Dialog: kein Fehler, nichts passiert
+- [ ] Abos als CSV exportieren
+- [ ] Bankauszug (CSV) importieren und abgleichen, idealerweise mit einer echten, anonymisierten Datei
+
+**Simulation**
+- [ ] Flask-Toggle auf einer aktiven Abo-Card → Simulations-Sektion zeigt Ersparnis und Kontenwirkung; Toggle aus → weg (nichts wird gespeichert)
+- [ ] Hell und Dunkel, schmale Fensterbreite
+
+**Backup-Roundtrip mit den neuen Tabellen**
+- [ ] Skip, Verschiebungsregel und Wechselkurs anlegen → Backup exportieren → Daten ändern → Backup importieren → alle drei sind zurück
+
 ## Wenn etwas fehlschlägt
 
 - **Logs:** macOS `Console.app` (Filter „SubTracked"), Windows Event-Viewer, oder ein `--debug`-Build mit offenen DevTools.
