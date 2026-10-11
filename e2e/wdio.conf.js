@@ -44,7 +44,11 @@ export const config = {
 
   // App-Binary muss existieren, bevor die WebDriver-Session startet.
   onPrepare: () => {
-    const result = spawnSync("cargo", ["build"], {
+    // `tauri/custom-protocol`: ohne dieses Feature laedt ein reiner `cargo build` die
+    // devUrl (http://localhost:1420) statt das eingebettete `dist/` -- in CI laeuft dort
+    // kein Dev-Server, die Seite bleibt leer und der Fenstertitel wird nie gesetzt.
+    // (`pnpm tauri build` setzt das Feature selbst.) `dist/` muss vorher gebaut sein.
+    const result = spawnSync("cargo", ["build", "--features", "tauri/custom-protocol"], {
       cwd: srcTauriDir,
       stdio: "inherit",
     });
