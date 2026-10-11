@@ -72,7 +72,7 @@ Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist seit 2026-10-11 au
 
 **C. Hygiene**
 - [ ] **`CLAUDE.md` auf macOS-Pfade umstellen** — Regel 1 nennt noch `/home/legr/.claude/projects/...`; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
-- [ ] **`cargo-machete` lokal installieren** (`cargo-deny` und `cargo-nextest` sind jetzt da; Machete prüft sonst nur die CI).
+- [x] **`cargo-machete` lokal installiert (2026-10-11)**, v0.9.2 wie in der CI gepinnt; `cargo machete` meldet keine ungenutzten Abhängigkeiten. Damit laufen alle CI-Rust-Checks lokal.
 - [x] **E2E-CI-Job** läuft grün seit 2026-10-11 (Ursache: `devUrl` statt `dist/`, siehe A0). Der Test prüft bisher nur den Fenstertitel — echte Flows (Abo anlegen etc.) wären der nächste Ausbau.
 
 **D. Bewusst nicht umgesetzt — Ideen für später**
