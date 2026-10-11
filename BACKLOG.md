@@ -47,22 +47,22 @@ Aufgabenliste für SubTracked. Reihenfolge = grobe Priorität. Erledigtes abhake
 
 ### Offene Punkte (Stand 2026-10-09, nach Skip/Verschiebung/Updater/Wechselkurse)
 
-Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist committet, aber **noch nicht gepusht**; die Commits davor (Simulation, Datei-Token, Trigger) sind auf `origin`. Nichts davon wurde bisher im laufenden Fenster abgenommen. Reihenfolge = sinnvolle Abarbeitung.
+Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist seit 2026-10-11 auf `origin` und als Draft-Release `v0.6.0` gebaut. Nichts davon wurde bisher im laufenden Fenster abgenommen. Reihenfolge = sinnvolle Abarbeitung.
 
-**Stand am Ende der Session 2026-10-09:** `main` ist komplett auf GitHub (bis `e4f2ca3`). Der Tag `v0.6.0` liegt **nur lokal** auf `e4f2ca3`, das Secret `TAURI_SIGNING_PRIVATE_KEY` ist **nicht angelegt**, die CI zum letzten Push wurde **nicht ausgewertet**. Nächste Session beginnt mit **A0**.
-
-**A0. CI auswerten (nächste Session zuerst)**
-- [ ] **Läufe zu `d7eef6b` auswerten** (`gh run list --commit d7eef6b`). Ursachen der roten Läufe davor (`3a0662b`, 2026-10-09): **Checks** = `cargo clippy` der CI (Clippy **1.99**, lokal nur 1.96) beanstandete `.map(&get)` in `csv_import.rs` — mein Fehler, in `d7eef6b` behoben (erwartet: Checks jetzt grün; lokal nicht mit 1.99 verifizierbar). **Security** = nur `pnpm audit` rot, die 3 Funde unten (`cargo audit`/`cargo deny` grün). **E2E** = der bekannte, pausierte Fehler (Tests scheitern, Log zeigt nur Fluxbox-Rauschen). `pnpm audit` war bei `c6a0477` mit 42 Funden rot (Dev-Tooling-Drift seit Juli) und wurde in `e4f2ca3` auf **3** reduziert (Overrides in `pnpm-workspace.yaml`, vitest 4.1.11).
+**A0. CI auswerten — erledigt 2026-10-11 (Claude)**
+- [x] **Läufe ausgewertet, alle drei Workflows auf `main` grün** (Checks, Security, E2E bei `e3596eb`). Checks: der Clippy-Fix `d7eef6b` wirkte. Security und E2E brauchten je einen Fix (siehe nächste Punkte).
+- [x] **E2E-CI repariert** (`346c82d`, `e3596eb`): Zwei Ursachen. (1) Mein globaler `brace-expansion >=5.0.12`-Override ließ `wdio` mit `SyntaxError` abstürzen (`minimatch@9` importiert `default`); jetzt je Major gepatcht (`brace-expansion@1`, `@2`) in `pnpm-workspace.yaml`. (2) Der eigentliche Titel-Timeout aus Juli: ein reiner `cargo build` lädt `devUrl` (`localhost:1420`) statt des eingebetteten `dist/`, in der CI läuft dort kein Server. Der Build in `e2e/wdio.conf.js` nutzt jetzt `--features tauri/custom-protocol`.
+- [x] **3 `pnpm audit`-Funde ohne Patch** (`braces`, `extract-zip` ×2; nur über `e2e`/`@wdio`) per `auditConfig.ignoreGhsas` mit Begründung ausgenommen. Entfernen, sobald wdio/Upstream gepatchte Versionen zieht (`pnpm audit` ohne die Ausnahme prüfen).
+- [x] **Secret angelegt, Tag `v0.6.0` auf aktuellen `main` gesetzt und gepusht** (Tag war nie auf dem Remote). Release-Lauf grün (macOS arm64/x64, Windows, Linux, Checksummen), Assets inkl. `latest.json` und `.sig`-Dateien da, **Release ist noch ein Draft**.
 - [ ] **Lokale Toolchain an die CI angleichen:** `rustup update stable` (lokal 1.96, CI 1.99), sonst fallen neue Clippy-Lints erst in der CI auf.
-- [ ] **3 verbleibende `pnpm audit`-Funde ohne Patch auf der Registry:** `braces` (GHSA-vfj7-8cjw-p6xm, gefixt erst ab 3.0.4, neueste ist 3.0.3) und `extract-zip` (GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3, gefixt ab 2.0.2, neueste 2.0.1) — beide nur über `e2e`/`@wdio` (kein Runtime-Pfad). Entscheiden: abwarten und beobachten, oder per `auditConfig.ignoreGhsas` mit Begründung ausnehmen. Solange sie offen sind, bleibt der Pflicht-Check „pnpm audit" rot.
-- [ ] **Erst wenn CI und Entscheidung geklärt sind:** Secret anlegen (`gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/subtracked-updater.key`), dann `git push origin v0.6.0`.
 
 **A. Vor dem nächsten Release (v0.6.0) — nur du kannst das**
-- [ ] **Updater in Betrieb nehmen.** (1) ~~Privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern~~ — **erledigt 2026-10-09 (vom User bestätigt)**; er hat **kein** Passwort, wird er verloren, nimmt keine installierte Version mehr Updates an. (2) GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen — ohne das bricht der Release-Job bewusst im Schritt „Check updater signing key" ab. (3) Danach v0.6.0 releasen und mit einem späteren v0.6.1 den **echten** Update-Pfad durchspielen (alte Version installieren → neue veröffentlichen → in der App aktualisieren); erst dann ist der Updater verifiziert. Details: RELEASE.md → Updater.
-- [x] **Version auf 0.6.0 gebumpt** (2026-10-09; `package.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock`). Der Tag `v0.6.0` existiert **nur lokal** und ist **nicht gepusht**: ein Tag-Push startet `release.yml`, und das bricht ohne Secret (nächster Punkt) im ersten Schritt ab. Erst Secret anlegen, dann `git push origin v0.6.0`.
+- [ ] **Updater in Betrieb nehmen.** (1) ~~Privaten Schlüssel `~/.tauri/subtracked-updater.key` im Passwortmanager sichern~~ — **erledigt 2026-10-09 (vom User bestätigt)**; er hat **kein** Passwort, wird er verloren, nimmt keine installierte Version mehr Updates an. (2) ~~GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` anlegen~~ — **erledigt 2026-10-11** (per `gh secret set` aus der Schlüsseldatei). (3) v0.6.0 ist als **Draft** gebaut — Draft prüfen und veröffentlichen, dann mit einem späteren v0.6.1 den **echten** Update-Pfad durchspielen (alte Version installieren → neue veröffentlichen → in der App aktualisieren); erst dann ist der Updater verifiziert. Details: RELEASE.md → Updater.
+- [x] **Version auf 0.6.0 gebumpt** (2026-10-09; `package.json`, `tauri.conf.json`, `Cargo.toml`/`Cargo.lock`). Der Tag `v0.6.0` wurde am 2026-10-11 auf den damaligen `main`-Stand gesetzt und gepusht (löste `release.yml` aus, grün).
 - [x] **Release-Text in `release.yml` aktualisiert** (2026-10-09): neue Features unter „Enthalten", Updater-Assets erklärt, Hinweis, dass Nutzer von ≤ 0.5.x einmal manuell auf 0.6.0 wechseln müssen.
 - [ ] **Smoke-Checkliste in RELEASE.md erweitern** um die neuen Flows: Termin überspringen/zurücknehmen, Verschiebungsregel setzen (Prognose-Datum ändert sich), Wechselkurs anlegen (≈-Kennzeichnung), „Nach Updates suchen" (auch offline: sauberer Fehler), Backup-Roundtrip mit den neuen Tabellen.
-- [ ] **Beim ersten Release-Lauf beobachten:** ob der macOS-Runner am `strip`-Schritt scheitert (lokal auf macOS 27 tat er das, siehe RELEASE.md); ob `tauri-action` `latest.json` anhängt; ob `cargo deny`/`cargo audit` in der CI grün bleiben (lokal grün).
+- [x] **Beim ersten Release-Lauf beobachtet (2026-10-11):** alle Jobs grün, kein `strip`-Fehler auf den macOS-Runnern, `latest.json` und `.sig`-Dateien hängen am Release, `cargo deny`/`cargo audit` grün.
+- [ ] **Draft-Release `v0.6.0` prüfen und veröffentlichen** (erst nach der Smoke-Checkliste aus dem vorigen Punkt).
 
 **B. Manuelle Abnahme im laufenden Fenster (nichts davon wurde gesehen)**
 - [ ] **Nativer Datei-Dialog** (Rust öffnet ihn, Renderer bekommt nur ein Token): Backup exportieren/importieren, Abos als CSV exportieren, Bankauszug importieren und abgleichen — jeweils auch „Abbrechen". Linux (WebKitGTK) und Windows gegenprüfen, falls verfügbar.
@@ -73,7 +73,7 @@ Der Code zu Skip, Verschiebung, Updater und Wechselkursen ist committet, aber **
 **C. Hygiene**
 - [ ] **`CLAUDE.md` auf macOS-Pfade umstellen** — Regel 1 nennt noch `/home/legr/.claude/projects/...`; tatsächlich `/Users/leopoldgrund/.claude/projects/-Users-leopoldgrund-projects-SubTracked/memory/`.
 - [ ] **`cargo-machete` lokal installieren** (`cargo-deny` und `cargo-nextest` sind jetzt da; Machete prüft sonst nur die CI).
-- [ ] **E2E-CI-Job** ist rot und pausiert (kein Pflicht-Check), Verlauf in HANDOVER 2026-07-14.
+- [x] **E2E-CI-Job** läuft grün seit 2026-10-11 (Ursache: `devUrl` statt `dist/`, siehe A0). Der Test prüft bisher nur den Fenstertitel — echte Flows (Abo anlegen etc.) wären der nächste Ausbau.
 
 **D. Bewusst nicht umgesetzt — Ideen für später**
 - [ ] Termin *verschieben* statt nur entfallen lassen; Zeitraum-Pause („bis Datum X") als Ein-Klick.
