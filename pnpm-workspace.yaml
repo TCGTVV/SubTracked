@@ -24,7 +24,10 @@ overrides:
   # brace-expansion (ueber e2e > @wdio/cli > ... > minimatch/glob) < 5.0.8:
   # GHSA-mh99-v99m-4gvg, ReDoS ueber unbegrenzte Expansion-Laenge. Nur
   # E2E-Tooling, kein Runtime-Pfad.
-  brace-expansion: '>=5.0.12'
+  # Je Major gepatcht statt global auf 5.x: minimatch@9 importiert `default` (CJS/2.x-Form),
+  # ein globales >=5 liess wdio in CI mit SyntaxError abstuerzen.
+  'brace-expansion@1': '>=1.1.21 <2'
+  'brace-expansion@2': '>=2.1.7 <3'
   # Weitere Funde aus dem pnpm-audit-Lauf vom 2026-10-09 (alle transitiv ueber Dev-/Test-/
   # Build-Tooling: vitest, jsdom, @wdio/*, vite; nichts davon steckt in der ausgelieferten App).
   # Auf die jeweils gepatchte Mindestversion gehoben.
@@ -37,6 +40,15 @@ overrides:
   nanoid: '>=3.3.18'
   smol-toml: '>=1.8.1'
   source-map-js: '>=1.2.2'
+
+# Funde ohne gepatchtes Release auf der Registry (extract-zip max 2.0.1, braces max 3.0.3),
+# nur ueber e2e > @wdio/* (Test-Tooling, nicht in der ausgelieferten App). Bewusst akzeptiert;
+# entfernen, sobald wdio/Upstream gepatchte Versionen zieht.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-7pqw-9j4j-h8q3
+    - GHSA-jmr9-qjv8-65gv
+    - GHSA-vfj7-8cjw-p6xm
 
 allowBuilds:
   # edgedriver/geckodriver sind transitive @wdio/cli-Deps fuer Browser-Treiber-
